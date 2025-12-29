@@ -30,8 +30,3 @@ testData:
       password: password123
     - username: testuser2
       password: password456
-
-# Environment-specific overrides
-# You can override any value using environment variables
-# Format: SECTION_KEY=value (dots become underscores)
-# Example: CAPSERVICE_BASEURL=https://prod.example.com

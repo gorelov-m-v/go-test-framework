@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +30,6 @@ type ServiceConfig struct {
 
 // Viper returns the singleton viper instance with loaded configuration
 // It searches for config.yaml in ./configs/ and project root
-// Supports environment variable overrides (e.g., CAPSERVICE_BASEURL)
 func Viper() (*viper.Viper, error) {
 	once.Do(func() {
 		v := viper.New()
@@ -41,10 +39,6 @@ func Viper() (*viper.Viper, error) {
 		// Search paths
 		v.AddConfigPath("./configs")
 		v.AddConfigPath(".")
-
-		// Enable environment variable overrides
-		v.AutomaticEnv()
-		v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 		if err := v.ReadInConfig(); err != nil {
 			loadErr = fmt.Errorf("failed to read config file: %w", err)

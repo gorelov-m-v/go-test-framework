@@ -36,7 +36,7 @@ go get github.com/your-org/go-test-framework
 *   [**Конфигурация**](#-конфигурация)
     *   [Структура Config.yaml](#структура-configyaml)
     *   [Автоматическая инициализация окружения](#автоматическая-инициализация-окружения)
-    *   [Переопределение через переменные окружения](#переопределение-через-переменные-окружения)
+    *   [Загрузка кастомных данных](#загрузка-кастомных-данных)
 *   [**HTTP Клиент**](#-http-клиент)
     *   [1. Описание Моделей](#1-описание-моделей)
     *   [2. Создание и Конфигурация Клиента](#2-создание-и-конфигурация-клиента)
@@ -52,7 +52,7 @@ go get github.com/your-org/go-test-framework
 
 # ⚙️ Конфигурация
 
-Модуль `pkg/config` предоставляет мощный механизм управления конфигурацией для ваших тестов. Он автоматически загружает настройки из YAML-файлов, поддерживает переопределение через переменные окружения и использует DI-подобную технику для автоматической инициализации HTTP-клиентов.
+Модуль `pkg/config` предоставляет мощный механизм управления конфигурацией для ваших тестов. Он автоматически загружает настройки из YAML-файлов и использует DI-подобную технику для автоматической инициализации HTTP-клиентов.
 
 ## Структура Config.yaml
 
@@ -147,41 +147,44 @@ func TestMain(m *testing.M) {
 }
 ```
 
-### Шаг 4: Используйте в тестах
+### Шаг 4: Загрузите тестовые данные из конфига
+
+```go
+type TestData struct {
+	DefaultUsername string `mapstructure:"defaultUsername"`
+	DefaultPassword string `mapstructure:"defaultPassword"`
+}
+
+var testData TestData
+
+func init() {
+	// ... инициализация env ...
+
+	// Загрузка тестовых данных
+	if err := config.UnmarshalByKey("testData", &testData); err != nil {
+		log.Fatalf("Failed to load test data: %v", err)
+	}
+}
+```
+
+### Шаг 5: Используйте в тестах
 
 ```go
 func (s *CAPTokenSuite) TestTokenCheck(t provider.T) {
 	t.Title("CAP API: Token check")
 
 	t.WithNewStep("Token check request", func(sCtx provider.StepCtx) {
-		// env.CapClient уже полностью инициализирован!
+		// Используем клиент и данные из конфига
 		env.CapClient.TokenCheck(sCtx).
 			RequestBody(models.TokenCheckRequest{
-				Username: "admin",
-				Password: "admin",
+				Username: testData.DefaultUsername,
+				Password: testData.DefaultPassword,
 			}).
 			ExpectResponseStatus(http.StatusOK).
 			ExpectResponseBodyFieldNotEmpty("token").
 			RequestSend()
 	})
 }
-```
-
-## Переопределение через переменные окружения
-
-Вы можете переопределить любое значение из `config.yaml` через переменные окружения. Формат: `SECTION_KEY=value` (точки заменяются на подчеркивания).
-
-**Примеры:**
-
-```bash
-# Переопределить baseURL для capService
-export CAPSERVICE_BASEURL=https://prod.example.com
-
-# Переопределить timeout
-export CAPSERVICE_TIMEOUT=60s
-
-# Запустить тесты
-go test ./tests/...
 ```
 
 ## Загрузка кастомных данных

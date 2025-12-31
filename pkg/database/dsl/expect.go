@@ -213,6 +213,7 @@ func (q *Query[T]) ExpectFound() *Query[T] {
 
 func (q *Query[T]) ExpectNotFound() *Query[T] {
 	q.expectsNotFound = true
+	q.expectations = []ExpectationFunc{}
 	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
 		parent.WithNewStep("Expect: Not Found", func(sCtx provider.StepCtx) {
 			a := sCtx.Require()
@@ -226,6 +227,11 @@ func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Que
 	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
 		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' = %v", columnName, expectedValue), func(sCtx provider.StepCtx) {
 			a := sCtx.Require()
+
+			if q.expectsNotFound {
+				a.True(false, "ExpectColumnEquals cannot be used with ExpectNotFound()")
+				return
+			}
 
 			if !ensureQuerySuccessSilent(a, err) {
 				return
@@ -255,6 +261,11 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
 		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' not empty", columnName), func(sCtx provider.StepCtx) {
 			a := sCtx.Require()
+
+			if q.expectsNotFound {
+				a.True(false, "ExpectColumnNotEmpty cannot be used with ExpectNotFound()")
+				return
+			}
 
 			if !ensureQuerySuccessSilent(a, err) {
 				return
@@ -334,6 +345,11 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' IS NULL", columnName), func(sCtx provider.StepCtx) {
 			a := sCtx.Require()
 
+			if q.expectsNotFound {
+				a.True(false, "ExpectColumnIsNull cannot be used with ExpectNotFound()")
+				return
+			}
+
 			if !ensureQuerySuccessSilent(a, err) {
 				return
 			}
@@ -344,7 +360,6 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 			}
 
 			if isNilAny(actualValue) {
-				a.True(true, "Column '%s' is NULL (nil value)", columnName)
 				return
 			}
 
@@ -400,6 +415,11 @@ func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' IS NOT NULL", columnName), func(sCtx provider.StepCtx) {
 			a := sCtx.Require()
 
+			if q.expectsNotFound {
+				a.True(false, "ExpectColumnIsNotNull cannot be used with ExpectNotFound()")
+				return
+			}
+
 			if !ensureQuerySuccessSilent(a, err) {
 				return
 			}
@@ -454,7 +474,6 @@ func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 			case *sql.NullTime:
 				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
 			default:
-				a.True(true, "Column '%s' is NOT NULL", columnName)
 			}
 		})
 	})
@@ -465,6 +484,11 @@ func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
 	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
 		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' = true", columnName), func(sCtx provider.StepCtx) {
 			a := sCtx.Require()
+
+			if q.expectsNotFound {
+				a.True(false, "ExpectColumnTrue cannot be used with ExpectNotFound()")
+				return
+			}
 
 			if !ensureQuerySuccessSilent(a, err) {
 				return
@@ -489,6 +513,11 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
 		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' = false", columnName), func(sCtx provider.StepCtx) {
 			a := sCtx.Require()
+
+			if q.expectsNotFound {
+				a.True(false, "ExpectColumnFalse cannot be used with ExpectNotFound()")
+				return
+			}
 
 			if !ensureQuerySuccessSilent(a, err) {
 				return

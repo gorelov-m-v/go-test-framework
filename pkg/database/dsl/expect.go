@@ -27,28 +27,67 @@ func asBool(v any) (bool, bool) {
 	case bool:
 		return x, true
 	case int:
-		return x == 1, true
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	case int8:
-		return x == 1, true
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	case int16:
-		return x == 1, true
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	case int32:
-		return x == 1, true
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	case int64:
-		return x == 1, true
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	case uint:
-		return x == 1, true
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	case uint8:
-		return x == 1, true
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	case uint16:
-		return x == 1, true
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	case uint32:
-		return x == 1, true
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	case uint64:
-		return x == 1, true
-	default:
-		return false, false
+		if x == 0 {
+			return false, true
+		} else if x == 1 {
+			return true, true
+		}
 	}
+	return false, false
 }
 
 func ensureQuerySuccessSilent(a provider.Asserts, err error) bool {
@@ -156,10 +195,9 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 			} else if val := reflect.ValueOf(actualValue); val.Kind() == reflect.Ptr {
 				isEmpty = val.IsNil()
 			} else {
-				val := reflect.ValueOf(actualValue)
 				switch v := actualValue.(type) {
 				case sql.NullString:
-					isEmpty = !v.Valid
+					isEmpty = !v.Valid || (v.Valid && strings.TrimSpace(v.String) == "")
 				case sql.NullInt64:
 					isEmpty = !v.Valid
 				case sql.NullInt32:
@@ -175,7 +213,7 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 				case sql.NullTime:
 					isEmpty = !v.Valid
 				case *sql.NullString:
-					isEmpty = v == nil || !v.Valid
+					isEmpty = v == nil || !v.Valid || (v.Valid && strings.TrimSpace(v.String) == "")
 				case *sql.NullInt64:
 					isEmpty = v == nil || !v.Valid
 				case *sql.NullInt32:
@@ -191,6 +229,7 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 				case *sql.NullTime:
 					isEmpty = v == nil || !v.Valid
 				default:
+					val := reflect.ValueOf(actualValue)
 					isEmpty = val.IsZero()
 				}
 			}
@@ -216,6 +255,7 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 			}
 
 			if isNilAny(actualValue) {
+				a.True(true, "Column '%s' is NULL (nil value)", columnName)
 				return
 			}
 

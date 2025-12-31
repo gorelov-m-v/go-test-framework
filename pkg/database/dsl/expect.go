@@ -205,7 +205,7 @@ func (q *Query[T]) ExpectFound() *Query[T] {
 	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
 		parent.WithNewStep("Expect: Found", func(sCtx provider.StepCtx) {
 			a := sCtx.Require()
-			a.NoError(err, "Expected to find a result, but query failed")
+			a.NoError(err, "Expected query to execute successfully and return at least one result")
 		})
 	})
 	return q

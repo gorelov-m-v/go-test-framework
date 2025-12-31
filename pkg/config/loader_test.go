@@ -10,7 +10,6 @@ import (
 )
 
 func TestViper_LoadsConfigSuccessfully(t *testing.T) {
-	// Setup: Create a temporary config file
 	configContent := `
 capService:
   baseURL: https://api.example.com
@@ -27,14 +26,11 @@ testData:
 	require.NoError(t, err)
 	defer os.Remove("config.yaml")
 
-	// Reset singleton for testing
 	resetSingleton()
 
 	v, err := Viper()
 	require.NoError(t, err)
 	assert.NotNil(t, v)
-
-	// Verify config values are loaded
 	assert.Equal(t, "https://api.example.com", v.GetString("capService.baseURL"))
 	assert.Equal(t, 30*time.Second, v.GetDuration("capService.timeout"))
 }
@@ -49,7 +45,6 @@ testData:
 	require.NoError(t, err)
 	defer os.Remove("config.yaml")
 
-	// Reset singleton
 	resetSingleton()
 
 	type TestData struct {
@@ -73,7 +68,6 @@ capService:
 	require.NoError(t, err)
 	defer os.Remove("config.yaml")
 
-	// Reset singleton
 	resetSingleton()
 
 	var data map[string]any
@@ -94,22 +88,18 @@ myService:
 	require.NoError(t, err)
 	defer os.Remove("config.yaml")
 
-	// Reset singleton
 	resetSingleton()
 
 	cfg, err := GetServiceConfig("myService")
 	require.NoError(t, err)
 	assert.Equal(t, "https://my-service.com", cfg.BaseURL)
 	assert.Equal(t, 15*time.Second, cfg.Timeout)
-	// Viper converts map keys to lowercase
 	assert.Equal(t, "Bearer token123", cfg.DefaultHeaders["authorization"])
 }
 
 func TestViper_ConfigFileNotFound(t *testing.T) {
-	// Reset singleton
 	resetSingleton()
 
-	// Make sure no config.yaml exists
 	os.Remove("config.yaml")
 	os.RemoveAll("configs")
 

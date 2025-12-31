@@ -14,29 +14,23 @@ var (
 	loadErr        error
 )
 
-// resetSingleton is used for testing purposes only
 func resetSingleton() {
 	once = sync.Once{}
 	configInstance = nil
 	loadErr = nil
 }
 
-// ServiceConfig represents standard configuration for HTTP service client
 type ServiceConfig struct {
 	BaseURL        string            `mapstructure:"baseURL"`
 	Timeout        time.Duration     `mapstructure:"timeout"`
 	DefaultHeaders map[string]string `mapstructure:"defaultHeaders"`
 }
 
-// Viper returns the singleton viper instance with loaded configuration
-// It searches for config.yaml in ./configs/ and project root
 func Viper() (*viper.Viper, error) {
 	once.Do(func() {
 		v := viper.New()
 		v.SetConfigName("config")
 		v.SetConfigType("yaml")
-
-		// Search paths
 		v.AddConfigPath("./configs")
 		v.AddConfigPath(".")
 
@@ -51,8 +45,6 @@ func Viper() (*viper.Viper, error) {
 	return configInstance, loadErr
 }
 
-// UnmarshalByKey loads a specific section from config into the provided struct
-// Example: UnmarshalByKey("testData", &myData)
 func UnmarshalByKey(key string, out any) error {
 	v, err := Viper()
 	if err != nil {
@@ -66,7 +58,6 @@ func UnmarshalByKey(key string, out any) error {
 	return v.UnmarshalKey(key, out)
 }
 
-// GetServiceConfig retrieves and unmarshals a service configuration by key
 func GetServiceConfig(key string) (*ServiceConfig, error) {
 	var cfg ServiceConfig
 	if err := UnmarshalByKey(key, &cfg); err != nil {

@@ -1,18 +1,20 @@
-package httpdsl
+package dsl
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
-	"go-test-framework/pkg/httpclient"
+	"go-test-framework/pkg/http/client"
 
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
-func attachRequest[TReq any](sCtx provider.StepCtx, client *httpclient.Client, req *httpclient.Request[TReq]) {
-	rb := newReportBuilder(client)
+// ToDo: Вынести название заголовков для маскировки результата в конфиг
+func attachRequest[TReq any](sCtx provider.StepCtx, httpClient *client.Client, req *client.Request[TReq]) {
+	rb := newReportBuilder(httpClient)
 
 	rb.writeRequestBasicInfo(req.Method, req.Path, req.PathParams, req.QueryParams)
 	rb.writeParams(req.PathParams, "Path Params")
@@ -28,7 +30,7 @@ func attachRequest[TReq any](sCtx provider.StepCtx, client *httpclient.Client, r
 	sCtx.WithNewAttachment("HTTP Request", allure.Text, rb.Bytes())
 }
 
-func attachResponse[TResp any](sCtx provider.StepCtx, _ *httpclient.Client, resp *httpclient.Response[TResp]) {
+func attachResponse[TResp any](sCtx provider.StepCtx, _ *client.Client, resp *client.Response[TResp]) {
 	rb := newReportBuilder(nil)
 
 	if resp == nil {
@@ -54,10 +56,10 @@ func attachResponse[TResp any](sCtx provider.StepCtx, _ *httpclient.Client, resp
 
 type reportBuilder struct {
 	buf    bytes.Buffer
-	client *httpclient.Client
+	client *client.Client
 }
 
-func newReportBuilder(c *httpclient.Client) *reportBuilder {
+func newReportBuilder(c *client.Client) *reportBuilder {
 	return &reportBuilder{client: c}
 }
 
@@ -75,7 +77,7 @@ func (b *reportBuilder) writeRequestBasicInfo(method, path string, pathParams, q
 	b.writeLine("Path: %s", path)
 
 	if b.client != nil {
-		if eff, err := httpclient.BuildEffectiveURL(b.client.BaseURL, path, pathParams, queryParams); err == nil {
+		if eff, err := client.BuildEffectiveURL(b.client.BaseURL, path, pathParams, queryParams); err == nil {
 			b.writeLine("Effective URL: %s", eff)
 		} else {
 			b.writeLine("Effective URL: (failed to resolve: %v)", err)
@@ -98,16 +100,13 @@ func (b *reportBuilder) writeRequestHeaders(headers map[string]string) {
 		return
 	}
 	b.writeLine("\nHeaders:")
-	sanitized := headers
-	if b.client != nil {
-		sanitized = b.client.SanitizeHeaders(headers)
-	}
+	sanitized := sanitizeHeaders(b.client, headers)
 	for k, v := range sanitized {
 		b.writeLine("  %s: %s", k, v)
 	}
 }
 
-func (b *reportBuilder) writeRequestBody(body any, rawBody []byte, multipart *httpclient.MultipartForm) {
+func (b *reportBuilder) writeRequestBody(body any, rawBody []byte, multipart *client.MultipartForm) {
 	switch {
 	case body != nil:
 		b.writeLine("\nBody (json):")
@@ -158,7 +157,7 @@ func (b *reportBuilder) writeResponseHeaders(headers map[string][]string) {
 	}
 }
 
-func (b *reportBuilder) writeResponseError(err *httpclient.ErrorResponse) {
+func (b *reportBuilder) writeResponseError(err *client.ErrorResponse) {
 	if err == nil {
 		return
 	}
@@ -208,4 +207,32 @@ func (b *reportBuilder) writeTruncated(data []byte) {
 		b.buf.Write(data[:1000])
 		b.buf.WriteString("\n...\n")
 	}
+}
+
+func sanitizeHeaders(c *client.Client, headers map[string]string) map[string]string {
+	sanitized := make(map[string]string, len(headers))
+
+	for key, value := range headers {
+		if c != nil && c.IsSecretHeader(key) {
+			sanitized[key] = maskHeaderValue(key, value)
+		} else {
+			sanitized[key] = value
+		}
+	}
+
+	return sanitized
+}
+
+func maskHeaderValue(key, value string) string {
+	k := strings.ToLower(strings.TrimSpace(key))
+
+	if k == "authorization" {
+		parts := strings.SplitN(strings.TrimSpace(value), " ", 2)
+		if len(parts) == 2 && parts[0] != "" {
+			return parts[0] + " ***MASKED***"
+		}
+		return "***MASKED***"
+	}
+
+	return "***MASKED***"
 }

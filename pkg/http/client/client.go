@@ -1,4 +1,4 @@
-package httpclient
+package client
 
 import (
 	"context"
@@ -12,7 +12,7 @@ type Client struct {
 	BaseURL        string
 	HTTPClient     *http.Client
 	DefaultHeaders map[string]string
-	secretHeaders  map[string]bool // stored in lower-case
+	secretHeaders  map[string]bool
 }
 
 type Config struct {

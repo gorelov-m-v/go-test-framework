@@ -1,4 +1,4 @@
-package httpdsl
+package dsl
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"go-test-framework/pkg/httpclient"
+	"go-test-framework/pkg/http/client"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
@@ -20,26 +20,26 @@ const (
 
 type Call[TReq any, TResp any] struct {
 	sCtx          provider.StepCtx
-	client        *httpclient.Client
+	client        *client.Client
 	ctx           context.Context
 	assertionMode AssertionMode
 
 	stepName string
 
-	req  *httpclient.Request[TReq]
-	resp *httpclient.Response[TResp]
+	req  *client.Request[TReq]
+	resp *client.Response[TResp]
 
 	sent         bool
 	expectations []func(parent provider.StepCtx)
 }
 
-func NewCall[TReq any, TResp any](sCtx provider.StepCtx, client *httpclient.Client) *Call[TReq, TResp] {
+func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Client) *Call[TReq, TResp] {
 	return &Call[TReq, TResp]{
 		sCtx:          sCtx,
-		client:        client,
+		client:        httpClient,
 		ctx:           context.Background(),
 		assertionMode: AssertionsRequire,
-		req: &httpclient.Request[TReq]{
+		req: &client.Request[TReq]{
 			Headers:     make(map[string]string),
 			PathParams:  make(map[string]string),
 			QueryParams: make(map[string]string),
@@ -132,9 +132,9 @@ func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
 	c.sCtx.WithNewStep(name, func(stepCtx provider.StepCtx) {
 		attachRequest(stepCtx, c.client, c.req)
 
-		resp, err := httpclient.DoTyped[TReq, TResp](c.ctx, c.client, c.req)
+		resp, err := client.DoTyped[TReq, TResp](c.ctx, c.client, c.req)
 		if err != nil && resp == nil {
-			resp = &httpclient.Response[TResp]{NetworkError: err.Error()}
+			resp = &client.Response[TResp]{NetworkError: err.Error()}
 		}
 		c.resp = resp
 
@@ -149,13 +149,13 @@ func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
 	return c
 }
 
-func (c *Call[TReq, TResp]) Response() *httpclient.Response[TResp] {
+func (c *Call[TReq, TResp]) Response() *client.Response[TResp] {
 	return c.resp
 }
 
 func (c *Call[TReq, TResp]) validate() {
 	if c.client == nil {
-		panic("httpdsl: httpclient is nil")
+		panic("httpdsl: client is nil")
 	}
 	if c.req == nil {
 		panic("httpdsl: request is nil")

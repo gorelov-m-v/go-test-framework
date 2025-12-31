@@ -22,9 +22,9 @@ type Query[T any] struct {
 	sql             string
 	args            []any
 	expectations    []ExpectationFunc
-	expectsNotFound bool       // True if ExpectNotFound() was called
-	scannedResult   T          // For MustFetch return
-	sqlResult       sql.Result // For MustExec return
+	expectsNotFound bool
+	scannedResult   T
+	sqlResult       sql.Result
 }
 
 func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
@@ -91,7 +91,6 @@ func (q *Query[T]) MustExec() sql.Result {
 	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
-		// Проверяем, что expectations пустые - они предназначены только для MustFetch
 		if len(q.expectations) > 0 {
 			stepCtx.Require().True(false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
 			return
@@ -112,7 +111,10 @@ func (q *Query[T]) MustExec() sql.Result {
 
 func getFieldValueByColumnName(target any, columnName string) (any, error) {
 	val := reflect.ValueOf(target)
-	if val.Kind() == reflect.Ptr && !val.IsNil() {
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return nil, fmt.Errorf("target pointer is nil")
+		}
 		val = val.Elem()
 	}
 	if val.Kind() != reflect.Struct {

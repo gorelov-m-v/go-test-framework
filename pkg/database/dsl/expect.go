@@ -9,6 +9,48 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
+func isNilAny(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Interface, reflect.Func, reflect.Chan:
+		return rv.IsNil()
+	default:
+		return false
+	}
+}
+
+func asBool(v any) (bool, bool) {
+	switch x := v.(type) {
+	case bool:
+		return x, true
+	case int:
+		return x == 1, true
+	case int8:
+		return x == 1, true
+	case int16:
+		return x == 1, true
+	case int32:
+		return x == 1, true
+	case int64:
+		return x == 1, true
+	case uint:
+		return x == 1, true
+	case uint8:
+		return x == 1, true
+	case uint16:
+		return x == 1, true
+	case uint32:
+		return x == 1, true
+	case uint64:
+		return x == 1, true
+	default:
+		return false, false
+	}
+}
+
 func ensureQuerySuccessSilent(a provider.Asserts, err error) bool {
 	if err != nil {
 		a.NoError(err, "Cannot check expectation when query failed")
@@ -73,12 +115,13 @@ func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Que
 				return
 			}
 
-			// Частый кейс: булевое ожидаемое vs TINYINT(1) из БД
 			if expectedBool, ok := expectedValue.(bool); ok {
-				if actualInt64, ok := actualValue.(int64); ok {
-					a.Equal(expectedBool, actualInt64 == 1, "Expected column '%s' = %v", columnName, expectedValue)
+				if actualBool, ok := asBool(actualValue); ok {
+					a.Equal(expectedBool, actualBool, "Expected column '%s' = %v", columnName, expectedValue)
 					return
 				}
+				a.True(false, "Column '%s' is not a boolean/numeric(0/1) type", columnName)
+				return
 			}
 
 			a.Equal(expectedValue, actualValue, "Expected column '%s' = %v", columnName, expectedValue)
@@ -98,6 +141,11 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 
 			actualValue, ok := getColumnValueSilent(a, scannedResult, columnName)
 			if !ok {
+				return
+			}
+
+			if isNilAny(actualValue) {
+				a.False(true, "Expected column '%s' to not be empty", columnName)
 				return
 			}
 
@@ -167,6 +215,10 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 				return
 			}
 
+			if isNilAny(actualValue) {
+				return
+			}
+
 			val := reflect.ValueOf(actualValue)
 			if val.Kind() == reflect.Ptr {
 				a.True(val.IsNil(), "Expected pointer for column '%s' to be nil", columnName)
@@ -228,6 +280,11 @@ func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 				return
 			}
 
+			if isNilAny(actualValue) {
+				a.True(false, "Expected column '%s' to be NOT NULL", columnName)
+				return
+			}
+
 			val := reflect.ValueOf(actualValue)
 			if val.Kind() == reflect.Ptr {
 				a.False(val.IsNil(), "Expected pointer for column '%s' to not be nil", columnName)
@@ -268,7 +325,6 @@ func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 			case *sql.NullTime:
 				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
 			default:
-				// Для не-nullable типов считаем IS NOT NULL всегда true
 				a.True(true, "Column '%s' is NOT NULL", columnName)
 			}
 		})
@@ -290,16 +346,11 @@ func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
 				return
 			}
 
-			if v, ok := actualValue.(int64); ok {
-				a.Equal(int64(1), v, "Expected column '%s' to be true (1)", columnName)
+			if b, ok := asBool(actualValue); ok {
+				a.True(b, "Expected column '%s' to be true", columnName)
 				return
 			}
-			if v, ok := actualValue.(bool); ok {
-				a.True(v, "Expected column '%s' to be true", columnName)
-				return
-			}
-
-			a.True(false, "Column '%s' is not a boolean/int64 type", columnName)
+			a.True(false, "Column '%s' is not a boolean/numeric(0/1) type", columnName)
 		})
 	})
 	return q
@@ -319,16 +370,11 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 				return
 			}
 
-			if v, ok := actualValue.(int64); ok {
-				a.Equal(int64(0), v, "Expected column '%s' to be false (0)", columnName)
+			if b, ok := asBool(actualValue); ok {
+				a.False(b, "Expected column '%s' to be false", columnName)
 				return
 			}
-			if v, ok := actualValue.(bool); ok {
-				a.False(v, "Expected column '%s' to be false", columnName)
-				return
-			}
-
-			a.True(false, "Column '%s' is not a boolean/int64 type", columnName)
+			a.True(false, "Column '%s' is not a boolean/numeric(0/1) type", columnName)
 		})
 	})
 	return q

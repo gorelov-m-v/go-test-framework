@@ -86,6 +86,88 @@ func asBool(v any) (bool, bool) {
 		} else if x == 1 {
 			return true, true
 		}
+	case sql.NullBool:
+		if !x.Valid {
+			return false, false
+		}
+		return x.Bool, true
+	case *sql.NullBool:
+		if x == nil || !x.Valid {
+			return false, false
+		}
+		return x.Bool, true
+	case sql.NullInt64:
+		if !x.Valid {
+			return false, false
+		}
+		if x.Int64 == 0 {
+			return false, true
+		} else if x.Int64 == 1 {
+			return true, true
+		}
+	case *sql.NullInt64:
+		if x == nil || !x.Valid {
+			return false, false
+		}
+		if x.Int64 == 0 {
+			return false, true
+		} else if x.Int64 == 1 {
+			return true, true
+		}
+	case sql.NullInt32:
+		if !x.Valid {
+			return false, false
+		}
+		if x.Int32 == 0 {
+			return false, true
+		} else if x.Int32 == 1 {
+			return true, true
+		}
+	case *sql.NullInt32:
+		if x == nil || !x.Valid {
+			return false, false
+		}
+		if x.Int32 == 0 {
+			return false, true
+		} else if x.Int32 == 1 {
+			return true, true
+		}
+	case sql.NullInt16:
+		if !x.Valid {
+			return false, false
+		}
+		if x.Int16 == 0 {
+			return false, true
+		} else if x.Int16 == 1 {
+			return true, true
+		}
+	case *sql.NullInt16:
+		if x == nil || !x.Valid {
+			return false, false
+		}
+		if x.Int16 == 0 {
+			return false, true
+		} else if x.Int16 == 1 {
+			return true, true
+		}
+	case sql.NullByte:
+		if !x.Valid {
+			return false, false
+		}
+		if x.Byte == 0 {
+			return false, true
+		} else if x.Byte == 1 {
+			return true, true
+		}
+	case *sql.NullByte:
+		if x == nil || !x.Valid {
+			return false, false
+		}
+		if x.Byte == 0 {
+			return false, true
+		} else if x.Byte == 1 {
+			return true, true
+		}
 	}
 	return false, false
 }
@@ -230,7 +312,14 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 					isEmpty = v == nil || !v.Valid
 				default:
 					val := reflect.ValueOf(actualValue)
-					isEmpty = val.IsZero()
+					switch val.Kind() {
+					case reflect.Slice, reflect.Map, reflect.Array:
+						isEmpty = val.Len() == 0
+					case reflect.String:
+						isEmpty = strings.TrimSpace(val.String()) == ""
+					default:
+						isEmpty = false
+					}
 				}
 			}
 

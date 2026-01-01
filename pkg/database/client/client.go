@@ -23,12 +23,10 @@ type Client struct {
 }
 
 func New(cfg Config) (*Client, error) {
-	// Validate driver is required
 	if cfg.Driver == "" {
 		return nil, fmt.Errorf("driver is required: must be 'mysql' or 'postgres'")
 	}
 
-	// Validate driver value
 	if cfg.Driver != "mysql" && cfg.Driver != "postgres" {
 		return nil, fmt.Errorf("unsupported driver '%s': must be 'mysql' or 'postgres'", cfg.Driver)
 	}

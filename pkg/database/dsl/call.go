@@ -51,13 +51,11 @@ func (q *Query[T]) MustFetch() T {
 	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
-		// Determine step mode (sync vs async)
 		mode := getStepMode(q.sCtx)
 		var result T
 		var err error
 		var summary pollingSummary
 
-		// Execute based on mode
 		if mode == AsyncMode {
 			result, err, summary = q.executeWithRetry(stepCtx, q.expectations)
 			attachPollingSummary(stepCtx, summary)
@@ -67,7 +65,6 @@ func (q *Query[T]) MustFetch() T {
 
 		q.scannedResult = result
 
-		// Attach result
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				stepCtx.Logf("Query returned no rows")
@@ -77,7 +74,6 @@ func (q *Query[T]) MustFetch() T {
 			attachResult(stepCtx, result, nil)
 		}
 
-		// Choose assertion mode based on step mode
 		var assertMd assertMode
 		if mode == AsyncMode {
 			assertMd = assertModeValue
@@ -85,12 +81,10 @@ func (q *Query[T]) MustFetch() T {
 			assertMd = requireMode
 		}
 
-		// Report expectations
 		if len(q.expectations) > 0 {
 			reportExpectations(stepCtx, assertMd, q.expectations, err, result)
 		}
 
-		// Final error handling
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				if !q.expectsNotFound {
@@ -108,7 +102,6 @@ func (q *Query[T]) MustFetch() T {
 				}
 			}
 		} else if !summary.Success {
-			// Expectations failed even though query succeeded
 			if mode == AsyncMode {
 				stepCtx.Assert().True(false, finalFailureMessage(summary))
 			} else {

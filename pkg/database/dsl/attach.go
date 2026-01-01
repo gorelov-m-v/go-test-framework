@@ -36,7 +36,6 @@ func attachQuery(sCtx provider.StepCtx, sqlQuery string, args []any) {
 
 func attachResult(sCtx provider.StepCtx, result any, err error) {
 	if err != nil {
-		// Distinguish ErrNoRows from other SQL errors for better UX
 		if errors.Is(err, sql.ErrNoRows) {
 			noRowsJSON, _ := json.MarshalIndent(map[string]string{
 				"status": "no rows found",

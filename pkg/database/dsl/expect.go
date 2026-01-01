@@ -511,30 +511,12 @@ func makeColumnEqualsExpectation(columnName string, expectedValue any) *expectat
 				}
 			}
 
-			if expectedBool, ok := expectedValue.(bool); ok {
-				actualBool, canConvert := asBool(actualValue)
-				if !canConvert {
-					return checkResult{
-						ok:        false,
-						retryable: false,
-						reason:    fmt.Sprintf("Column '%s' is not a boolean/numeric(0/1) type", columnName),
-					}
-				}
-				if actualBool != expectedBool {
-					return checkResult{
-						ok:        false,
-						retryable: true,
-						reason:    fmt.Sprintf("Expected column '%s' = %v, but got %v", columnName, expectedBool, actualBool),
-					}
-				}
-				return checkResult{ok: true}
-			}
-
-			if actualValue != expectedValue {
+			equal, retryable, reason := equalsLoose(expectedValue, actualValue)
+			if !equal {
 				return checkResult{
 					ok:        false,
-					retryable: true,
-					reason:    fmt.Sprintf("Expected column '%s' = %v, but got %v", columnName, expectedValue, actualValue),
+					retryable: retryable,
+					reason:    fmt.Sprintf("Column '%s': %s", columnName, reason),
 				}
 			}
 			return checkResult{ok: true}
@@ -779,6 +761,14 @@ func makeColumnTrueExpectation(columnName string) *expectation {
 				}
 			}
 
+			if isValueNull(actualValue) {
+				return checkResult{
+					ok:        false,
+					retryable: true,
+					reason:    fmt.Sprintf("Column '%s' is NULL yet", columnName),
+				}
+			}
+
 			b, ok := asBool(actualValue)
 			if !ok {
 				return checkResult{
@@ -847,6 +837,14 @@ func makeColumnFalseExpectation(columnName string) *expectation {
 					ok:        false,
 					retryable: false,
 					reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				}
+			}
+
+			if isValueNull(actualValue) {
+				return checkResult{
+					ok:        false,
+					retryable: true,
+					reason:    fmt.Sprintf("Column '%s' is NULL yet", columnName),
 				}
 			}
 

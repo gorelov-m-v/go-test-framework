@@ -33,7 +33,6 @@ type retryContext struct {
 }
 
 func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*expectation) (T, error, pollingSummary) {
-	var zero T
 	cfg := config.GetAsyncConfig()
 
 	if !cfg.Enabled {
@@ -101,7 +100,7 @@ func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*ex
 			if err != nil {
 				summary.LastError = err.Error()
 			}
-			return zero, err, summary
+			return result, err, summary
 		}
 
 		if time.Now().After(deadline) || ctx.Err() != nil {
@@ -116,7 +115,7 @@ func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*ex
 			if err != nil {
 				summary.LastError = err.Error()
 			}
-			return zero, err, summary
+			return result, err, summary
 		}
 
 		delay := retryCtx.calculateNextDelay()
@@ -131,7 +130,7 @@ func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*ex
 				FailedChecks:  retryCtx.failedReasons,
 				TimeoutReason: "Context cancelled",
 			}
-			return zero, ctx.Err(), summary
+			return result, ctx.Err(), summary
 		}
 	}
 }

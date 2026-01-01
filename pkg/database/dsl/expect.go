@@ -530,12 +530,11 @@ func makeColumnEqualsExpectation(columnName string, expectedValue any) *expectat
 				}
 
 				actualValue, _ := getFieldValueByColumnName(result, columnName)
-				if expectedBool, ok := expectedValue.(bool); ok {
-					actualBool, _ := asBool(actualValue)
-					a.Equal(expectedBool, actualBool, "Expected column '%s' = %v", columnName, expectedValue)
-				} else {
-					a.Equal(expectedValue, actualValue, "Expected column '%s' = %v", columnName, expectedValue)
+				equal, _, reason := equalsLoose(expectedValue, actualValue)
+				if reason == "" {
+					reason = fmt.Sprintf("expected %v, got %v", expectedValue, actualValue)
 				}
+				a.True(equal, "Column '%s': %s", columnName, reason)
 			})
 		},
 	)

@@ -1,7 +1,6 @@
 package dsl
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"reflect"
@@ -20,6 +19,20 @@ func equalsLoose(expected, actual any) (bool, bool, string) {
 
 	if isValueNull(actual) {
 		return false, true, "column is NULL yet"
+	}
+
+	if _, ok := expected.(bool); ok {
+		expBool, _ := asBool(expected)
+
+		actBool, actOk := asBool(actual)
+		if !actOk {
+			return false, false, fmt.Sprintf("type mismatch: expected bool, got %T(%v)", actual, actual)
+		}
+
+		if expBool == actBool {
+			return true, true, ""
+		}
+		return false, true, fmt.Sprintf("expected %v, got %v", expBool, actBool)
 	}
 
 	expNum, expIsNum := toComparableNumber(expected)
@@ -157,27 +170,4 @@ func toComparableString(v any) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func equalsBytesOrString(a, b any) bool {
-	aBytes, aOk := a.([]byte)
-	bBytes, bOk := b.([]byte)
-
-	if aOk && bOk {
-		return bytes.Equal(aBytes, bBytes)
-	}
-
-	if aOk {
-		if bStr, ok := b.(string); ok {
-			return string(aBytes) == bStr
-		}
-	}
-
-	if bOk {
-		if aStr, ok := a.(string); ok {
-			return aStr == string(bBytes)
-		}
-	}
-
-	return false
 }

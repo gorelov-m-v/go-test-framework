@@ -1,4 +1,4 @@
-package dsl
+package extension
 
 import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
@@ -16,7 +16,7 @@ type StepModeProvider interface {
 	StepMode() StepMode
 }
 
-func getStepMode(sCtx provider.StepCtx) StepMode {
+func GetStepMode(sCtx provider.StepCtx) StepMode {
 	if smp, ok := sCtx.(StepModeProvider); ok {
 		return smp.StepMode()
 	}

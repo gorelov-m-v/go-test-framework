@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"go-test-framework/pkg/database/client"
+	"go-test-framework/pkg/extension"
 )
 
 type Query[T any] struct {
@@ -51,14 +52,14 @@ func (q *Query[T]) MustFetch() T {
 	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
-		mode := getStepMode(q.sCtx)
+		mode := extension.GetStepMode(q.sCtx)
 		var result T
 		var err error
-		var summary pollingSummary
+		var summary extension.PollingSummary
 
-		if mode == AsyncMode {
+		if mode == extension.AsyncMode {
 			result, err, summary = q.executeWithRetry(stepCtx, q.expectations)
-			attachPollingSummary(stepCtx, summary)
+			extension.AttachPollingSummary(stepCtx, summary)
 		} else {
 			result, err, summary = q.executeSingle(stepCtx)
 		}
@@ -75,7 +76,7 @@ func (q *Query[T]) MustFetch() T {
 		}
 
 		var assertMd assertMode
-		if mode == AsyncMode {
+		if mode == extension.AsyncMode {
 			assertMd = assertModeValue
 		} else {
 			assertMd = requireMode
@@ -88,22 +89,22 @@ func (q *Query[T]) MustFetch() T {
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				if !q.expectsNotFound {
-					if mode == AsyncMode {
+					if mode == extension.AsyncMode {
 						stepCtx.Assert().NoError(err, "Expected row to exist, but got sql.ErrNoRows after retry. Use ExpectNotFound() if 'not found' is expected")
 					} else {
 						stepCtx.Require().NoError(err, "Expected row to exist, but got sql.ErrNoRows. Use ExpectNotFound() if 'not found' is expected")
 					}
 				}
 			} else {
-				if mode == AsyncMode {
-					stepCtx.Assert().NoError(err, finalFailureMessage(summary))
+				if mode == extension.AsyncMode {
+					stepCtx.Assert().NoError(err, extension.FinalFailureMessage(summary))
 				} else {
 					stepCtx.Require().NoError(err, "DB query failed")
 				}
 			}
 		} else if !summary.Success {
-			if mode == AsyncMode {
-				stepCtx.Assert().True(false, finalFailureMessage(summary))
+			if mode == extension.AsyncMode {
+				stepCtx.Assert().True(false, extension.FinalFailureMessage(summary))
 			} else {
 				stepCtx.Require().True(false, "DB query expectations not met")
 			}
@@ -122,8 +123,8 @@ func (q *Query[T]) MustExec() sql.Result {
 		attachQuery(stepCtx, q.sql, q.args)
 
 		if len(q.expectations) > 0 {
-			mode := getStepMode(q.sCtx)
-			if mode == AsyncMode {
+			mode := extension.GetStepMode(q.sCtx)
+			if mode == extension.AsyncMode {
 				stepCtx.Assert().True(false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
 			} else {
 				stepCtx.Require().True(false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
@@ -137,8 +138,8 @@ func (q *Query[T]) MustExec() sql.Result {
 		attachExecResult(stepCtx, res, err)
 
 		if err != nil {
-			mode := getStepMode(q.sCtx)
-			if mode == AsyncMode {
+			mode := extension.GetStepMode(q.sCtx)
+			if mode == extension.AsyncMode {
 				stepCtx.Assert().NoError(err, "DB exec failed")
 			} else {
 				stepCtx.Require().NoError(err, "DB exec failed")

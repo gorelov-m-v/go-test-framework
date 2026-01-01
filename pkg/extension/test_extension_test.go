@@ -1,4 +1,4 @@
-package dsl
+package extension
 
 import (
 	"testing"
@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// mockT is a minimal mock implementation of provider.T for testing
 type mockT struct {
 	provider.T
 	stepCalls      []string
@@ -18,7 +17,6 @@ type mockT struct {
 
 func (m *mockT) WithNewStep(stepName string, step func(sCtx provider.StepCtx), params ...*allure.Parameter) {
 	m.stepCalls = append(m.stepCalls, stepName)
-	// Create a minimal context
 	mockCtx := &mockStepCtx{}
 	m.lastStepCtx = mockCtx
 	step(mockCtx)
@@ -26,7 +24,6 @@ func (m *mockT) WithNewStep(stepName string, step func(sCtx provider.StepCtx), p
 
 func (m *mockT) WithNewAsyncStep(stepName string, step func(sCtx provider.StepCtx), params ...*allure.Parameter) {
 	m.asyncStepCalls = append(m.asyncStepCalls, stepName)
-	// Create a minimal context
 	mockCtx := &mockStepCtx{}
 	m.lastStepCtx = mockCtx
 	step(mockCtx)
@@ -45,8 +42,7 @@ func TestTExtension_WithNewStep(t *testing.T) {
 		assert.Len(t, mockProvider.stepCalls, 1)
 		assert.Equal(t, "test step", mockProvider.stepCalls[0])
 
-		// Check that context was wrapped with SyncMode
-		mode := getStepMode(capturedCtx)
+		mode := GetStepMode(capturedCtx)
 		assert.Equal(t, SyncMode, mode, "WithNewStep should wrap context with SyncMode")
 	})
 }
@@ -64,8 +60,7 @@ func TestTExtension_WithNewAsyncStep(t *testing.T) {
 		assert.Len(t, mockProvider.asyncStepCalls, 1)
 		assert.Equal(t, "test async step", mockProvider.asyncStepCalls[0])
 
-		// Check that context was wrapped with AsyncMode
-		mode := getStepMode(capturedCtx)
+		mode := GetStepMode(capturedCtx)
 		assert.Equal(t, AsyncMode, mode, "WithNewAsyncStep should wrap context with AsyncMode")
 	})
 }
@@ -85,8 +80,8 @@ func TestTExtension_Integration(t *testing.T) {
 			asyncCtx = sCtx
 		})
 
-		syncMode := getStepMode(syncCtx)
-		asyncMode := getStepMode(asyncCtx)
+		syncMode := GetStepMode(syncCtx)
+		asyncMode := GetStepMode(asyncCtx)
 
 		assert.Equal(t, SyncMode, syncMode, "sync step should have SyncMode")
 		assert.Equal(t, AsyncMode, asyncMode, "async step should have AsyncMode")

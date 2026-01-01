@@ -1,4 +1,4 @@
-package dsl
+package extension
 
 import (
 	"github.com/ozontech/allure-go/pkg/allure"

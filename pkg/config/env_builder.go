@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -18,6 +19,67 @@ func debugLog(format string, args ...any) {
 	if debugEnabled {
 		log.Printf("BuildEnv: "+format, args...)
 	}
+}
+
+// AsyncConfig defines retry/polling behavior for async DB operations
+type AsyncConfig struct {
+	// Enabled controls whether async retry is active globally
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+
+	// Timeout is the maximum time to wait for eventual consistency
+	Timeout time.Duration `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
+
+	// Interval is the initial delay between retry attempts
+	Interval time.Duration `mapstructure:"interval" yaml:"interval" json:"interval"`
+
+	// Backoff configuration for exponential retry delays
+	Backoff BackoffConfig `mapstructure:"backoff" yaml:"backoff" json:"backoff"`
+
+	// Jitter adds randomness to retry intervals (0.0 to 1.0, e.g., 0.2 = ±20%)
+	Jitter float64 `mapstructure:"jitter" yaml:"jitter" json:"jitter"`
+
+	// RetryOnErrors lists which error types should trigger retry (e.g., "sql_no_rows")
+	RetryOnErrors []string `mapstructure:"retry_on_errors" yaml:"retry_on_errors" json:"retry_on_errors"`
+}
+
+// BackoffConfig defines exponential backoff parameters
+type BackoffConfig struct {
+	// Enabled controls whether backoff is active
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+
+	// Factor is the multiplier for each retry (e.g., 1.5, 2.0)
+	Factor float64 `mapstructure:"factor" yaml:"factor" json:"factor"`
+
+	// MaxInterval caps the maximum delay between retries
+	MaxInterval time.Duration `mapstructure:"max_interval" yaml:"max_interval" json:"max_interval"`
+}
+
+// DefaultAsyncConfig returns safe default configuration
+func DefaultAsyncConfig() AsyncConfig {
+	return AsyncConfig{
+		Enabled:  true,
+		Timeout:  10 * time.Second,
+		Interval: 200 * time.Millisecond,
+		Backoff: BackoffConfig{
+			Enabled:     true,
+			Factor:      1.5,
+			MaxInterval: 1 * time.Second,
+		},
+		Jitter:        0.2,
+		RetryOnErrors: []string{"sql_no_rows"},
+	}
+}
+
+var globalAsyncConfig = DefaultAsyncConfig()
+
+// SetAsyncConfig updates the global async configuration
+func SetAsyncConfig(cfg AsyncConfig) {
+	globalAsyncConfig = cfg
+}
+
+// GetAsyncConfig returns the current global async configuration
+func GetAsyncConfig() AsyncConfig {
+	return globalAsyncConfig
 }
 
 func BuildEnv(envPtr any) error {
@@ -47,6 +109,13 @@ func BuildEnv(envPtr any) error {
 
 		if dbConfigKey := field.Tag.Get("db_config"); dbConfigKey != "" {
 			if err := injectDBClient(v, fieldValue, field, dbConfigKey, structName); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if asyncConfigKey := field.Tag.Get("async_config"); asyncConfigKey != "" {
+			if err := injectAsyncConfig(v, fieldValue, field, asyncConfigKey, structName); err != nil {
 				return err
 			}
 			continue
@@ -163,6 +232,34 @@ func injectDBClient(v *viper.Viper, fieldValue reflect.Value, field reflect.Stru
 
 	fieldValue.Set(reflect.ValueOf(dbClient))
 	debugLog("injected DB client into '%s'", field.Name)
+	return nil
+}
+
+func injectAsyncConfig(v *viper.Viper, fieldValue reflect.Value, field reflect.StructField, asyncConfigKey, structName string) error {
+	debugLog("found tag 'async_config:%s' on field '%s' (type=%s)", asyncConfigKey, field.Name, field.Type)
+
+	if !fieldValue.CanSet() {
+		return fmt.Errorf("BuildEnv(%s): field '%s' has tag async_config:\"%s\" but is not exported", structName, field.Name, asyncConfigKey)
+	}
+
+	if fieldValue.Type() != reflect.TypeOf(AsyncConfig{}) {
+		return fmt.Errorf("BuildEnv(%s): field '%s' tag async_config:\"%s\": field must be 'config.AsyncConfig', got '%s'", structName, field.Name, asyncConfigKey, fieldValue.Type())
+	}
+
+	var asyncCfg AsyncConfig
+	if v.IsSet(asyncConfigKey) {
+		if err := v.UnmarshalKey(asyncConfigKey, &asyncCfg); err != nil {
+			return fmt.Errorf("BuildEnv(%s): field '%s' tag async_config:\"%s\": failed to unmarshal config: %w", structName, field.Name, asyncConfigKey, err)
+		}
+		debugLog("loaded async config from '%s'", asyncConfigKey)
+	} else {
+		asyncCfg = DefaultAsyncConfig()
+		debugLog("using default async config for field '%s'", field.Name)
+	}
+
+	SetAsyncConfig(asyncCfg)
+	fieldValue.Set(reflect.ValueOf(asyncCfg))
+	debugLog("injected async config into '%s'", field.Name)
 	return nil
 }
 

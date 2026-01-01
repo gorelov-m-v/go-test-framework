@@ -3,17 +3,15 @@ package dsl
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 
-	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"go-test-framework/pkg/database/client"
 )
-
-type ExpectationFunc func(parent provider.StepCtx, err error, scannedResult any)
 
 type Query[T any] struct {
 	sCtx            provider.StepCtx
@@ -21,7 +19,7 @@ type Query[T any] struct {
 	ctx             context.Context
 	sql             string
 	args            []any
-	expectations    []ExpectationFunc
+	expectations    []*expectation
 	expectsNotFound bool
 	scannedResult   T
 	sqlResult       sql.Result
@@ -47,17 +45,31 @@ func (q *Query[T]) WithContext(ctx context.Context) *Query[T] {
 }
 
 func (q *Query[T]) MustFetch() T {
-	var result T
 	tableName := extractTableName(q.sql)
 	stepName := fmt.Sprintf("SELECT %s", tableName)
 
 	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
-		err := sqlscan.Get(q.ctx, q.client.DB, &result, q.sql, q.args...)
+		// Determine step mode (sync vs async)
+		mode := getStepMode(q.sCtx)
+		var result T
+		var err error
+		var summary pollingSummary
+
+		// Execute based on mode
+		if mode == AsyncMode {
+			result, err, summary = q.executeWithRetry(stepCtx, q.expectations)
+			attachPollingSummary(stepCtx, summary)
+		} else {
+			result, err, summary = q.executeSingle(stepCtx)
+		}
+
 		q.scannedResult = result
+
+		// Attach result
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				stepCtx.Logf("Query returned no rows")
 			}
 			attachResult(stepCtx, nil, err)
@@ -65,17 +77,42 @@ func (q *Query[T]) MustFetch() T {
 			attachResult(stepCtx, result, nil)
 		}
 
-		for _, expectation := range q.expectations {
-			expectation(stepCtx, err, result)
+		// Choose assertion mode based on step mode
+		var assertMd assertMode
+		if mode == AsyncMode {
+			assertMd = assertModeValue
+		} else {
+			assertMd = requireMode
 		}
 
+		// Report expectations
+		if len(q.expectations) > 0 {
+			reportExpectations(stepCtx, assertMd, q.expectations, err, result)
+		}
+
+		// Final error handling
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				if !q.expectsNotFound {
-					stepCtx.Require().NoError(err, "Expected row to exist, but got sql.ErrNoRows. Use ExpectNotFound() if 'not found' is expected")
+					if mode == AsyncMode {
+						stepCtx.Assert().NoError(err, "Expected row to exist, but got sql.ErrNoRows after retry. Use ExpectNotFound() if 'not found' is expected")
+					} else {
+						stepCtx.Require().NoError(err, "Expected row to exist, but got sql.ErrNoRows. Use ExpectNotFound() if 'not found' is expected")
+					}
 				}
 			} else {
-				stepCtx.Require().NoError(err, "DB query failed")
+				if mode == AsyncMode {
+					stepCtx.Assert().NoError(err, finalFailureMessage(summary))
+				} else {
+					stepCtx.Require().NoError(err, "DB query failed")
+				}
+			}
+		} else if !summary.Success {
+			// Expectations failed even though query succeeded
+			if mode == AsyncMode {
+				stepCtx.Assert().True(false, finalFailureMessage(summary))
+			} else {
+				stepCtx.Require().True(false, "DB query expectations not met")
 			}
 		}
 	})
@@ -92,7 +129,12 @@ func (q *Query[T]) MustExec() sql.Result {
 		attachQuery(stepCtx, q.sql, q.args)
 
 		if len(q.expectations) > 0 {
-			stepCtx.Require().True(false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
+			mode := getStepMode(q.sCtx)
+			if mode == AsyncMode {
+				stepCtx.Assert().True(false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
+			} else {
+				stepCtx.Require().True(false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
+			}
 			return
 		}
 
@@ -102,7 +144,12 @@ func (q *Query[T]) MustExec() sql.Result {
 		attachExecResult(stepCtx, res, err)
 
 		if err != nil {
-			stepCtx.Require().NoError(err, "DB exec failed")
+			mode := getStepMode(q.sCtx)
+			if mode == AsyncMode {
+				stepCtx.Assert().NoError(err, "DB exec failed")
+			} else {
+				stepCtx.Require().NoError(err, "DB exec failed")
+			}
 		}
 	})
 

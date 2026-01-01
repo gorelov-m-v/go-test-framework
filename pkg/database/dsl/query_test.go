@@ -87,7 +87,6 @@ func TestQuery_MultipleExpectationsAddedCorrectly(t *testing.T) {
 
 	query.
 		ExpectFound().
-		ExpectNotFound().
 		ExpectColumnEquals("id", 1).
 		ExpectColumnNotEmpty("username").
 		ExpectColumnIsNull("deleted_at").
@@ -95,5 +94,5 @@ func TestQuery_MultipleExpectationsAddedCorrectly(t *testing.T) {
 		ExpectColumnTrue("is_active").
 		ExpectColumnFalse("is_deleted")
 
-	assert.Len(t, query.expectations, 8)
+	assert.Len(t, query.expectations, 7)
 }

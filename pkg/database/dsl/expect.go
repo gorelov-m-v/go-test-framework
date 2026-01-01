@@ -2,9 +2,7 @@ package dsl
 
 import (
 	"database/sql"
-	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
@@ -202,338 +200,62 @@ func getColumnValueSilent(a provider.Asserts, scannedResult any, columnName stri
 }
 
 func (q *Query[T]) ExpectFound() *Query[T] {
-	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
-		parent.WithNewStep("Expect: Found", func(sCtx provider.StepCtx) {
-			a := sCtx.Require()
-			a.NoError(err, "Expected query to execute successfully and return at least one result")
-		})
-	})
+	q.expectations = append(q.expectations, makeFoundExpectation())
 	return q
 }
 
 func (q *Query[T]) ExpectNotFound() *Query[T] {
 	q.expectsNotFound = true
-	q.expectations = []ExpectationFunc{}
-	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
-		parent.WithNewStep("Expect: Not Found", func(sCtx provider.StepCtx) {
-			a := sCtx.Require()
-			a.ErrorIs(err, sql.ErrNoRows, "Expected sql.ErrNoRows")
-		})
-	})
+	q.expectations = []*expectation{}
+	q.expectations = append(q.expectations, makeNotFoundExpectation())
 	return q
 }
 
 func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Query[T] {
-	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
-		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' = %v", columnName, expectedValue), func(sCtx provider.StepCtx) {
-			a := sCtx.Require()
-
-			if q.expectsNotFound {
-				a.True(false, "ExpectColumnEquals cannot be used with ExpectNotFound()")
-				return
-			}
-
-			if !ensureQuerySuccessSilent(a, err) {
-				return
-			}
-
-			actualValue, ok := getColumnValueSilent(a, scannedResult, columnName)
-			if !ok {
-				return
-			}
-
-			if expectedBool, ok := expectedValue.(bool); ok {
-				if actualBool, ok := asBool(actualValue); ok {
-					a.Equal(expectedBool, actualBool, "Expected column '%s' = %v", columnName, expectedValue)
-					return
-				}
-				a.True(false, "Column '%s' is not a boolean/numeric(0/1) type", columnName)
-				return
-			}
-
-			a.Equal(expectedValue, actualValue, "Expected column '%s' = %v", columnName, expectedValue)
-		})
-	})
+	if q.expectsNotFound {
+		// This is a programming error, so we panic here
+		panic("ExpectColumnEquals cannot be used with ExpectNotFound()")
+	}
+	q.expectations = append(q.expectations, makeColumnEqualsExpectation(columnName, expectedValue))
 	return q
 }
 
 func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
-	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
-		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' not empty", columnName), func(sCtx provider.StepCtx) {
-			a := sCtx.Require()
-
-			if q.expectsNotFound {
-				a.True(false, "ExpectColumnNotEmpty cannot be used with ExpectNotFound()")
-				return
-			}
-
-			if !ensureQuerySuccessSilent(a, err) {
-				return
-			}
-
-			actualValue, ok := getColumnValueSilent(a, scannedResult, columnName)
-			if !ok {
-				return
-			}
-
-			if isNilAny(actualValue) {
-				a.False(true, "Expected column '%s' to not be empty", columnName)
-				return
-			}
-
-			isEmpty := false
-
-			if str, ok := actualValue.(string); ok {
-				isEmpty = strings.TrimSpace(str) == ""
-			} else if val := reflect.ValueOf(actualValue); val.Kind() == reflect.Ptr {
-				isEmpty = val.IsNil()
-			} else {
-				switch v := actualValue.(type) {
-				case sql.NullString:
-					isEmpty = !v.Valid || (v.Valid && strings.TrimSpace(v.String) == "")
-				case sql.NullInt64:
-					isEmpty = !v.Valid
-				case sql.NullInt32:
-					isEmpty = !v.Valid
-				case sql.NullInt16:
-					isEmpty = !v.Valid
-				case sql.NullByte:
-					isEmpty = !v.Valid
-				case sql.NullFloat64:
-					isEmpty = !v.Valid
-				case sql.NullBool:
-					isEmpty = !v.Valid
-				case sql.NullTime:
-					isEmpty = !v.Valid
-				case *sql.NullString:
-					isEmpty = v == nil || !v.Valid || (v.Valid && strings.TrimSpace(v.String) == "")
-				case *sql.NullInt64:
-					isEmpty = v == nil || !v.Valid
-				case *sql.NullInt32:
-					isEmpty = v == nil || !v.Valid
-				case *sql.NullInt16:
-					isEmpty = v == nil || !v.Valid
-				case *sql.NullByte:
-					isEmpty = v == nil || !v.Valid
-				case *sql.NullFloat64:
-					isEmpty = v == nil || !v.Valid
-				case *sql.NullBool:
-					isEmpty = v == nil || !v.Valid
-				case *sql.NullTime:
-					isEmpty = v == nil || !v.Valid
-				default:
-					val := reflect.ValueOf(actualValue)
-					switch val.Kind() {
-					case reflect.Slice, reflect.Map, reflect.Array:
-						isEmpty = val.Len() == 0
-					case reflect.String:
-						isEmpty = strings.TrimSpace(val.String()) == ""
-					default:
-						isEmpty = false
-					}
-				}
-			}
-
-			a.False(isEmpty, "Expected column '%s' to not be empty", columnName)
-		})
-	})
+	if q.expectsNotFound {
+		panic("ExpectColumnNotEmpty cannot be used with ExpectNotFound()")
+	}
+	q.expectations = append(q.expectations, makeColumnNotEmptyExpectation(columnName))
 	return q
 }
 
 func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
-	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
-		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' IS NULL", columnName), func(sCtx provider.StepCtx) {
-			a := sCtx.Require()
-
-			if q.expectsNotFound {
-				a.True(false, "ExpectColumnIsNull cannot be used with ExpectNotFound()")
-				return
-			}
-
-			if !ensureQuerySuccessSilent(a, err) {
-				return
-			}
-
-			actualValue, ok := getColumnValueSilent(a, scannedResult, columnName)
-			if !ok {
-				return
-			}
-
-			if isNilAny(actualValue) {
-				return
-			}
-
-			val := reflect.ValueOf(actualValue)
-			if val.Kind() == reflect.Ptr {
-				a.True(val.IsNil(), "Expected pointer for column '%s' to be nil", columnName)
-				return
-			}
-
-			switch v := actualValue.(type) {
-			case sql.NullString:
-				a.False(v.Valid, "Expected column '%s' to be NULL (Valid=false)", columnName)
-			case sql.NullInt64:
-				a.False(v.Valid, "Expected column '%s' to be NULL (Valid=false)", columnName)
-			case sql.NullInt32:
-				a.False(v.Valid, "Expected column '%s' to be NULL (Valid=false)", columnName)
-			case sql.NullInt16:
-				a.False(v.Valid, "Expected column '%s' to be NULL (Valid=false)", columnName)
-			case sql.NullByte:
-				a.False(v.Valid, "Expected column '%s' to be NULL (Valid=false)", columnName)
-			case sql.NullFloat64:
-				a.False(v.Valid, "Expected column '%s' to be NULL (Valid=false)", columnName)
-			case sql.NullBool:
-				a.False(v.Valid, "Expected column '%s' to be NULL (Valid=false)", columnName)
-			case sql.NullTime:
-				a.False(v.Valid, "Expected column '%s' to be NULL (Valid=false)", columnName)
-			case *sql.NullString:
-				a.True(v == nil || !v.Valid, "Expected column '%s' to be NULL", columnName)
-			case *sql.NullInt64:
-				a.True(v == nil || !v.Valid, "Expected column '%s' to be NULL", columnName)
-			case *sql.NullInt32:
-				a.True(v == nil || !v.Valid, "Expected column '%s' to be NULL", columnName)
-			case *sql.NullInt16:
-				a.True(v == nil || !v.Valid, "Expected column '%s' to be NULL", columnName)
-			case *sql.NullByte:
-				a.True(v == nil || !v.Valid, "Expected column '%s' to be NULL", columnName)
-			case *sql.NullFloat64:
-				a.True(v == nil || !v.Valid, "Expected column '%s' to be NULL", columnName)
-			case *sql.NullBool:
-				a.True(v == nil || !v.Valid, "Expected column '%s' to be NULL", columnName)
-			case *sql.NullTime:
-				a.True(v == nil || !v.Valid, "Expected column '%s' to be NULL", columnName)
-			default:
-				a.True(false, "Column '%s' type %T does not support NULL check", columnName, actualValue)
-			}
-		})
-	})
+	if q.expectsNotFound {
+		panic("ExpectColumnIsNull cannot be used with ExpectNotFound()")
+	}
+	q.expectations = append(q.expectations, makeColumnIsNullExpectation(columnName))
 	return q
 }
 
 func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
-	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
-		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' IS NOT NULL", columnName), func(sCtx provider.StepCtx) {
-			a := sCtx.Require()
-
-			if q.expectsNotFound {
-				a.True(false, "ExpectColumnIsNotNull cannot be used with ExpectNotFound()")
-				return
-			}
-
-			if !ensureQuerySuccessSilent(a, err) {
-				return
-			}
-
-			actualValue, ok := getColumnValueSilent(a, scannedResult, columnName)
-			if !ok {
-				return
-			}
-
-			if isNilAny(actualValue) {
-				a.True(false, "Expected column '%s' to be NOT NULL", columnName)
-				return
-			}
-
-			val := reflect.ValueOf(actualValue)
-			if val.Kind() == reflect.Ptr {
-				a.False(val.IsNil(), "Expected pointer for column '%s' to not be nil", columnName)
-				return
-			}
-
-			switch v := actualValue.(type) {
-			case sql.NullString:
-				a.True(v.Valid, "Expected column '%s' to be NOT NULL (Valid=true)", columnName)
-			case sql.NullInt64:
-				a.True(v.Valid, "Expected column '%s' to be NOT NULL (Valid=true)", columnName)
-			case sql.NullInt32:
-				a.True(v.Valid, "Expected column '%s' to be NOT NULL (Valid=true)", columnName)
-			case sql.NullInt16:
-				a.True(v.Valid, "Expected column '%s' to be NOT NULL (Valid=true)", columnName)
-			case sql.NullByte:
-				a.True(v.Valid, "Expected column '%s' to be NOT NULL (Valid=true)", columnName)
-			case sql.NullFloat64:
-				a.True(v.Valid, "Expected column '%s' to be NOT NULL (Valid=true)", columnName)
-			case sql.NullBool:
-				a.True(v.Valid, "Expected column '%s' to be NOT NULL (Valid=true)", columnName)
-			case sql.NullTime:
-				a.True(v.Valid, "Expected column '%s' to be NOT NULL (Valid=true)", columnName)
-			case *sql.NullString:
-				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
-			case *sql.NullInt64:
-				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
-			case *sql.NullInt32:
-				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
-			case *sql.NullInt16:
-				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
-			case *sql.NullByte:
-				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
-			case *sql.NullFloat64:
-				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
-			case *sql.NullBool:
-				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
-			case *sql.NullTime:
-				a.True(v != nil && v.Valid, "Expected column '%s' to be NOT NULL", columnName)
-			default:
-			}
-		})
-	})
+	if q.expectsNotFound {
+		panic("ExpectColumnIsNotNull cannot be used with ExpectNotFound()")
+	}
+	q.expectations = append(q.expectations, makeColumnIsNotNullExpectation(columnName))
 	return q
 }
 
 func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
-	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
-		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' = true", columnName), func(sCtx provider.StepCtx) {
-			a := sCtx.Require()
-
-			if q.expectsNotFound {
-				a.True(false, "ExpectColumnTrue cannot be used with ExpectNotFound()")
-				return
-			}
-
-			if !ensureQuerySuccessSilent(a, err) {
-				return
-			}
-
-			actualValue, ok := getColumnValueSilent(a, scannedResult, columnName)
-			if !ok {
-				return
-			}
-
-			if b, ok := asBool(actualValue); ok {
-				a.True(b, "Expected column '%s' to be true", columnName)
-				return
-			}
-			a.True(false, "Column '%s' is not a boolean/numeric(0/1) type", columnName)
-		})
-	})
+	if q.expectsNotFound {
+		panic("ExpectColumnTrue cannot be used with ExpectNotFound()")
+	}
+	q.expectations = append(q.expectations, makeColumnTrueExpectation(columnName))
 	return q
 }
 
 func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
-	q.expectations = append(q.expectations, func(parent provider.StepCtx, err error, scannedResult any) {
-		parent.WithNewStep(fmt.Sprintf("Expect: Column '%s' = false", columnName), func(sCtx provider.StepCtx) {
-			a := sCtx.Require()
-
-			if q.expectsNotFound {
-				a.True(false, "ExpectColumnFalse cannot be used with ExpectNotFound()")
-				return
-			}
-
-			if !ensureQuerySuccessSilent(a, err) {
-				return
-			}
-
-			actualValue, ok := getColumnValueSilent(a, scannedResult, columnName)
-			if !ok {
-				return
-			}
-
-			if b, ok := asBool(actualValue); ok {
-				a.False(b, "Expected column '%s' to be false", columnName)
-				return
-			}
-			a.True(false, "Column '%s' is not a boolean/numeric(0/1) type", columnName)
-		})
-	})
+	if q.expectsNotFound {
+		panic("ExpectColumnFalse cannot be used with ExpectNotFound()")
+	}
+	q.expectations = append(q.expectations, makeColumnFalseExpectation(columnName))
 	return q
 }

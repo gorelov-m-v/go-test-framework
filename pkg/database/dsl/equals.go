@@ -21,14 +21,9 @@ func equalsLoose(expected, actual any) (bool, bool, string) {
 		return false, true, "column is NULL yet"
 	}
 
-	if _, ok := expected.(bool); ok {
-		expBool, _ := asBool(expected)
-
-		actBool, actOk := asBool(actual)
-		if !actOk {
-			return false, false, fmt.Sprintf("type mismatch: expected bool, got %T(%v)", actual, actual)
-		}
-
+	expBool, expIsBool := asBool(expected)
+	actBool, actIsBool := asBool(actual)
+	if expIsBool && actIsBool {
 		if expBool == actBool {
 			return true, true, ""
 		}
@@ -54,17 +49,6 @@ func equalsLoose(expected, actual any) (bool, bool, string) {
 	}
 
 	if expIsStr != actIsStr {
-		return false, false, fmt.Sprintf("type mismatch: expected %T(%v), got %T(%v) - incompatible types", expected, expected, actual, actual)
-	}
-
-	expBool, expIsBool := asBool(expected)
-	actBool, actIsBool := asBool(actual)
-	if expIsBool && actIsBool {
-		equal := expBool == actBool
-		return equal, true, fmt.Sprintf("expected %v, got %v", expected, actual)
-	}
-
-	if expIsBool != actIsBool {
 		return false, false, fmt.Sprintf("type mismatch: expected %T(%v), got %T(%v) - incompatible types", expected, expected, actual, actual)
 	}
 

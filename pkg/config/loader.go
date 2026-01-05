@@ -14,12 +14,6 @@ var (
 	loadErr        error
 )
 
-func resetSingleton() {
-	once = sync.Once{}
-	configInstance = nil
-	loadErr = nil
-}
-
 type ServiceConfig struct {
 	BaseURL        string            `mapstructure:"baseURL"`
 	Timeout        time.Duration     `mapstructure:"timeout"`
@@ -56,12 +50,4 @@ func UnmarshalByKey(key string, out any) error {
 	}
 
 	return v.UnmarshalKey(key, out)
-}
-
-func GetServiceConfig(key string) (*ServiceConfig, error) {
-	var cfg ServiceConfig
-	if err := UnmarshalByKey(key, &cfg); err != nil {
-		return nil, err
-	}
-	return &cfg, nil
 }

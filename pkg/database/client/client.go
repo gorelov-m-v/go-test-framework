@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -16,10 +17,12 @@ type Config struct {
 	MaxOpenConns    int           `mapstructure:"maxOpenConns"`
 	MaxIdleConns    int           `mapstructure:"maxIdleConns"`
 	ConnMaxLifetime time.Duration `mapstructure:"connMaxLifetime"`
+	MaskColumns     string        `mapstructure:"maskColumns"`
 }
 
 type Client struct {
-	DB *sql.DB
+	DB          *sql.DB
+	maskColumns []string
 }
 
 func New(cfg Config) (*Client, error) {
@@ -52,7 +55,31 @@ func New(cfg Config) (*Client, error) {
 		db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 	}
 
-	return &Client{DB: db}, nil
+	var maskColumns []string
+	if cfg.MaskColumns != "" {
+		parts := strings.Split(cfg.MaskColumns, ",")
+		for _, part := range parts {
+			trimmed := strings.ToLower(strings.TrimSpace(part))
+			if trimmed != "" {
+				maskColumns = append(maskColumns, trimmed)
+			}
+		}
+	}
+
+	return &Client{DB: db, maskColumns: maskColumns}, nil
+}
+
+func (c *Client) ShouldMaskColumn(name string) bool {
+	if len(c.maskColumns) == 0 {
+		return false
+	}
+	key := strings.ToLower(strings.TrimSpace(name))
+	for _, col := range c.maskColumns {
+		if strings.Contains(key, col) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Client) Close() error {

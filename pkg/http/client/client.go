@@ -12,14 +12,14 @@ type Client struct {
 	BaseURL        string
 	HTTPClient     *http.Client
 	DefaultHeaders map[string]string
-	secretHeaders  map[string]bool
+	maskHeaders    map[string]bool
 }
 
 type Config struct {
 	BaseURL        string
 	Timeout        time.Duration
 	DefaultHeaders map[string]string
-	SecretHeaders  []string
+	MaskHeaders    string `mapstructure:"maskHeaders"`
 }
 
 func New(cfg Config) *Client {
@@ -27,27 +27,15 @@ func New(cfg Config) *Client {
 		cfg.Timeout = 30 * time.Second
 	}
 
-	secretHeaders := make(map[string]bool)
-
-	addSecret := func(h string) {
-		h = strings.TrimSpace(h)
-		if h == "" {
-			return
-		}
-		secretHeaders[strings.ToLower(h)] = true
-	}
-
-	if len(cfg.SecretHeaders) == 0 {
-		defaultSecrets := []string{
-			"Authorization", "Cookie", "Set-Cookie",
-			"X-Api-Key", "Api-Key", "X-Token", "Token",
-		}
-		for _, h := range defaultSecrets {
-			addSecret(h)
-		}
-	} else {
-		for _, h := range cfg.SecretHeaders {
-			addSecret(h)
+	var maskHeaders map[string]bool
+	if cfg.MaskHeaders != "" {
+		maskHeaders = make(map[string]bool)
+		parts := strings.Split(cfg.MaskHeaders, ",")
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				maskHeaders[strings.ToLower(trimmed)] = true
+			}
 		}
 	}
 
@@ -57,8 +45,15 @@ func New(cfg Config) *Client {
 			Timeout: cfg.Timeout,
 		},
 		DefaultHeaders: cfg.DefaultHeaders,
-		secretHeaders:  secretHeaders,
+		maskHeaders:    maskHeaders,
 	}
+}
+
+func (c *Client) ShouldMaskHeader(name string) bool {
+	if c.maskHeaders == nil {
+		return false
+	}
+	return c.maskHeaders[strings.ToLower(strings.TrimSpace(name))]
 }
 
 func (c *Client) Do(ctx context.Context, req *Request[any]) (*Response[any], error) {
@@ -86,8 +81,4 @@ func DoTyped[TReq any, TResp any](ctx context.Context, c *Client, req *Request[T
 	defer resp.Body.Close()
 
 	return decodeResponse[TResp](resp, time.Since(start))
-}
-
-func (c *Client) IsSecretHeader(name string) bool {
-	return c.secretHeaders[strings.ToLower(name)]
 }

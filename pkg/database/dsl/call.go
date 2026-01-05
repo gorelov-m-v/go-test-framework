@@ -70,9 +70,9 @@ func (q *Query[T]) MustFetch() T {
 			if errors.Is(err, sql.ErrNoRows) {
 				stepCtx.Logf("Query returned no rows")
 			}
-			attachResult(stepCtx, nil, err)
+			attachResult(stepCtx, q.client, nil, err)
 		} else {
-			attachResult(stepCtx, result, nil)
+			attachResult(stepCtx, q.client, result, nil)
 		}
 
 		var assertMd assertMode

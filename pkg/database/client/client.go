@@ -11,6 +11,20 @@ import (
 	_ "github.com/lib/pq"
 )
 
+type AsyncConfig struct {
+	Enabled  bool          `mapstructure:"enabled"`
+	Timeout  time.Duration `mapstructure:"timeout"`
+	Interval time.Duration `mapstructure:"interval"`
+	Backoff  BackoffConfig `mapstructure:"backoff"`
+	Jitter   float64       `mapstructure:"jitter"`
+}
+
+type BackoffConfig struct {
+	Enabled     bool          `mapstructure:"enabled"`
+	Factor      float64       `mapstructure:"factor"`
+	MaxInterval time.Duration `mapstructure:"max_interval"`
+}
+
 type Config struct {
 	Driver          string        `mapstructure:"driver"`
 	DSN             string        `mapstructure:"dsn"`
@@ -18,10 +32,12 @@ type Config struct {
 	MaxIdleConns    int           `mapstructure:"maxIdleConns"`
 	ConnMaxLifetime time.Duration `mapstructure:"connMaxLifetime"`
 	MaskColumns     string        `mapstructure:"maskColumns"`
+	AsyncConfig     AsyncConfig   `mapstructure:"asyncConfig"`
 }
 
 type Client struct {
 	DB          *sql.DB
+	AsyncConfig AsyncConfig
 	maskColumns []string
 }
 
@@ -66,7 +82,26 @@ func New(cfg Config) (*Client, error) {
 		}
 	}
 
-	return &Client{DB: db, maskColumns: maskColumns}, nil
+	asyncCfg := cfg.AsyncConfig
+	if asyncCfg.Timeout == 0 {
+		asyncCfg = defaultAsyncConfig()
+	}
+
+	return &Client{DB: db, AsyncConfig: asyncCfg, maskColumns: maskColumns}, nil
+}
+
+func defaultAsyncConfig() AsyncConfig {
+	return AsyncConfig{
+		Enabled:  true,
+		Timeout:  10 * time.Second,
+		Interval: 200 * time.Millisecond,
+		Backoff: BackoffConfig{
+			Enabled:     true,
+			Factor:      1.5,
+			MaxInterval: 1 * time.Second,
+		},
+		Jitter: 0.2,
+	}
 }
 
 func (c *Client) ShouldMaskColumn(name string) bool {

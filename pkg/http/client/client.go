@@ -8,10 +8,25 @@ import (
 	"time"
 )
 
+type AsyncConfig struct {
+	Enabled  bool          `mapstructure:"enabled"`
+	Timeout  time.Duration `mapstructure:"timeout"`
+	Interval time.Duration `mapstructure:"interval"`
+	Backoff  BackoffConfig `mapstructure:"backoff"`
+	Jitter   float64       `mapstructure:"jitter"`
+}
+
+type BackoffConfig struct {
+	Enabled     bool          `mapstructure:"enabled"`
+	Factor      float64       `mapstructure:"factor"`
+	MaxInterval time.Duration `mapstructure:"max_interval"`
+}
+
 type Client struct {
 	BaseURL        string
 	HTTPClient     *http.Client
 	DefaultHeaders map[string]string
+	AsyncConfig    AsyncConfig
 	maskHeaders    map[string]bool
 }
 
@@ -19,7 +34,8 @@ type Config struct {
 	BaseURL        string
 	Timeout        time.Duration
 	DefaultHeaders map[string]string
-	MaskHeaders    string `mapstructure:"maskHeaders"`
+	MaskHeaders    string      `mapstructure:"maskHeaders"`
+	AsyncConfig    AsyncConfig `mapstructure:"asyncConfig"`
 }
 
 func New(cfg Config) *Client {
@@ -39,13 +55,33 @@ func New(cfg Config) *Client {
 		}
 	}
 
+	asyncCfg := cfg.AsyncConfig
+	if asyncCfg.Timeout == 0 {
+		asyncCfg = defaultAsyncConfig()
+	}
+
 	return &Client{
 		BaseURL: cfg.BaseURL,
 		HTTPClient: &http.Client{
 			Timeout: cfg.Timeout,
 		},
 		DefaultHeaders: cfg.DefaultHeaders,
+		AsyncConfig:    asyncCfg,
 		maskHeaders:    maskHeaders,
+	}
+}
+
+func defaultAsyncConfig() AsyncConfig {
+	return AsyncConfig{
+		Enabled:  true,
+		Timeout:  10 * time.Second,
+		Interval: 200 * time.Millisecond,
+		Backoff: BackoffConfig{
+			Enabled:     true,
+			Factor:      1.5,
+			MaxInterval: 1 * time.Second,
+		},
+		Jitter: 0.2,
 	}
 }
 

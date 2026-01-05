@@ -28,12 +28,26 @@ type Query[T any] struct {
 	asyncCfg        config.AsyncConfig
 }
 
-func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client, asyncCfg config.AsyncConfig) *Query[T] {
+func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
 	return &Query[T]{
 		sCtx:     sCtx,
 		client:   dbClient,
 		ctx:      context.Background(),
-		asyncCfg: asyncCfg,
+		asyncCfg: convertAsyncConfig(dbClient.AsyncConfig),
+	}
+}
+
+func convertAsyncConfig(cfg client.AsyncConfig) config.AsyncConfig {
+	return config.AsyncConfig{
+		Enabled:  cfg.Enabled,
+		Timeout:  cfg.Timeout,
+		Interval: cfg.Interval,
+		Backoff: config.BackoffConfig{
+			Enabled:     cfg.Backoff.Enabled,
+			Factor:      cfg.Backoff.Factor,
+			MaxInterval: cfg.Backoff.MaxInterval,
+		},
+		Jitter: cfg.Jitter,
 	}
 }
 

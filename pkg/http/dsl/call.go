@@ -42,12 +42,26 @@ func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Clie
 		client:        httpClient,
 		ctx:           context.Background(),
 		assertionMode: AssertionsRequire,
-		asyncCfg:      config.DefaultAsyncConfig(),
+		asyncCfg:      convertAsyncConfig(httpClient.AsyncConfig),
 		req: &client.Request[TReq]{
 			Headers:     make(map[string]string),
 			PathParams:  make(map[string]string),
 			QueryParams: make(map[string]string),
 		},
+	}
+}
+
+func convertAsyncConfig(cfg client.AsyncConfig) config.AsyncConfig {
+	return config.AsyncConfig{
+		Enabled:  cfg.Enabled,
+		Timeout:  cfg.Timeout,
+		Interval: cfg.Interval,
+		Backoff: config.BackoffConfig{
+			Enabled:     cfg.Backoff.Enabled,
+			Factor:      cfg.Backoff.Factor,
+			MaxInterval: cfg.Backoff.MaxInterval,
+		},
+		Jitter: cfg.Jitter,
 	}
 }
 

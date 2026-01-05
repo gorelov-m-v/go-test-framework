@@ -21,40 +21,20 @@ func debugLog(format string, args ...any) {
 	}
 }
 
-// AsyncConfig defines retry/polling behavior for async DB operations
 type AsyncConfig struct {
-	// Enabled controls whether async retry is active globally
-	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-
-	// Timeout is the maximum time to wait for eventual consistency
-	Timeout time.Duration `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
-
-	// Interval is the initial delay between retry attempts
+	Enabled  bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Timeout  time.Duration `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
 	Interval time.Duration `mapstructure:"interval" yaml:"interval" json:"interval"`
-
-	// Backoff configuration for exponential retry delays
-	Backoff BackoffConfig `mapstructure:"backoff" yaml:"backoff" json:"backoff"`
-
-	// Jitter adds randomness to retry intervals (0.0 to 1.0, e.g., 0.2 = ±20%)
-	Jitter float64 `mapstructure:"jitter" yaml:"jitter" json:"jitter"`
-
-	// RetryOnErrors lists which error types should trigger retry (e.g., "sql_no_rows")
-	RetryOnErrors []string `mapstructure:"retry_on_errors" yaml:"retry_on_errors" json:"retry_on_errors"`
+	Backoff  BackoffConfig `mapstructure:"backoff" yaml:"backoff" json:"backoff"`
+	Jitter   float64       `mapstructure:"jitter" yaml:"jitter" json:"jitter"`
 }
 
-// BackoffConfig defines exponential backoff parameters
 type BackoffConfig struct {
-	// Enabled controls whether backoff is active
-	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-
-	// Factor is the multiplier for each retry (e.g., 1.5, 2.0)
-	Factor float64 `mapstructure:"factor" yaml:"factor" json:"factor"`
-
-	// MaxInterval caps the maximum delay between retries
+	Enabled     bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Factor      float64       `mapstructure:"factor" yaml:"factor" json:"factor"`
 	MaxInterval time.Duration `mapstructure:"max_interval" yaml:"max_interval" json:"max_interval"`
 }
 
-// DefaultAsyncConfig returns safe default configuration
 func DefaultAsyncConfig() AsyncConfig {
 	return AsyncConfig{
 		Enabled:  true,
@@ -65,8 +45,7 @@ func DefaultAsyncConfig() AsyncConfig {
 			Factor:      1.5,
 			MaxInterval: 1 * time.Second,
 		},
-		Jitter:        0.2,
-		RetryOnErrors: []string{"sql_no_rows"},
+		Jitter: 0.2,
 	}
 }
 

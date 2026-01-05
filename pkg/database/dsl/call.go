@@ -55,7 +55,7 @@ func (q *Query[T]) MustFetch() T {
 	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
-		mode := extension.GetStepMode(q.sCtx)
+		mode := extension.GetStepMode(stepCtx)
 		var result T
 		var err error
 		var summary extension.PollingSummary
@@ -64,7 +64,7 @@ func (q *Query[T]) MustFetch() T {
 			result, err, summary = q.executeWithRetry(stepCtx, q.expectations)
 			extension.AttachPollingSummary(stepCtx, summary)
 		} else {
-			result, err, summary = q.executeSingle(stepCtx)
+			result, err, summary = q.executeSingle()
 		}
 
 		q.scannedResult = result
@@ -126,7 +126,7 @@ func (q *Query[T]) MustExec() sql.Result {
 		attachQuery(stepCtx, q.sql, q.args)
 
 		if len(q.expectations) > 0 {
-			mode := extension.GetStepMode(q.sCtx)
+			mode := extension.GetStepMode(stepCtx)
 			if mode == extension.AsyncMode {
 				stepCtx.Assert().True(false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
 			} else {
@@ -141,7 +141,7 @@ func (q *Query[T]) MustExec() sql.Result {
 		attachExecResult(stepCtx, res, err)
 
 		if err != nil {
-			mode := extension.GetStepMode(q.sCtx)
+			mode := extension.GetStepMode(stepCtx)
 			if mode == extension.AsyncMode {
 				stepCtx.Assert().NoError(err, "DB exec failed")
 			} else {

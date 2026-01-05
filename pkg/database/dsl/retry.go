@@ -6,12 +6,11 @@ import (
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/config"
 	"go-test-framework/pkg/extension"
 )
 
 func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*expectation) (T, error, extension.PollingSummary) {
-	cfg := config.GetAsyncConfig()
+	cfg := q.asyncCfg
 
 	if !cfg.Enabled {
 		return q.executeSingle(stepCtx)

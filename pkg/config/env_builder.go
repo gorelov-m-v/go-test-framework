@@ -70,18 +70,6 @@ func DefaultAsyncConfig() AsyncConfig {
 	}
 }
 
-var globalAsyncConfig = DefaultAsyncConfig()
-
-// SetAsyncConfig updates the global async configuration
-func SetAsyncConfig(cfg AsyncConfig) {
-	globalAsyncConfig = cfg
-}
-
-// GetAsyncConfig returns the current global async configuration
-func GetAsyncConfig() AsyncConfig {
-	return globalAsyncConfig
-}
-
 func BuildEnv(envPtr any) error {
 	v, err := Viper()
 	if err != nil {
@@ -257,7 +245,6 @@ func injectAsyncConfig(v *viper.Viper, fieldValue reflect.Value, field reflect.S
 		debugLog("using default async config for field '%s'", field.Name)
 	}
 
-	SetAsyncConfig(asyncCfg)
 	fieldValue.Set(reflect.ValueOf(asyncCfg))
 	debugLog("injected async config into '%s'", field.Name)
 	return nil

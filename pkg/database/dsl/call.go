@@ -10,6 +10,7 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"go-test-framework/pkg/config"
 	"go-test-framework/pkg/database/client"
 	"go-test-framework/pkg/extension"
 )
@@ -24,13 +25,15 @@ type Query[T any] struct {
 	expectsNotFound bool
 	scannedResult   T
 	sqlResult       sql.Result
+	asyncCfg        config.AsyncConfig
 }
 
-func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
+func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client, asyncCfg config.AsyncConfig) *Query[T] {
 	return &Query[T]{
-		sCtx:   sCtx,
-		client: dbClient,
-		ctx:    context.Background(),
+		sCtx:     sCtx,
+		client:   dbClient,
+		ctx:      context.Background(),
+		asyncCfg: asyncCfg,
 	}
 }
 

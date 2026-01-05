@@ -434,10 +434,12 @@ func makeFoundExpectation() *expectation {
 			return checkResult{ok: true}
 		},
 		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			stepCtx.WithNewStep("Expect: Found", func(sCtx provider.StepCtx) {
-				a := reportWithMode(sCtx, mode)
-				a.NoError(err, checkRes.reason)
-			})
+			a := reportWithMode(stepCtx, mode)
+			if !checkRes.ok {
+				a.True(false, "[Expect: Found] %s", checkRes.reason)
+			} else {
+				a.True(true, "[Expect: Found]")
+			}
 		},
 	)
 }
@@ -463,14 +465,12 @@ func makeNotFoundExpectation() *expectation {
 			}
 		},
 		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			stepCtx.WithNewStep("Expect: Not Found", func(sCtx provider.StepCtx) {
-				a := reportWithMode(sCtx, mode)
-				if !checkRes.ok {
-					a.True(false, checkRes.reason)
-				} else {
-					a.ErrorIs(err, sql.ErrNoRows, "Expected sql.ErrNoRows")
-				}
-			})
+			a := reportWithMode(stepCtx, mode)
+			if !checkRes.ok {
+				a.True(false, "[Expect: Not Found] %s", checkRes.reason)
+			} else {
+				a.True(true, "[Expect: Not Found]")
+			}
 		},
 	)
 }
@@ -522,20 +522,14 @@ func makeColumnEqualsExpectation(columnName string, expectedValue any) *expectat
 			return checkResult{ok: true}
 		},
 		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			stepCtx.WithNewStep(fmt.Sprintf("Expect: Column '%s' = %v", columnName, expectedValue), func(sCtx provider.StepCtx) {
-				a := reportWithMode(sCtx, mode)
-				if !checkRes.ok {
-					a.True(false, checkRes.reason)
-					return
-				}
+			a := reportWithMode(stepCtx, mode)
+			if !checkRes.ok {
+				a.True(false, "[Expect: Column '%s' = %v] %s", columnName, expectedValue, checkRes.reason)
+				return
+			}
 
-				actualValue, _ := getFieldValueByColumnName(result, columnName)
-				equal, _, reason := equalsLoose(expectedValue, actualValue)
-				if reason == "" {
-					reason = fmt.Sprintf("expected %v, got %v", expectedValue, actualValue)
-				}
-				a.True(equal, "Column '%s': %s", columnName, reason)
-			})
+			actualValue, _ := getFieldValueByColumnName(result, columnName)
+			a.Equal(expectedValue, actualValue, "[Expect: Column '%s' = %v]", columnName, expectedValue)
 		},
 	)
 }
@@ -587,17 +581,12 @@ func makeColumnNotEmptyExpectation(columnName string) *expectation {
 			return checkResult{ok: true}
 		},
 		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			stepCtx.WithNewStep(fmt.Sprintf("Expect: Column '%s' not empty", columnName), func(sCtx provider.StepCtx) {
-				a := reportWithMode(sCtx, mode)
-				if !checkRes.ok {
-					a.True(false, checkRes.reason)
-					return
-				}
-
-				actualValue, _ := getFieldValueByColumnName(result, columnName)
-				isEmpty := isEmptyValue(actualValue)
-				a.False(isEmpty, "Expected column '%s' to not be empty", columnName)
-			})
+			a := reportWithMode(stepCtx, mode)
+			if !checkRes.ok {
+				a.True(false, "[Expect: Column '%s' not empty] %s", columnName, checkRes.reason)
+			} else {
+				a.True(true, "[Expect: Column '%s' not empty]", columnName)
+			}
 		},
 	)
 }
@@ -649,16 +638,15 @@ func makeColumnIsNullExpectation(columnName string) *expectation {
 			return checkResult{ok: true}
 		},
 		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			stepCtx.WithNewStep(fmt.Sprintf("Expect: Column '%s' IS NULL", columnName), func(sCtx provider.StepCtx) {
-				a := reportWithMode(sCtx, mode)
-				if !checkRes.ok {
-					a.True(false, checkRes.reason)
-					return
-				}
+			a := reportWithMode(stepCtx, mode)
+			if !checkRes.ok {
+				a.True(false, "[Expect: Column '%s' IS NULL] %s", columnName, checkRes.reason)
+				return
+			}
 
-				actualValue, _ := getFieldValueByColumnName(result, columnName)
-				reportNullCheck(a, actualValue, columnName, true)
-			})
+			actualValue, _ := getFieldValueByColumnName(result, columnName)
+			isNull := isValueNull(actualValue)
+			a.Equal(true, isNull, "[Expect: Column '%s' IS NULL]", columnName)
 		},
 	)
 }
@@ -710,16 +698,15 @@ func makeColumnIsNotNullExpectation(columnName string) *expectation {
 			return checkResult{ok: true}
 		},
 		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			stepCtx.WithNewStep(fmt.Sprintf("Expect: Column '%s' IS NOT NULL", columnName), func(sCtx provider.StepCtx) {
-				a := reportWithMode(sCtx, mode)
-				if !checkRes.ok {
-					a.True(false, checkRes.reason)
-					return
-				}
+			a := reportWithMode(stepCtx, mode)
+			if !checkRes.ok {
+				a.True(false, "[Expect: Column '%s' IS NOT NULL] %s", columnName, checkRes.reason)
+				return
+			}
 
-				actualValue, _ := getFieldValueByColumnName(result, columnName)
-				reportNullCheck(a, actualValue, columnName, false)
-			})
+			actualValue, _ := getFieldValueByColumnName(result, columnName)
+			isNull := isValueNull(actualValue)
+			a.Equal(false, isNull, "[Expect: Column '%s' IS NOT NULL]", columnName)
 		},
 	)
 }
@@ -788,17 +775,15 @@ func makeColumnTrueExpectation(columnName string) *expectation {
 			return checkResult{ok: true}
 		},
 		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			stepCtx.WithNewStep(fmt.Sprintf("Expect: Column '%s' = true", columnName), func(sCtx provider.StepCtx) {
-				a := reportWithMode(sCtx, mode)
-				if !checkRes.ok {
-					a.True(false, checkRes.reason)
-					return
-				}
+			a := reportWithMode(stepCtx, mode)
+			if !checkRes.ok {
+				a.True(false, "[Expect: Column '%s' = true] %s", columnName, checkRes.reason)
+				return
+			}
 
-				actualValue, _ := getFieldValueByColumnName(result, columnName)
-				b, _ := asBool(actualValue)
-				a.True(b, "Expected column '%s' to be true", columnName)
-			})
+			actualValue, _ := getFieldValueByColumnName(result, columnName)
+			b, _ := asBool(actualValue)
+			a.Equal(true, b, "[Expect: Column '%s' = true]", columnName)
 		},
 	)
 }
@@ -867,17 +852,15 @@ func makeColumnFalseExpectation(columnName string) *expectation {
 			return checkResult{ok: true}
 		},
 		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			stepCtx.WithNewStep(fmt.Sprintf("Expect: Column '%s' = false", columnName), func(sCtx provider.StepCtx) {
-				a := reportWithMode(sCtx, mode)
-				if !checkRes.ok {
-					a.True(false, checkRes.reason)
-					return
-				}
+			a := reportWithMode(stepCtx, mode)
+			if !checkRes.ok {
+				a.True(false, "[Expect: Column '%s' = false] %s", columnName, checkRes.reason)
+				return
+			}
 
-				actualValue, _ := getFieldValueByColumnName(result, columnName)
-				b, _ := asBool(actualValue)
-				a.False(b, "Expected column '%s' to be false", columnName)
-			})
+			actualValue, _ := getFieldValueByColumnName(result, columnName)
+			b, _ := asBool(actualValue)
+			a.Equal(false, b, "[Expect: Column '%s' = false]", columnName)
 		},
 	)
 }

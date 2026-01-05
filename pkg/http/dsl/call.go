@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"strings"
 
-	"go-test-framework/pkg/http/client"
-
 	"github.com/ozontech/allure-go/pkg/framework/provider"
+
+	"go-test-framework/pkg/config"
+	"go-test-framework/pkg/extension"
+	"go-test-framework/pkg/http/client"
 )
 
 type AssertionMode int
@@ -23,6 +25,7 @@ type Call[TReq any, TResp any] struct {
 	client        *client.Client
 	ctx           context.Context
 	assertionMode AssertionMode
+	asyncCfg      config.AsyncConfig
 
 	stepName string
 
@@ -30,7 +33,7 @@ type Call[TReq any, TResp any] struct {
 	resp *client.Response[TResp]
 
 	sent         bool
-	expectations []func(parent provider.StepCtx)
+	expectations []*expectation
 }
 
 func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Client) *Call[TReq, TResp] {
@@ -39,12 +42,18 @@ func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Clie
 		client:        httpClient,
 		ctx:           context.Background(),
 		assertionMode: AssertionsRequire,
+		asyncCfg:      config.DefaultAsyncConfig(),
 		req: &client.Request[TReq]{
 			Headers:     make(map[string]string),
 			PathParams:  make(map[string]string),
 			QueryParams: make(map[string]string),
 		},
 	}
+}
+
+func (c *Call[TReq, TResp]) WithAsyncConfig(cfg config.AsyncConfig) *Call[TReq, TResp] {
+	c.asyncCfg = cfg
+	return c
 }
 
 func (c *Call[TReq, TResp]) StepName(name string) *Call[TReq, TResp] {
@@ -114,11 +123,11 @@ func (c *Call[TReq, TResp]) RequestBody(body TReq) *Call[TReq, TResp] {
 	return c
 }
 
-func (c *Call[TReq, TResp]) addExpectation(fn func(parent provider.StepCtx)) {
+func (c *Call[TReq, TResp]) addExpectation(exp *expectation) {
 	if c.sent {
 		panic("httpdsl: expectations must be added before RequestSend()")
 	}
-	c.expectations = append(c.expectations, fn)
+	c.expectations = append(c.expectations, exp)
 }
 
 func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
@@ -132,18 +141,68 @@ func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
 	c.sCtx.WithNewStep(name, func(stepCtx provider.StepCtx) {
 		attachRequest(stepCtx, c.client, c.req)
 
-		resp, err := client.DoTyped[TReq, TResp](c.ctx, c.client, c.req)
-		if err != nil && resp == nil {
-			resp = &client.Response[TResp]{NetworkError: err.Error()}
+		mode := extension.GetStepMode(stepCtx)
+		useRetry := mode == extension.AsyncMode && len(c.expectations) > 0
+
+		var (
+			resp    *client.Response[TResp]
+			err     error
+			summary extension.PollingSummary
+		)
+
+		if useRetry {
+			resp, err, summary = c.executeWithRetry(stepCtx, c.asyncCfg, c.expectations)
+		} else {
+			resp, err, summary = c.executeSingle()
 		}
+
+		if resp == nil {
+			resp = &client.Response[TResp]{NetworkError: "nil response"}
+			if err == nil {
+				err = fmt.Errorf("unexpected nil response")
+			}
+		}
+
 		c.resp = resp
+		c.sent = true
+
+		if mode == extension.AsyncMode {
+			extension.AttachPollingSummary(stepCtx, summary)
+		}
 
 		attachResponse(stepCtx, c.client, c.resp)
 
-		c.sent = true
-		for _, fn := range c.expectations {
-			fn(stepCtx)
+		respAny := &client.Response[any]{
+			StatusCode:   resp.StatusCode,
+			Headers:      resp.Headers,
+			RawBody:      resp.RawBody,
+			Error:        resp.Error,
+			Duration:     resp.Duration,
+			NetworkError: resp.NetworkError,
 		}
+
+		var assertionMode AssertionMode
+		if mode == extension.AsyncMode {
+			assertionMode = AssertionsAssert
+		} else {
+			assertionMode = AssertionsRequire
+		}
+
+		if len(c.expectations) == 0 {
+			a := pickAsserter(stepCtx, assertionMode)
+
+			if err != nil {
+				a.NoError(err, "HTTP request failed: %v", err)
+				return
+			}
+			if c.resp.NetworkError != "" {
+				a.Equal("", c.resp.NetworkError, "HTTP network error")
+				return
+			}
+			return
+		}
+
+		reportExpectations(stepCtx, assertionMode, c.expectations, err, respAny)
 	})
 
 	return c

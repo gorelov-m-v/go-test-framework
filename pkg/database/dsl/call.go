@@ -183,14 +183,6 @@ func getFieldValueByColumnName(target any, columnName string) (any, error) {
 	return nil, fmt.Errorf("no field with db tag '%s' found in struct %T", columnName, target)
 }
 
-func getFirstLine(s string) string {
-	lines := strings.Split(s, "\n")
-	if len(lines) > 0 {
-		return strings.TrimSpace(lines[0])
-	}
-	return s
-}
-
 func extractTableName(query string) string {
 	query = strings.TrimSpace(query)
 	upper := strings.ToUpper(query)

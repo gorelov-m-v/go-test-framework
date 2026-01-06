@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go-test-framework/pkg/config"
 )
 
 type AsyncConfig struct {
@@ -117,4 +119,18 @@ func DoTyped[TReq any, TResp any](ctx context.Context, c *Client, req *Request[T
 	defer resp.Body.Close()
 
 	return decodeResponse[TResp](resp, time.Since(start))
+}
+
+func (c *Client) GetAsyncConfig() config.AsyncConfig {
+	return config.AsyncConfig{
+		Enabled:  c.AsyncConfig.Enabled,
+		Timeout:  c.AsyncConfig.Timeout,
+		Interval: c.AsyncConfig.Interval,
+		Backoff: config.BackoffConfig{
+			Enabled:     c.AsyncConfig.Backoff.Enabled,
+			Factor:      c.AsyncConfig.Backoff.Factor,
+			MaxInterval: c.AsyncConfig.Backoff.MaxInterval,
+		},
+		Jitter: c.AsyncConfig.Jitter,
+	}
 }

@@ -9,6 +9,8 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+
+	"go-test-framework/pkg/config"
 )
 
 type AsyncConfig struct {
@@ -119,4 +121,32 @@ func (c *Client) ShouldMaskColumn(name string) bool {
 
 func (c *Client) Close() error {
 	return c.DB.Close()
+}
+
+func (c *Client) GetAsyncConfig() config.AsyncConfig {
+	return config.AsyncConfig{
+		Enabled:  c.AsyncConfig.Enabled,
+		Timeout:  c.AsyncConfig.Timeout,
+		Interval: c.AsyncConfig.Interval,
+		Backoff: config.BackoffConfig{
+			Enabled:     c.AsyncConfig.Backoff.Enabled,
+			Factor:      c.AsyncConfig.Backoff.Factor,
+			MaxInterval: c.AsyncConfig.Backoff.MaxInterval,
+		},
+		Jitter: c.AsyncConfig.Jitter,
+	}
+}
+
+func (c *Client) GetAsyncConfig() config.AsyncConfig {
+	return config.AsyncConfig{
+		Enabled:  c.AsyncConfig.Enabled,
+		Timeout:  c.AsyncConfig.Timeout,
+		Interval: c.AsyncConfig.Interval,
+		Backoff: config.BackoffConfig{
+			Enabled:     c.AsyncConfig.Backoff.Enabled,
+			Factor:      c.AsyncConfig.Backoff.Factor,
+			MaxInterval: c.AsyncConfig.Backoff.MaxInterval,
+		},
+		Jitter: c.AsyncConfig.Jitter,
+	}
 }

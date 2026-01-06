@@ -10,7 +10,6 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/config"
 	"go-test-framework/pkg/database/client"
 	"go-test-framework/pkg/extension"
 )
@@ -25,7 +24,6 @@ type Query[T any] struct {
 	expectsNotFound bool
 	scannedResult   T
 	sqlResult       sql.Result
-	asyncCfg        config.AsyncConfig
 }
 
 func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
@@ -33,17 +31,6 @@ func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
 		sCtx:   sCtx,
 		client: dbClient,
 		ctx:    context.Background(),
-		asyncCfg: config.AsyncConfig{
-			Enabled:  dbClient.AsyncConfig.Enabled,
-			Timeout:  dbClient.AsyncConfig.Timeout,
-			Interval: dbClient.AsyncConfig.Interval,
-			Backoff: config.BackoffConfig{
-				Enabled:     dbClient.AsyncConfig.Backoff.Enabled,
-				Factor:      dbClient.AsyncConfig.Backoff.Factor,
-				MaxInterval: dbClient.AsyncConfig.Backoff.MaxInterval,
-			},
-			Jitter: dbClient.AsyncConfig.Jitter,
-		},
 	}
 }
 

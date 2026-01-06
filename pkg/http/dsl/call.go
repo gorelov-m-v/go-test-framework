@@ -8,7 +8,6 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/config"
 	"go-test-framework/pkg/extension"
 	"go-test-framework/pkg/http/client"
 )
@@ -18,7 +17,6 @@ type Call[TReq any, TResp any] struct {
 	client        *client.Client
 	ctx           context.Context
 	assertionMode extension.AssertionMode
-	asyncCfg      config.AsyncConfig
 
 	stepName string
 
@@ -35,28 +33,12 @@ func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Clie
 		client:        httpClient,
 		ctx:           context.Background(),
 		assertionMode: extension.AssertionRequire,
-		asyncCfg: config.AsyncConfig{
-			Enabled:  httpClient.AsyncConfig.Enabled,
-			Timeout:  httpClient.AsyncConfig.Timeout,
-			Interval: httpClient.AsyncConfig.Interval,
-			Backoff: config.BackoffConfig{
-				Enabled:     httpClient.AsyncConfig.Backoff.Enabled,
-				Factor:      httpClient.AsyncConfig.Backoff.Factor,
-				MaxInterval: httpClient.AsyncConfig.Backoff.MaxInterval,
-			},
-			Jitter: httpClient.AsyncConfig.Jitter,
-		},
 		req: &client.Request[TReq]{
 			Headers:     make(map[string]string),
 			PathParams:  make(map[string]string),
 			QueryParams: make(map[string]string),
 		},
 	}
-}
-
-func (c *Call[TReq, TResp]) WithAsyncConfig(cfg config.AsyncConfig) *Call[TReq, TResp] {
-	c.asyncCfg = cfg
-	return c
 }
 
 func (c *Call[TReq, TResp]) StepName(name string) *Call[TReq, TResp] {
@@ -154,7 +136,7 @@ func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
 		)
 
 		if useRetry {
-			resp, err, summary = c.executeWithRetry(stepCtx, c.asyncCfg, c.expectations)
+			resp, err, summary = c.executeWithRetry(stepCtx, c.expectations)
 		} else {
 			resp, err, summary = c.executeSingle()
 		}

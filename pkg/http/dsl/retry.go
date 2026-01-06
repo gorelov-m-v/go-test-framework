@@ -6,7 +6,6 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/config"
 	"go-test-framework/pkg/extension"
 	"go-test-framework/pkg/http/client"
 	"go-test-framework/pkg/retry"
@@ -65,9 +64,9 @@ func (c *Call[TReq, TResp]) executeSingle() (*client.Response[TResp], error, ext
 
 func (c *Call[TReq, TResp]) executeWithRetry(
 	stepCtx provider.StepCtx,
-	asyncCfg config.AsyncConfig,
 	expectations []*expectation,
 ) (*client.Response[TResp], error, extension.PollingSummary) {
+	asyncCfg := c.client.GetAsyncConfig()
 	executor := func(ctx context.Context) (*client.Response[TResp], error) {
 		resp, err := client.DoTyped[TReq, TResp](ctx, c.client, c.req)
 		if err != nil && resp == nil {

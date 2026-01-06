@@ -66,7 +66,7 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 	stepCtx provider.StepCtx,
 	expectations []*expectation,
 ) (*client.Response[TResp], error, extension.PollingSummary) {
-	asyncCfg := c.client.GetAsyncConfig()
+	asyncCfg := c.client.AsyncConfig
 	executor := func(ctx context.Context) (*client.Response[TResp], error) {
 		resp, err := client.DoTyped[TReq, TResp](ctx, c.client, c.req)
 		if err != nil && resp == nil {

@@ -1,14 +1,14 @@
-package config
+package builder
 
 import (
 	"fmt"
 	"log"
 	"os"
 	"reflect"
-	"time"
 
 	"github.com/spf13/viper"
 
+	"go-test-framework/pkg/config"
 	dbclient "go-test-framework/pkg/database/client"
 	"go-test-framework/pkg/http/client"
 )
@@ -21,36 +21,8 @@ func debugLog(format string, args ...any) {
 	}
 }
 
-type AsyncConfig struct {
-	Enabled  bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Timeout  time.Duration `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
-	Interval time.Duration `mapstructure:"interval" yaml:"interval" json:"interval"`
-	Backoff  BackoffConfig `mapstructure:"backoff" yaml:"backoff" json:"backoff"`
-	Jitter   float64       `mapstructure:"jitter" yaml:"jitter" json:"jitter"`
-}
-
-type BackoffConfig struct {
-	Enabled     bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Factor      float64       `mapstructure:"factor" yaml:"factor" json:"factor"`
-	MaxInterval time.Duration `mapstructure:"max_interval" yaml:"max_interval" json:"max_interval"`
-}
-
-func DefaultAsyncConfig() AsyncConfig {
-	return AsyncConfig{
-		Enabled:  true,
-		Timeout:  10 * time.Second,
-		Interval: 200 * time.Millisecond,
-		Backoff: BackoffConfig{
-			Enabled:     true,
-			Factor:      1.5,
-			MaxInterval: 1 * time.Second,
-		},
-		Jitter: 0.2,
-	}
-}
-
 func BuildEnv(envPtr any) error {
-	v, err := Viper()
+	v, err := config.Viper()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -117,7 +89,7 @@ func injectHTTPClient(v *viper.Viper, fieldValue reflect.Value, field reflect.St
 		return fmt.Errorf("BuildEnv(%s): field '%s' tag config:\"%s\": config key '%s' not found", structName, field.Name, configKey, configKey)
 	}
 
-	var svcCfg ServiceConfig
+	var svcCfg config.ServiceConfig
 	if err := v.UnmarshalKey(configKey, &svcCfg); err != nil {
 		return fmt.Errorf("BuildEnv(%s): field '%s' tag config:\"%s\": failed to unmarshal config: %w", structName, field.Name, configKey, err)
 	}
@@ -209,18 +181,18 @@ func injectAsyncConfig(v *viper.Viper, fieldValue reflect.Value, field reflect.S
 		return fmt.Errorf("BuildEnv(%s): field '%s' has tag async_config:\"%s\" but is not exported", structName, field.Name, asyncConfigKey)
 	}
 
-	if fieldValue.Type() != reflect.TypeOf(AsyncConfig{}) {
+	if fieldValue.Type() != reflect.TypeOf(config.AsyncConfig{}) {
 		return fmt.Errorf("BuildEnv(%s): field '%s' tag async_config:\"%s\": field must be 'config.AsyncConfig', got '%s'", structName, field.Name, asyncConfigKey, fieldValue.Type())
 	}
 
-	var asyncCfg AsyncConfig
+	var asyncCfg config.AsyncConfig
 	if v.IsSet(asyncConfigKey) {
 		if err := v.UnmarshalKey(asyncConfigKey, &asyncCfg); err != nil {
 			return fmt.Errorf("BuildEnv(%s): field '%s' tag async_config:\"%s\": failed to unmarshal config: %w", structName, field.Name, asyncConfigKey, err)
 		}
 		debugLog("loaded async config from '%s'", asyncConfigKey)
 	} else {
-		asyncCfg = DefaultAsyncConfig()
+		asyncCfg = config.DefaultAsyncConfig()
 		debugLog("using default async config for field '%s'", field.Name)
 	}
 

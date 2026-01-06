@@ -11,7 +11,7 @@ import (
 )
 
 func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*expectation) (T, error, extension.PollingSummary) {
-	cfg := q.client.GetAsyncConfig()
+	cfg := q.client.AsyncConfig
 
 	if !cfg.Enabled {
 		return q.executeSingle()

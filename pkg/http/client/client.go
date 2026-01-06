@@ -10,25 +10,11 @@ import (
 	"go-test-framework/pkg/config"
 )
 
-type AsyncConfig struct {
-	Enabled  bool          `mapstructure:"enabled"`
-	Timeout  time.Duration `mapstructure:"timeout"`
-	Interval time.Duration `mapstructure:"interval"`
-	Backoff  BackoffConfig `mapstructure:"backoff"`
-	Jitter   float64       `mapstructure:"jitter"`
-}
-
-type BackoffConfig struct {
-	Enabled     bool          `mapstructure:"enabled"`
-	Factor      float64       `mapstructure:"factor"`
-	MaxInterval time.Duration `mapstructure:"max_interval"`
-}
-
 type Client struct {
 	BaseURL        string
 	HTTPClient     *http.Client
 	DefaultHeaders map[string]string
-	AsyncConfig    AsyncConfig
+	AsyncConfig    config.AsyncConfig
 	maskHeaders    map[string]bool
 }
 
@@ -36,8 +22,8 @@ type Config struct {
 	BaseURL        string
 	Timeout        time.Duration
 	DefaultHeaders map[string]string
-	MaskHeaders    string      `mapstructure:"maskHeaders"`
-	AsyncConfig    AsyncConfig `mapstructure:"asyncConfig"`
+	MaskHeaders    string             `mapstructure:"maskHeaders"`
+	AsyncConfig    config.AsyncConfig `mapstructure:"asyncConfig"`
 }
 
 func New(cfg Config) *Client {
@@ -73,12 +59,12 @@ func New(cfg Config) *Client {
 	}
 }
 
-func defaultAsyncConfig() AsyncConfig {
-	return AsyncConfig{
+func defaultAsyncConfig() config.AsyncConfig {
+	return config.AsyncConfig{
 		Enabled:  true,
 		Timeout:  10 * time.Second,
 		Interval: 200 * time.Millisecond,
-		Backoff: BackoffConfig{
+		Backoff: config.BackoffConfig{
 			Enabled:     true,
 			Factor:      1.5,
 			MaxInterval: 1 * time.Second,
@@ -119,18 +105,4 @@ func DoTyped[TReq any, TResp any](ctx context.Context, c *Client, req *Request[T
 	defer resp.Body.Close()
 
 	return decodeResponse[TResp](resp, time.Since(start))
-}
-
-func (c *Client) GetAsyncConfig() config.AsyncConfig {
-	return config.AsyncConfig{
-		Enabled:  c.AsyncConfig.Enabled,
-		Timeout:  c.AsyncConfig.Timeout,
-		Interval: c.AsyncConfig.Interval,
-		Backoff: config.BackoffConfig{
-			Enabled:     c.AsyncConfig.Backoff.Enabled,
-			Factor:      c.AsyncConfig.Backoff.Factor,
-			MaxInterval: c.AsyncConfig.Backoff.MaxInterval,
-		},
-		Jitter: c.AsyncConfig.Jitter,
-	}
 }

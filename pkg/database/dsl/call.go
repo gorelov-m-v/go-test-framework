@@ -30,24 +30,20 @@ type Query[T any] struct {
 
 func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
 	return &Query[T]{
-		sCtx:     sCtx,
-		client:   dbClient,
-		ctx:      context.Background(),
-		asyncCfg: convertAsyncConfig(dbClient.AsyncConfig),
-	}
-}
-
-func convertAsyncConfig(cfg client.AsyncConfig) config.AsyncConfig {
-	return config.AsyncConfig{
-		Enabled:  cfg.Enabled,
-		Timeout:  cfg.Timeout,
-		Interval: cfg.Interval,
-		Backoff: config.BackoffConfig{
-			Enabled:     cfg.Backoff.Enabled,
-			Factor:      cfg.Backoff.Factor,
-			MaxInterval: cfg.Backoff.MaxInterval,
+		sCtx:   sCtx,
+		client: dbClient,
+		ctx:    context.Background(),
+		asyncCfg: config.AsyncConfig{
+			Enabled:  dbClient.AsyncConfig.Enabled,
+			Timeout:  dbClient.AsyncConfig.Timeout,
+			Interval: dbClient.AsyncConfig.Interval,
+			Backoff: config.BackoffConfig{
+				Enabled:     dbClient.AsyncConfig.Backoff.Enabled,
+				Factor:      dbClient.AsyncConfig.Backoff.Factor,
+				MaxInterval: dbClient.AsyncConfig.Backoff.MaxInterval,
+			},
+			Jitter: dbClient.AsyncConfig.Jitter,
 		},
-		Jitter: cfg.Jitter,
 	}
 }
 
@@ -92,12 +88,7 @@ func (q *Query[T]) MustFetch() T {
 			attachResult(stepCtx, q.client, result, nil)
 		}
 
-		var assertMd assertMode
-		if mode == extension.AsyncMode {
-			assertMd = assertModeValue
-		} else {
-			assertMd = requireMode
-		}
+		assertMd := extension.GetAssertionModeFromStepMode(mode)
 
 		if len(q.expectations) > 0 {
 			reportExpectations(stepCtx, assertMd, q.expectations, err, result)
@@ -106,25 +97,26 @@ func (q *Query[T]) MustFetch() T {
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				if !q.expectsNotFound {
-					if mode == extension.AsyncMode {
-						stepCtx.Assert().NoError(err, "Expected row to exist, but got sql.ErrNoRows after retry. Use ExpectNotFound() if 'not found' is expected")
-					} else {
-						stepCtx.Require().NoError(err, "Expected row to exist, but got sql.ErrNoRows. Use ExpectNotFound() if 'not found' is expected")
-					}
+					extension.NoError(stepCtx, assertMd, err, "Expected row to exist, but got sql.ErrNoRows%s. Use ExpectNotFound() if 'not found' is expected", func() string {
+						if mode == extension.AsyncMode {
+							return " after retry"
+						}
+						return ""
+					}())
 				}
 			} else {
+				msg := "DB query failed"
 				if mode == extension.AsyncMode {
-					stepCtx.Assert().NoError(err, extension.FinalFailureMessage(summary))
-				} else {
-					stepCtx.Require().NoError(err, "DB query failed")
+					msg = extension.FinalFailureMessage(summary)
 				}
+				extension.NoError(stepCtx, assertMd, err, msg)
 			}
 		} else if !summary.Success {
+			msg := "DB query expectations not met"
 			if mode == extension.AsyncMode {
-				stepCtx.Assert().True(false, extension.FinalFailureMessage(summary))
-			} else {
-				stepCtx.Require().True(false, "DB query expectations not met")
+				msg = extension.FinalFailureMessage(summary)
 			}
+			extension.True(stepCtx, assertMd, false, msg)
 		}
 	})
 
@@ -139,13 +131,11 @@ func (q *Query[T]) MustExec() sql.Result {
 	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
+		mode := extension.GetStepMode(stepCtx)
+		assertMd := extension.GetAssertionModeFromStepMode(mode)
+
 		if len(q.expectations) > 0 {
-			mode := extension.GetStepMode(stepCtx)
-			if mode == extension.AsyncMode {
-				stepCtx.Assert().True(false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
-			} else {
-				stepCtx.Require().True(false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
-			}
+			extension.True(stepCtx, assertMd, false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
 			return
 		}
 
@@ -155,12 +145,7 @@ func (q *Query[T]) MustExec() sql.Result {
 		attachExecResult(stepCtx, res, err)
 
 		if err != nil {
-			mode := extension.GetStepMode(stepCtx)
-			if mode == extension.AsyncMode {
-				stepCtx.Assert().NoError(err, "DB exec failed")
-			} else {
-				stepCtx.Require().NoError(err, "DB exec failed")
-			}
+			extension.NoError(stepCtx, assertMd, err, "DB exec failed")
 		}
 	})
 

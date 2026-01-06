@@ -21,13 +21,13 @@ type checkResult struct {
 type expectation struct {
 	name   string
 	check  func(err error, resp *client.Response[any]) checkResult
-	report func(stepCtx provider.StepCtx, mode AssertionMode, err error, resp *client.Response[any], checkRes checkResult)
+	report func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes checkResult)
 }
 
 func newExpectation(
 	name string,
 	checkFn func(err error, resp *client.Response[any]) checkResult,
-	reportFn func(stepCtx provider.StepCtx, mode AssertionMode, err error, resp *client.Response[any], checkRes checkResult),
+	reportFn func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes checkResult),
 ) *expectation {
 	return &expectation{
 		name:   name,
@@ -123,7 +123,7 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 
 func reportExpectations(
 	stepCtx provider.StepCtx,
-	mode AssertionMode,
+	mode extension.AssertionMode,
 	expectations []*expectation,
 	err error,
 	resp *client.Response[any],
@@ -132,13 +132,6 @@ func reportExpectations(
 		checkRes := exp.check(err, resp)
 		exp.report(stepCtx, mode, err, resp, checkRes)
 	}
-}
-
-func pickAsserter(stepCtx provider.StepCtx, mode AssertionMode) provider.Asserts {
-	if mode == AssertionsAssert {
-		return stepCtx.Assert()
-	}
-	return stepCtx.Require()
 }
 
 func validateJSONPath(path string) error {

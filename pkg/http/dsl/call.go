@@ -13,18 +13,11 @@ import (
 	"go-test-framework/pkg/http/client"
 )
 
-type AssertionMode int
-
-const (
-	AssertionsRequire AssertionMode = iota
-	AssertionsAssert
-)
-
 type Call[TReq any, TResp any] struct {
 	sCtx          provider.StepCtx
 	client        *client.Client
 	ctx           context.Context
-	assertionMode AssertionMode
+	assertionMode extension.AssertionMode
 	asyncCfg      config.AsyncConfig
 
 	stepName string
@@ -41,27 +34,23 @@ func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Clie
 		sCtx:          sCtx,
 		client:        httpClient,
 		ctx:           context.Background(),
-		assertionMode: AssertionsRequire,
-		asyncCfg:      convertAsyncConfig(httpClient.AsyncConfig),
+		assertionMode: extension.AssertionRequire,
+		asyncCfg: config.AsyncConfig{
+			Enabled:  httpClient.AsyncConfig.Enabled,
+			Timeout:  httpClient.AsyncConfig.Timeout,
+			Interval: httpClient.AsyncConfig.Interval,
+			Backoff: config.BackoffConfig{
+				Enabled:     httpClient.AsyncConfig.Backoff.Enabled,
+				Factor:      httpClient.AsyncConfig.Backoff.Factor,
+				MaxInterval: httpClient.AsyncConfig.Backoff.MaxInterval,
+			},
+			Jitter: httpClient.AsyncConfig.Jitter,
+		},
 		req: &client.Request[TReq]{
 			Headers:     make(map[string]string),
 			PathParams:  make(map[string]string),
 			QueryParams: make(map[string]string),
 		},
-	}
-}
-
-func convertAsyncConfig(cfg client.AsyncConfig) config.AsyncConfig {
-	return config.AsyncConfig{
-		Enabled:  cfg.Enabled,
-		Timeout:  cfg.Timeout,
-		Interval: cfg.Interval,
-		Backoff: config.BackoffConfig{
-			Enabled:     cfg.Backoff.Enabled,
-			Factor:      cfg.Backoff.Factor,
-			MaxInterval: cfg.Backoff.MaxInterval,
-		},
-		Jitter: cfg.Jitter,
 	}
 }
 
@@ -76,12 +65,12 @@ func (c *Call[TReq, TResp]) StepName(name string) *Call[TReq, TResp] {
 }
 
 func (c *Call[TReq, TResp]) Assert() *Call[TReq, TResp] {
-	c.assertionMode = AssertionsAssert
+	c.assertionMode = extension.AssertionAssert
 	return c
 }
 
 func (c *Call[TReq, TResp]) Require() *Call[TReq, TResp] {
-	c.assertionMode = AssertionsRequire
+	c.assertionMode = extension.AssertionRequire
 	return c
 }
 
@@ -195,22 +184,15 @@ func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
 			NetworkError: resp.NetworkError,
 		}
 
-		var assertionMode AssertionMode
-		if mode == extension.AsyncMode {
-			assertionMode = AssertionsAssert
-		} else {
-			assertionMode = AssertionsRequire
-		}
+		assertionMode := extension.GetAssertionModeFromStepMode(mode)
 
 		if len(c.expectations) == 0 {
-			a := pickAsserter(stepCtx, assertionMode)
-
 			if err != nil {
-				a.NoError(err, "HTTP request failed: %v", err)
+				extension.NoError(stepCtx, assertionMode, err, "HTTP request failed: %v", err)
 				return
 			}
 			if c.resp.NetworkError != "" {
-				a.Equal("", c.resp.NetworkError, "HTTP network error")
+				extension.Equal(stepCtx, assertionMode, "", c.resp.NetworkError, "HTTP network error")
 				return
 			}
 			return
@@ -239,11 +221,4 @@ func (c *Call[TReq, TResp]) validate() {
 	if strings.TrimSpace(c.req.Path) == "" {
 		panic("httpdsl: HTTP path is not set")
 	}
-}
-
-func (c *Call[TReq, TResp]) pickAsserter(ctx provider.StepCtx) provider.Asserts {
-	if c.assertionMode == AssertionsAssert {
-		return ctx.Assert()
-	}
-	return ctx.Require()
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"go-test-framework/pkg/extension"
 	"go-test-framework/pkg/http/client"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
@@ -261,8 +262,8 @@ func makeResponseStatusExpectation(code int) *expectation {
 			}
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode AssertionMode, err error, resp *client.Response[any], checkRes checkResult) {
-			a := pickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect response status %d %s] %s", code, http.StatusText(code), checkRes.reason)
 				return
@@ -308,8 +309,8 @@ func makeResponseBodyNotEmptyExpectation() *expectation {
 			}
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode AssertionMode, err error, resp *client.Response[any], checkRes checkResult) {
-			a := pickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect response body not empty] %s", checkRes.reason)
 			} else {
@@ -387,8 +388,8 @@ func makeResponseBodyFieldNotEmptyExpectation(path string) *expectation {
 
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode AssertionMode, err error, resp *client.Response[any], checkRes checkResult) {
-			a := pickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect JSON field not empty: %s] %s", path, checkRes.reason)
 			} else {
@@ -467,8 +468,8 @@ func makeResponseBodyFieldValueExpectation(path string, expected any) *expectati
 
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode AssertionMode, err error, resp *client.Response[any], checkRes checkResult) {
-			a := pickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect JSON field '%s' == %v] %s", path, expected, checkRes.reason)
 				return

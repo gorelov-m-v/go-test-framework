@@ -49,7 +49,7 @@ func (q *Query[T]) executeSingle() (T, error, extension.PollingSummary) {
 	return retry.ExecuteSingle(q.ctx, executor)
 }
 
-func reportExpectations(stepCtx provider.StepCtx, mode assertMode, expectations []*expectation, err error, result any) {
+func reportExpectations(stepCtx provider.StepCtx, mode extension.AssertionMode, expectations []*expectation, err error, result any) {
 	for _, exp := range expectations {
 		checkRes := exp.check(err, result)
 		exp.report(stepCtx, mode, err, result, checkRes)

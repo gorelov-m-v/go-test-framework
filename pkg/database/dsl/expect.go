@@ -8,13 +8,8 @@ import (
 	"strings"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
-)
 
-type assertMode int
-
-const (
-	requireMode assertMode = iota
-	assertModeValue
+	"go-test-framework/pkg/extension"
 )
 
 type checkResult struct {
@@ -26,7 +21,7 @@ type checkResult struct {
 type expectation struct {
 	name   string
 	check  func(err error, result any) checkResult
-	report func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult)
+	report func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult)
 }
 
 func (q *Query[T]) ExpectFound() *Query[T] {
@@ -92,20 +87,13 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 func newExpectation(
 	name string,
 	checkFn func(err error, result any) checkResult,
-	reportFn func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult),
+	reportFn func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult),
 ) *expectation {
 	return &expectation{
 		name:   name,
 		check:  checkFn,
 		report: reportFn,
 	}
-}
-
-func reportWithMode(stepCtx provider.StepCtx, mode assertMode) provider.Asserts {
-	if mode == requireMode {
-		return stepCtx.Require()
-	}
-	return stepCtx.Assert()
 }
 
 func isNilAny(v any) bool {
@@ -433,8 +421,8 @@ func makeFoundExpectation() *expectation {
 			}
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			a := reportWithMode(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect: Found] %s", checkRes.reason)
 			} else {
@@ -464,8 +452,8 @@ func makeNotFoundExpectation() *expectation {
 				reason:    "Expected sql.ErrNoRows, but query returned results",
 			}
 		},
-		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			a := reportWithMode(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect: Not Found] %s", checkRes.reason)
 			} else {
@@ -521,8 +509,8 @@ func makeColumnEqualsExpectation(columnName string, expectedValue any) *expectat
 			}
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			a := reportWithMode(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect: Column '%s' = %v] %s", columnName, expectedValue, checkRes.reason)
 				return
@@ -580,8 +568,8 @@ func makeColumnNotEmptyExpectation(columnName string) *expectation {
 			}
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			a := reportWithMode(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect: Column '%s' not empty] %s", columnName, checkRes.reason)
 			} else {
@@ -637,8 +625,8 @@ func makeColumnIsNullExpectation(columnName string) *expectation {
 			}
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			a := reportWithMode(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect: Column '%s' IS NULL] %s", columnName, checkRes.reason)
 				return
@@ -697,8 +685,8 @@ func makeColumnIsNotNullExpectation(columnName string) *expectation {
 			}
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			a := reportWithMode(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect: Column '%s' IS NOT NULL] %s", columnName, checkRes.reason)
 				return
@@ -774,8 +762,8 @@ func makeColumnTrueExpectation(columnName string) *expectation {
 
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			a := reportWithMode(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect: Column '%s' = true] %s", columnName, checkRes.reason)
 				return
@@ -851,8 +839,8 @@ func makeColumnFalseExpectation(columnName string) *expectation {
 
 			return checkResult{ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode assertMode, err error, result any, checkRes checkResult) {
-			a := reportWithMode(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.ok {
 				a.True(false, "[Expect: Column '%s' = false] %s", columnName, checkRes.reason)
 				return

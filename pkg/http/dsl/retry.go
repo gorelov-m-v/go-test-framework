@@ -6,34 +6,11 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"go-test-framework/pkg/expect"
 	"go-test-framework/pkg/extension"
 	"go-test-framework/pkg/http/client"
 	"go-test-framework/pkg/retry"
 )
-
-type checkResult struct {
-	ok        bool
-	retryable bool
-	reason    string
-}
-
-type expectation struct {
-	name   string
-	check  func(err error, resp *client.Response[any]) checkResult
-	report func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes checkResult)
-}
-
-func newExpectation(
-	name string,
-	checkFn func(err error, resp *client.Response[any]) checkResult,
-	reportFn func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes checkResult),
-) *expectation {
-	return &expectation{
-		name:   name,
-		check:  checkFn,
-		report: reportFn,
-	}
-}
 
 func (c *Call[TReq, TResp]) executeSingle() (*client.Response[TResp], error, extension.PollingSummary) {
 	executor := func(ctx context.Context) (*client.Response[TResp], error) {
@@ -64,9 +41,14 @@ func (c *Call[TReq, TResp]) executeSingle() (*client.Response[TResp], error, ext
 
 func (c *Call[TReq, TResp]) executeWithRetry(
 	stepCtx provider.StepCtx,
-	expectations []*expectation,
+	expectations []*expect.Expectation[*client.Response[any]],
 ) (*client.Response[TResp], error, extension.PollingSummary) {
 	asyncCfg := c.client.AsyncConfig
+
+	if !asyncCfg.Enabled {
+		return c.executeSingle()
+	}
+
 	executor := func(ctx context.Context) (*client.Response[TResp], error) {
 		resp, err := client.DoTyped[TReq, TResp](ctx, c.client, c.req)
 		if err != nil && resp == nil {
@@ -95,11 +77,11 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 
 		results := make([]retry.CheckResult, 0, len(expectations))
 		for _, exp := range expectations {
-			checkRes := exp.check(err, respAny)
+			checkRes := exp.Check(err, respAny)
 			results = append(results, retry.CheckResult{
-				Ok:        checkRes.ok,
-				Retryable: checkRes.retryable,
-				Reason:    checkRes.reason,
+				Ok:        checkRes.Ok,
+				Retryable: checkRes.Retryable,
+				Reason:    checkRes.Reason,
 			})
 		}
 
@@ -118,19 +100,6 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 	}
 
 	return resp, err, summary
-}
-
-func reportExpectations(
-	stepCtx provider.StepCtx,
-	mode extension.AssertionMode,
-	expectations []*expectation,
-	err error,
-	resp *client.Response[any],
-) {
-	for _, exp := range expectations {
-		checkRes := exp.check(err, resp)
-		exp.report(stepCtx, mode, err, resp, checkRes)
-	}
 }
 
 func validateJSONPath(path string) error {

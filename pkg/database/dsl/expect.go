@@ -9,30 +9,25 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"go-test-framework/pkg/expect"
 	"go-test-framework/pkg/extension"
 )
 
-type checkResult struct {
-	ok        bool
-	retryable bool
-	reason    string
-}
-
-type expectation struct {
-	name   string
-	check  func(err error, result any) checkResult
-	report func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult)
-}
-
 func (q *Query[T]) ExpectFound() *Query[T] {
-	q.expectations = append(q.expectations, makeFoundExpectation())
+	if q.expectsNotFound {
+		panic("ExpectFound cannot be used with ExpectNotFound()")
+	}
+	q.expectations = append(q.expectations, makeFoundExpectation[T]())
 	return q
 }
 
 func (q *Query[T]) ExpectNotFound() *Query[T] {
+	if len(q.expectations) > 0 {
+		panic("ExpectNotFound cannot be used after other expectations (ExpectFound, ExpectColumnEquals, etc.)")
+	}
 	q.expectsNotFound = true
-	q.expectations = []*expectation{}
-	q.expectations = append(q.expectations, makeNotFoundExpectation())
+	q.expectations = []*expect.Expectation[T]{}
+	q.expectations = append(q.expectations, makeNotFoundExpectation[T]())
 	return q
 }
 
@@ -40,7 +35,7 @@ func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Que
 	if q.expectsNotFound {
 		panic("ExpectColumnEquals cannot be used with ExpectNotFound()")
 	}
-	q.expectations = append(q.expectations, makeColumnEqualsExpectation(columnName, expectedValue))
+	q.expectations = append(q.expectations, makeColumnEqualsExpectation[T](columnName, expectedValue))
 	return q
 }
 
@@ -48,7 +43,7 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 	if q.expectsNotFound {
 		panic("ExpectColumnNotEmpty cannot be used with ExpectNotFound()")
 	}
-	q.expectations = append(q.expectations, makeColumnNotEmptyExpectation(columnName))
+	q.expectations = append(q.expectations, makeColumnNotEmptyExpectation[T](columnName))
 	return q
 }
 
@@ -56,7 +51,7 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 	if q.expectsNotFound {
 		panic("ExpectColumnIsNull cannot be used with ExpectNotFound()")
 	}
-	q.expectations = append(q.expectations, makeColumnIsNullExpectation(columnName))
+	q.expectations = append(q.expectations, makeColumnIsNullExpectation[T](columnName))
 	return q
 }
 
@@ -64,7 +59,7 @@ func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 	if q.expectsNotFound {
 		panic("ExpectColumnIsNotNull cannot be used with ExpectNotFound()")
 	}
-	q.expectations = append(q.expectations, makeColumnIsNotNullExpectation(columnName))
+	q.expectations = append(q.expectations, makeColumnIsNotNullExpectation[T](columnName))
 	return q
 }
 
@@ -72,7 +67,7 @@ func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
 	if q.expectsNotFound {
 		panic("ExpectColumnTrue cannot be used with ExpectNotFound()")
 	}
-	q.expectations = append(q.expectations, makeColumnTrueExpectation(columnName))
+	q.expectations = append(q.expectations, makeColumnTrueExpectation[T](columnName))
 	return q
 }
 
@@ -80,20 +75,8 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 	if q.expectsNotFound {
 		panic("ExpectColumnFalse cannot be used with ExpectNotFound()")
 	}
-	q.expectations = append(q.expectations, makeColumnFalseExpectation(columnName))
+	q.expectations = append(q.expectations, makeColumnFalseExpectation[T](columnName))
 	return q
-}
-
-func newExpectation(
-	name string,
-	checkFn func(err error, result any) checkResult,
-	reportFn func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult),
-) *expectation {
-	return &expectation{
-		name:   name,
-		check:  checkFn,
-		report: reportFn,
-	}
 }
 
 func isNilAny(v any) bool {
@@ -401,30 +384,30 @@ func reportNullCheck(a provider.Asserts, actualValue any, columnName string, exp
 	}
 }
 
-func makeFoundExpectation() *expectation {
-	return newExpectation(
+func makeFoundExpectation[T any]() *expect.Expectation[T] {
+	return expect.New(
 		"Expect: Found",
-		func(err error, result any) checkResult {
+		func(err error, result T) expect.CheckResult {
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return checkResult{
-						ok:        false,
-						retryable: true,
-						reason:    "Expected query to return at least one result, but got sql.ErrNoRows",
+					return expect.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    "Expected query to return at least one result, but got sql.ErrNoRows",
 					}
 				}
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Query failed: %v", err),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Query failed: %v", err),
 				}
 			}
-			return checkResult{ok: true}
+			return expect.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result T, checkRes expect.CheckResult) {
 			a := extension.PickAsserter(stepCtx, mode)
-			if !checkRes.ok {
-				a.True(false, "[Expect: Found] %s", checkRes.reason)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Found] %s", checkRes.Reason)
 			} else {
 				a.True(true, "[Expect: Found]")
 			}
@@ -432,30 +415,30 @@ func makeFoundExpectation() *expectation {
 	)
 }
 
-func makeNotFoundExpectation() *expectation {
-	return newExpectation(
+func makeNotFoundExpectation[T any]() *expect.Expectation[T] {
+	return expect.New(
 		"Expect: Not Found",
-		func(err error, result any) checkResult {
+		func(err error, result T) expect.CheckResult {
 			if errors.Is(err, sql.ErrNoRows) {
-				return checkResult{ok: true}
+				return expect.CheckResult{Ok: true}
 			}
 			if err != nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Expected sql.ErrNoRows, but got different error: %v", err),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Expected sql.ErrNoRows, but got different error: %v", err),
 				}
 			}
-			return checkResult{
-				ok:        false,
-				retryable: true,
-				reason:    "Expected sql.ErrNoRows, but query returned results",
+			return expect.CheckResult{
+				Ok:        false,
+				Retryable: true,
+				Reason:    "Expected sql.ErrNoRows, but query returned results",
 			}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result T, checkRes expect.CheckResult) {
 			a := extension.PickAsserter(stepCtx, mode)
-			if !checkRes.ok {
-				a.True(false, "[Expect: Not Found] %s", checkRes.reason)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Not Found] %s", checkRes.Reason)
 			} else {
 				a.True(true, "[Expect: Not Found]")
 			}
@@ -463,56 +446,56 @@ func makeNotFoundExpectation() *expectation {
 	)
 }
 
-func makeColumnEqualsExpectation(columnName string, expectedValue any) *expectation {
-	return newExpectation(
+func makeColumnEqualsExpectation[T any](columnName string, expectedValue any) *expect.Expectation[T] {
+	return expect.New(
 		fmt.Sprintf("Expect: Column '%s' = %v", columnName, expectedValue),
-		func(err error, result any) checkResult {
+		func(err error, result T) expect.CheckResult {
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return checkResult{
-						ok:        false,
-						retryable: true,
-						reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
+					return expect.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
 					}
 				}
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
 				}
 			}
 
-			if result == nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    "This expectation can only be used with MustFetch()",
+			if any(result) == nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "This expectation can only be used with MustFetch()",
 				}
 			}
 
 			actualValue, getErr := getFieldValueByColumnName(result, columnName)
 			if getErr != nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
 				}
 			}
 
 			equal, retryable, reason := equalsLoose(expectedValue, actualValue)
 			if !equal {
-				return checkResult{
-					ok:        false,
-					retryable: retryable,
-					reason:    fmt.Sprintf("Column '%s': %s", columnName, reason),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: retryable,
+					Reason:    fmt.Sprintf("Column '%s': %s", columnName, reason),
 				}
 			}
-			return checkResult{ok: true}
+			return expect.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result T, checkRes expect.CheckResult) {
 			a := extension.PickAsserter(stepCtx, mode)
-			if !checkRes.ok {
-				a.True(false, "[Expect: Column '%s' = %v] %s", columnName, expectedValue, checkRes.reason)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Column '%s' = %v] %s", columnName, expectedValue, checkRes.Reason)
 				return
 			}
 
@@ -522,56 +505,56 @@ func makeColumnEqualsExpectation(columnName string, expectedValue any) *expectat
 	)
 }
 
-func makeColumnNotEmptyExpectation(columnName string) *expectation {
-	return newExpectation(
+func makeColumnNotEmptyExpectation[T any](columnName string) *expect.Expectation[T] {
+	return expect.New(
 		fmt.Sprintf("Expect: Column '%s' not empty", columnName),
-		func(err error, result any) checkResult {
+		func(err error, result T) expect.CheckResult {
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return checkResult{
-						ok:        false,
-						retryable: true,
-						reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
+					return expect.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
 					}
 				}
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
 				}
 			}
 
-			if result == nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    "This expectation can only be used with MustFetch()",
+			if any(result) == nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "This expectation can only be used with MustFetch()",
 				}
 			}
 
 			actualValue, getErr := getFieldValueByColumnName(result, columnName)
 			if getErr != nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
 				}
 			}
 
 			isEmpty := isEmptyValue(actualValue)
 			if isEmpty {
-				return checkResult{
-					ok:        false,
-					retryable: true,
-					reason:    fmt.Sprintf("Expected column '%s' to not be empty, but it is", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Expected column '%s' to not be empty, but it is", columnName),
 				}
 			}
-			return checkResult{ok: true}
+			return expect.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result T, checkRes expect.CheckResult) {
 			a := extension.PickAsserter(stepCtx, mode)
-			if !checkRes.ok {
-				a.True(false, "[Expect: Column '%s' not empty] %s", columnName, checkRes.reason)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Column '%s' not empty] %s", columnName, checkRes.Reason)
 			} else {
 				a.True(true, "[Expect: Column '%s' not empty]", columnName)
 			}
@@ -579,56 +562,56 @@ func makeColumnNotEmptyExpectation(columnName string) *expectation {
 	)
 }
 
-func makeColumnIsNullExpectation(columnName string) *expectation {
-	return newExpectation(
+func makeColumnIsNullExpectation[T any](columnName string) *expect.Expectation[T] {
+	return expect.New(
 		fmt.Sprintf("Expect: Column '%s' IS NULL", columnName),
-		func(err error, result any) checkResult {
+		func(err error, result T) expect.CheckResult {
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return checkResult{
-						ok:        false,
-						retryable: true,
-						reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
+					return expect.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
 					}
 				}
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
 				}
 			}
 
-			if result == nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    "This expectation can only be used with MustFetch()",
+			if any(result) == nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "This expectation can only be used with MustFetch()",
 				}
 			}
 
 			actualValue, getErr := getFieldValueByColumnName(result, columnName)
 			if getErr != nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
 				}
 			}
 
 			isNull := isValueNull(actualValue)
 			if !isNull {
-				return checkResult{
-					ok:        false,
-					retryable: true,
-					reason:    fmt.Sprintf("Expected column '%s' to be NULL, but it has a value", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Expected column '%s' to be NULL, but it has a value", columnName),
 				}
 			}
-			return checkResult{ok: true}
+			return expect.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result T, checkRes expect.CheckResult) {
 			a := extension.PickAsserter(stepCtx, mode)
-			if !checkRes.ok {
-				a.True(false, "[Expect: Column '%s' IS NULL] %s", columnName, checkRes.reason)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Column '%s' IS NULL] %s", columnName, checkRes.Reason)
 				return
 			}
 
@@ -639,56 +622,56 @@ func makeColumnIsNullExpectation(columnName string) *expectation {
 	)
 }
 
-func makeColumnIsNotNullExpectation(columnName string) *expectation {
-	return newExpectation(
+func makeColumnIsNotNullExpectation[T any](columnName string) *expect.Expectation[T] {
+	return expect.New(
 		fmt.Sprintf("Expect: Column '%s' IS NOT NULL", columnName),
-		func(err error, result any) checkResult {
+		func(err error, result T) expect.CheckResult {
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return checkResult{
-						ok:        false,
-						retryable: true,
-						reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
+					return expect.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
 					}
 				}
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
 				}
 			}
 
-			if result == nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    "This expectation can only be used with MustFetch()",
+			if any(result) == nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "This expectation can only be used with MustFetch()",
 				}
 			}
 
 			actualValue, getErr := getFieldValueByColumnName(result, columnName)
 			if getErr != nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
 				}
 			}
 
 			isNull := isValueNull(actualValue)
 			if isNull {
-				return checkResult{
-					ok:        false,
-					retryable: true,
-					reason:    fmt.Sprintf("Expected column '%s' to be NOT NULL, but it is NULL", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Expected column '%s' to be NOT NULL, but it is NULL", columnName),
 				}
 			}
-			return checkResult{ok: true}
+			return expect.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result T, checkRes expect.CheckResult) {
 			a := extension.PickAsserter(stepCtx, mode)
-			if !checkRes.ok {
-				a.True(false, "[Expect: Column '%s' IS NOT NULL] %s", columnName, checkRes.reason)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Column '%s' IS NOT NULL] %s", columnName, checkRes.Reason)
 				return
 			}
 
@@ -699,73 +682,73 @@ func makeColumnIsNotNullExpectation(columnName string) *expectation {
 	)
 }
 
-func makeColumnTrueExpectation(columnName string) *expectation {
-	return newExpectation(
+func makeColumnTrueExpectation[T any](columnName string) *expect.Expectation[T] {
+	return expect.New(
 		fmt.Sprintf("Expect: Column '%s' = true", columnName),
-		func(err error, result any) checkResult {
+		func(err error, result T) expect.CheckResult {
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return checkResult{
-						ok:        false,
-						retryable: true,
-						reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
+					return expect.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
 					}
 				}
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
 				}
 			}
 
-			if result == nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    "This expectation can only be used with MustFetch()",
+			if any(result) == nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "This expectation can only be used with MustFetch()",
 				}
 			}
 
 			actualValue, getErr := getFieldValueByColumnName(result, columnName)
 			if getErr != nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
 				}
 			}
 
 			if isValueNull(actualValue) {
-				return checkResult{
-					ok:        false,
-					retryable: true,
-					reason:    fmt.Sprintf("Column '%s' is NULL yet", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Column '%s' is NULL yet", columnName),
 				}
 			}
 
 			b, ok := asBool(actualValue)
 			if !ok {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Column '%s' is not a boolean/numeric(0/1) type", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Column '%s' is not a boolean/numeric(0/1) type", columnName),
 				}
 			}
 
 			if !b {
-				return checkResult{
-					ok:        false,
-					retryable: true,
-					reason:    fmt.Sprintf("Expected column '%s' to be true, but got false", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Expected column '%s' to be true, but got false", columnName),
 				}
 			}
 
-			return checkResult{ok: true}
+			return expect.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result T, checkRes expect.CheckResult) {
 			a := extension.PickAsserter(stepCtx, mode)
-			if !checkRes.ok {
-				a.True(false, "[Expect: Column '%s' = true] %s", columnName, checkRes.reason)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Column '%s' = true] %s", columnName, checkRes.Reason)
 				return
 			}
 
@@ -776,73 +759,73 @@ func makeColumnTrueExpectation(columnName string) *expectation {
 	)
 }
 
-func makeColumnFalseExpectation(columnName string) *expectation {
-	return newExpectation(
+func makeColumnFalseExpectation[T any](columnName string) *expect.Expectation[T] {
+	return expect.New(
 		fmt.Sprintf("Expect: Column '%s' = false", columnName),
-		func(err error, result any) checkResult {
+		func(err error, result T) expect.CheckResult {
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return checkResult{
-						ok:        false,
-						retryable: true,
-						reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
+					return expect.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
 					}
 				}
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
 				}
 			}
 
-			if result == nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    "This expectation can only be used with MustFetch()",
+			if any(result) == nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "This expectation can only be used with MustFetch()",
 				}
 			}
 
 			actualValue, getErr := getFieldValueByColumnName(result, columnName)
 			if getErr != nil {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
 				}
 			}
 
 			if isValueNull(actualValue) {
-				return checkResult{
-					ok:        false,
-					retryable: true,
-					reason:    fmt.Sprintf("Column '%s' is NULL yet", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Column '%s' is NULL yet", columnName),
 				}
 			}
 
 			b, ok := asBool(actualValue)
 			if !ok {
-				return checkResult{
-					ok:        false,
-					retryable: false,
-					reason:    fmt.Sprintf("Column '%s' is not a boolean/numeric(0/1) type", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Column '%s' is not a boolean/numeric(0/1) type", columnName),
 				}
 			}
 
 			if b {
-				return checkResult{
-					ok:        false,
-					retryable: true,
-					reason:    fmt.Sprintf("Expected column '%s' to be false, but got true", columnName),
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Expected column '%s' to be false, but got true", columnName),
 				}
 			}
 
-			return checkResult{ok: true}
+			return expect.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result any, checkRes checkResult) {
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result T, checkRes expect.CheckResult) {
 			a := extension.PickAsserter(stepCtx, mode)
-			if !checkRes.ok {
-				a.True(false, "[Expect: Column '%s' = false] %s", columnName, checkRes.reason)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Column '%s' = false] %s", columnName, checkRes.Reason)
 				return
 			}
 

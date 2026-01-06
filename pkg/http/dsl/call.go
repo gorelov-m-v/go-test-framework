@@ -8,6 +8,7 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"go-test-framework/pkg/expect"
 	"go-test-framework/pkg/extension"
 	"go-test-framework/pkg/http/client"
 )
@@ -23,7 +24,7 @@ type Call[TReq any, TResp any] struct {
 	resp *client.Response[TResp]
 
 	sent         bool
-	expectations []*expectation
+	expectations []*expect.Expectation[*client.Response[any]]
 }
 
 func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Client) *Call[TReq, TResp] {
@@ -96,7 +97,7 @@ func (c *Call[TReq, TResp]) RequestBody(body TReq) *Call[TReq, TResp] {
 	return c
 }
 
-func (c *Call[TReq, TResp]) addExpectation(exp *expectation) {
+func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Response[any]]) {
 	if c.sent {
 		panic("httpdsl: expectations must be added before RequestSend()")
 	}
@@ -115,6 +116,9 @@ func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
 		attachRequest(stepCtx, c.client, c.req)
 
 		mode := extension.GetStepMode(stepCtx)
+		// IMPORTANT: Retries are only enabled in AsyncMode when expectations are present.
+		// Without expectations, requests execute once even in AsyncMode (no automatic retry on network errors).
+		// To enable retries: add at least one expectation (ExpectResponseStatus, ExpectResponseBodyNotEmpty, etc.)
 		useRetry := mode == extension.AsyncMode && len(c.expectations) > 0
 
 		var (
@@ -168,7 +172,7 @@ func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
 			return
 		}
 
-		reportExpectations(stepCtx, assertionMode, c.expectations, err, respAny)
+		expect.ReportAll(stepCtx, assertionMode, c.expectations, err, respAny)
 	})
 
 	return c

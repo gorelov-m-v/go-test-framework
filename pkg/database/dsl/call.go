@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"go-test-framework/pkg/database/client"
+	"go-test-framework/pkg/expect"
 	"go-test-framework/pkg/extension"
 )
 
@@ -20,7 +21,7 @@ type Query[T any] struct {
 	ctx             context.Context
 	sql             string
 	args            []any
-	expectations    []*expectation
+	expectations    []*expect.Expectation[T]
 	expectsNotFound bool
 	scannedResult   T
 	sqlResult       sql.Result
@@ -41,7 +42,9 @@ func (q *Query[T]) SQL(query string, args ...any) *Query[T] {
 }
 
 func (q *Query[T]) WithContext(ctx context.Context) *Query[T] {
-	q.ctx = ctx
+	if ctx != nil {
+		q.ctx = ctx
+	}
 	return q
 }
 
@@ -57,11 +60,16 @@ func (q *Query[T]) MustFetch() T {
 		var err error
 		var summary extension.PollingSummary
 
-		if mode == extension.AsyncMode {
+		useRetry := mode == extension.AsyncMode && len(q.expectations) > 0
+
+		if useRetry {
 			result, err, summary = q.executeWithRetry(stepCtx, q.expectations)
-			extension.AttachPollingSummary(stepCtx, summary)
 		} else {
 			result, err, summary = q.executeSingle()
+		}
+
+		if mode == extension.AsyncMode {
+			extension.AttachPollingSummary(stepCtx, summary)
 		}
 
 		q.scannedResult = result
@@ -78,32 +86,26 @@ func (q *Query[T]) MustFetch() T {
 		assertMd := extension.GetAssertionModeFromStepMode(mode)
 
 		if len(q.expectations) > 0 {
-			reportExpectations(stepCtx, assertMd, q.expectations, err, result)
-		}
-
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				if !q.expectsNotFound {
-					extension.NoError(stepCtx, assertMd, err, "Expected row to exist, but got sql.ErrNoRows%s. Use ExpectNotFound() if 'not found' is expected", func() string {
-						if mode == extension.AsyncMode {
-							return " after retry"
-						}
-						return ""
-					}())
+			expect.ReportAll(stepCtx, assertMd, q.expectations, err, result)
+		} else {
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					if !q.expectsNotFound {
+						extension.NoError(stepCtx, assertMd, err, "Expected row to exist, but got sql.ErrNoRows%s. Use ExpectNotFound() if 'not found' is expected", func() string {
+							if mode == extension.AsyncMode {
+								return " after retry"
+							}
+							return ""
+						}())
+					}
+				} else {
+					msg := "DB query failed"
+					if mode == extension.AsyncMode {
+						msg = extension.FinalFailureMessage(summary)
+					}
+					extension.NoError(stepCtx, assertMd, err, msg)
 				}
-			} else {
-				msg := "DB query failed"
-				if mode == extension.AsyncMode {
-					msg = extension.FinalFailureMessage(summary)
-				}
-				extension.NoError(stepCtx, assertMd, err, msg)
 			}
-		} else if !summary.Success {
-			msg := "DB query expectations not met"
-			if mode == extension.AsyncMode {
-				msg = extension.FinalFailureMessage(summary)
-			}
-			extension.True(stepCtx, assertMd, false, msg)
 		}
 	})
 

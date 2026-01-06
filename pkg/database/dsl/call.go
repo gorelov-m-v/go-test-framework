@@ -8,12 +8,15 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"go-test-framework/pkg/database/client"
 	"go-test-framework/pkg/expect"
 	"go-test-framework/pkg/extension"
 )
+
+var structMapper = reflectx.NewMapper("db")
 
 type Query[T any] struct {
 	sCtx            provider.StepCtx
@@ -152,74 +155,35 @@ func getFieldValueByColumnName(target any, columnName string) (any, error) {
 		return nil, fmt.Errorf("columnName cannot be empty")
 	}
 
-	val := reflect.ValueOf(target)
-	if val.Kind() == reflect.Ptr {
-		if val.IsNil() {
+	if target == nil {
+		return nil, fmt.Errorf("target is nil")
+	}
+
+	v := reflect.ValueOf(target)
+
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
 			return nil, fmt.Errorf("target pointer is nil")
 		}
-		val = val.Elem()
-	}
-	if val.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("target is not a struct")
+		v = v.Elem()
 	}
 
-	return findFieldByColumnName(val, columnName)
-}
-
-func findFieldByColumnName(val reflect.Value, columnName string) (any, error) {
-	typ := val.Type()
-
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		tag := field.Tag.Get("db")
-
-		if tag == "-" {
-			continue
-		}
-
-		tagParts := strings.SplitN(tag, ",", 2)
-		tagName := strings.TrimSpace(tagParts[0])
-
-		if tagName == "" {
-			continue
-		}
-
-		if tagName == columnName {
-			fieldVal := val.Field(i)
-			if !fieldVal.CanInterface() {
-				return nil, fmt.Errorf("cannot interface field %s", field.Name)
-			}
-			return fieldVal.Interface(), nil
-		}
+	if v.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("target is not a struct, got %s", v.Kind())
 	}
 
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	fieldMap := structMapper.FieldMap(v)
 
-		if !field.Anonymous {
-			continue
-		}
-
-		fieldVal := val.Field(i)
-
-		if fieldVal.Kind() == reflect.Ptr {
-			if fieldVal.IsNil() {
-				continue
-			}
-			fieldVal = fieldVal.Elem()
-		}
-
-		if fieldVal.Kind() != reflect.Struct {
-			continue
-		}
-
-		result, err := findFieldByColumnName(fieldVal, columnName)
-		if err == nil {
-			return result, nil
-		}
+	fieldValue, found := fieldMap[columnName]
+	if !found {
+		return nil, fmt.Errorf("column '%s' not found in struct %T (check 'db' tags)", columnName, target)
 	}
 
-	return nil, fmt.Errorf("no field with db tag '%s' found in struct %T", columnName, val.Interface())
+	if !fieldValue.CanInterface() {
+		return nil, fmt.Errorf("field for column '%s' is unexported", columnName)
+	}
+
+	return fieldValue.Interface(), nil
 }
 
 func extractTableName(query string) string {

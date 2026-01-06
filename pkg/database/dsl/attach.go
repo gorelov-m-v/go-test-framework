@@ -1,8 +1,6 @@
 package dsl
 
 import (
-	"database/sql"
-
 	"go-test-framework/pkg/allure"
 	"go-test-framework/pkg/database/client"
 
@@ -17,8 +15,4 @@ func attachQuery(sCtx provider.StepCtx, sqlQuery string, args []any) {
 
 func attachResult(sCtx provider.StepCtx, dbClient *client.Client, result any, err error) {
 	sqlReporter.AttachSQLResult(sCtx, dbClient, result, err)
-}
-
-func attachExecResult(sCtx provider.StepCtx, res sql.Result, err error) {
-	sqlReporter.AttachSQLExecResult(sCtx, res, err)
 }

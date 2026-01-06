@@ -27,7 +27,6 @@ type Query[T any] struct {
 	expectations    []*expect.Expectation[T]
 	expectsNotFound bool
 	scannedResult   T
-	sqlResult       sql.Result
 }
 
 func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
@@ -122,35 +121,6 @@ func (q *Query[T]) MustFetch() T {
 	return q.scannedResult
 }
 
-func (q *Query[T]) MustExec() sql.Result {
-	tableName := extractTableName(q.sql)
-	operation := extractOperation(q.sql)
-	stepName := fmt.Sprintf("%s %s", operation, tableName)
-
-	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
-		attachQuery(stepCtx, q.sql, q.args)
-
-		mode := extension.GetStepMode(stepCtx)
-		assertMd := extension.GetAssertionModeFromStepMode(mode)
-
-		if len(q.expectations) > 0 {
-			extension.True(stepCtx, assertMd, false, "MustExec() cannot be used with expectations (ExpectColumn*, ExpectFound, ExpectNotFound). Expectations are only valid for MustFetch()")
-			return
-		}
-
-		res, err := q.client.DB.ExecContext(q.ctx, q.sql, q.args...)
-		q.sqlResult = res
-
-		attachExecResult(stepCtx, res, err)
-
-		if err != nil {
-			extension.NoError(stepCtx, assertMd, err, "DB exec failed")
-		}
-	})
-
-	return q.sqlResult
-}
-
 func getFieldValueByColumnName(target any, columnName string) (any, error) {
 	columnName = strings.TrimSpace(columnName)
 	if columnName == "" {
@@ -204,10 +174,7 @@ func extractTableName(query string) string {
 
 			if parenDepth == 0 && i > 0 {
 				remaining := upper[i:]
-				if strings.HasPrefix(remaining, "SELECT") ||
-					strings.HasPrefix(remaining, "INSERT") ||
-					strings.HasPrefix(remaining, "UPDATE") ||
-					strings.HasPrefix(remaining, "DELETE") {
+				if strings.HasPrefix(remaining, "SELECT") {
 					return extractTableName(query[i:])
 				}
 			}
@@ -216,30 +183,6 @@ func extractTableName(query string) string {
 
 	if tableName := extractTableFromKeyword(query, upper, "FROM"); tableName != "" {
 		return tableName
-	}
-
-	if tableName := extractTableFromKeyword(query, upper, "INTO"); tableName != "" {
-		return tableName
-	}
-
-	if strings.HasPrefix(upper, "UPDATE") || strings.Contains(upper, " UPDATE ") {
-		updateIdx := 0
-		if strings.HasPrefix(upper, "UPDATE") {
-			updateIdx = 0
-		} else {
-			updateIdx = strings.Index(upper, " UPDATE ")
-			if updateIdx != -1 {
-				updateIdx++
-			}
-		}
-
-		if updateIdx != -1 {
-			afterUpdate := query[updateIdx+6:]
-			words := strings.Fields(afterUpdate)
-			if len(words) > 0 {
-				return cleanTableName(words[0])
-			}
-		}
 	}
 
 	return "query"
@@ -279,23 +222,4 @@ func cleanTableName(tableName string) string {
 	tableName = strings.TrimRight(tableName, ",;()")
 
 	return tableName
-}
-
-func extractOperation(query string) string {
-	query = strings.TrimSpace(strings.ToUpper(query))
-
-	if strings.HasPrefix(query, "SELECT") {
-		return "SELECT"
-	}
-	if strings.HasPrefix(query, "INSERT") {
-		return "INSERT"
-	}
-	if strings.HasPrefix(query, "UPDATE") {
-		return "UPDATE"
-	}
-	if strings.HasPrefix(query, "DELETE") {
-		return "DELETE"
-	}
-
-	return "EXEC"
 }

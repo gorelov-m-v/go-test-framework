@@ -60,27 +60,6 @@ func (r *Reporter) AttachSQLResult(sCtx provider.StepCtx, db *dbclient.Client, r
 	r.attachJSON(sCtx, "SQL Result", maskedData)
 }
 
-func (r *Reporter) AttachSQLExecResult(sCtx provider.StepCtx, res sql.Result, err error) {
-	if err != nil {
-		r.attachJSON(sCtx, "SQL Exec Error", map[string]string{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	if res == nil {
-		return
-	}
-
-	rowsAffected, _ := res.RowsAffected()
-	lastInsertId, _ := res.LastInsertId()
-
-	r.attachJSON(sCtx, "SQL Exec Result", map[string]int64{
-		"rowsAffected": rowsAffected,
-		"lastInsertId": lastInsertId,
-	})
-}
-
 func (r *Reporter) attachJSON(sCtx provider.StepCtx, name string, content any) {
 	bytes, err := json.MarshalIndent(content, "", "  ")
 	if err != nil {

@@ -13,10 +13,9 @@ import (
 )
 
 type Call[TReq any, TResp any] struct {
-	sCtx          provider.StepCtx
-	client        *client.Client
-	ctx           context.Context
-	assertionMode extension.AssertionMode
+	sCtx   provider.StepCtx
+	client *client.Client
+	ctx    context.Context
 
 	stepName string
 
@@ -29,10 +28,9 @@ type Call[TReq any, TResp any] struct {
 
 func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Client) *Call[TReq, TResp] {
 	return &Call[TReq, TResp]{
-		sCtx:          sCtx,
-		client:        httpClient,
-		ctx:           context.Background(),
-		assertionMode: extension.AssertionRequire,
+		sCtx:   sCtx,
+		client: httpClient,
+		ctx:    context.Background(),
 		req: &client.Request[TReq]{
 			Headers:     make(map[string]string),
 			PathParams:  make(map[string]string),
@@ -43,16 +41,6 @@ func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Clie
 
 func (c *Call[TReq, TResp]) StepName(name string) *Call[TReq, TResp] {
 	c.stepName = strings.TrimSpace(name)
-	return c
-}
-
-func (c *Call[TReq, TResp]) Assert() *Call[TReq, TResp] {
-	c.assertionMode = extension.AssertionAssert
-	return c
-}
-
-func (c *Call[TReq, TResp]) Require() *Call[TReq, TResp] {
-	c.assertionMode = extension.AssertionRequire
 	return c
 }
 

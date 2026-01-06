@@ -79,19 +79,6 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 	return q
 }
 
-func isNilAny(v any) bool {
-	if v == nil {
-		return true
-	}
-	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
-	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Interface, reflect.Func, reflect.Chan:
-		return rv.IsNil()
-	default:
-		return false
-	}
-}
-
 func asBool(v any) (bool, bool) {
 	switch x := v.(type) {
 	case bool:
@@ -242,145 +229,125 @@ func asBool(v any) (bool, bool) {
 	return false, false
 }
 
-func isEmptyValue(actualValue any) bool {
-	if isNilAny(actualValue) {
+func isEmptyValue(v any) bool {
+	if v == nil {
 		return true
 	}
 
-	if str, ok := actualValue.(string); ok {
-		return strings.TrimSpace(str) == ""
-	}
+	switch x := v.(type) {
+	case string:
+		return strings.TrimSpace(x) == ""
 
-	val := reflect.ValueOf(actualValue)
-	if val.Kind() == reflect.Ptr {
-		return val.IsNil()
-	}
-
-	switch v := actualValue.(type) {
 	case sql.NullString:
-		return !v.Valid || (v.Valid && strings.TrimSpace(v.String) == "")
-	case sql.NullInt64:
-		return !v.Valid
-	case sql.NullInt32:
-		return !v.Valid
-	case sql.NullInt16:
-		return !v.Valid
-	case sql.NullByte:
-		return !v.Valid
-	case sql.NullFloat64:
-		return !v.Valid
-	case sql.NullBool:
-		return !v.Valid
-	case sql.NullTime:
-		return !v.Valid
+		return !x.Valid || strings.TrimSpace(x.String) == ""
 	case *sql.NullString:
-		return v == nil || !v.Valid || (v.Valid && strings.TrimSpace(v.String) == "")
+		return x == nil || !x.Valid || strings.TrimSpace(x.String) == ""
+
+	case sql.NullInt64:
+		return !x.Valid
 	case *sql.NullInt64:
-		return v == nil || !v.Valid
+		return x == nil || !x.Valid
+
+	case sql.NullInt32:
+		return !x.Valid
 	case *sql.NullInt32:
-		return v == nil || !v.Valid
+		return x == nil || !x.Valid
+
+	case sql.NullInt16:
+		return !x.Valid
 	case *sql.NullInt16:
-		return v == nil || !v.Valid
+		return x == nil || !x.Valid
+
+	case sql.NullByte:
+		return !x.Valid
 	case *sql.NullByte:
-		return v == nil || !v.Valid
+		return x == nil || !x.Valid
+
+	case sql.NullFloat64:
+		return !x.Valid
 	case *sql.NullFloat64:
-		return v == nil || !v.Valid
+		return x == nil || !x.Valid
+
+	case sql.NullBool:
+		return !x.Valid
 	case *sql.NullBool:
-		return v == nil || !v.Valid
+		return x == nil || !x.Valid
+
+	case sql.NullTime:
+		return !x.Valid
 	case *sql.NullTime:
-		return v == nil || !v.Valid
+		return x == nil || !x.Valid
+
 	default:
-		switch val.Kind() {
+		rv := reflect.ValueOf(v)
+		if rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
+			return rv.IsNil()
+		}
+		switch rv.Kind() {
 		case reflect.Slice, reflect.Map, reflect.Array:
-			return val.Len() == 0
+			return rv.Len() == 0
 		case reflect.String:
-			return strings.TrimSpace(val.String()) == ""
+			return strings.TrimSpace(rv.String()) == ""
 		default:
 			return false
 		}
 	}
 }
 
-func isValueNull(actualValue any) bool {
-	if isNilAny(actualValue) {
+func isValueNull(v any) bool {
+	if v == nil {
 		return true
 	}
 
-	val := reflect.ValueOf(actualValue)
-	if val.Kind() == reflect.Ptr {
-		return val.IsNil()
-	}
-
-	switch v := actualValue.(type) {
-	case sql.NullString, sql.NullInt64, sql.NullInt32, sql.NullInt16, sql.NullByte, sql.NullFloat64, sql.NullBool, sql.NullTime:
-		return !reflect.ValueOf(v).FieldByName("Valid").Bool()
-	case *sql.NullString, *sql.NullInt64, *sql.NullInt32, *sql.NullInt16, *sql.NullByte, *sql.NullFloat64, *sql.NullBool, *sql.NullTime:
-		if val.IsNil() {
-			return true
-		}
-		return !val.Elem().FieldByName("Valid").Bool()
-	default:
-		return false
-	}
-}
-
-func reportNullCheck(a provider.Asserts, actualValue any, columnName string, expectNull bool) {
-	if isNilAny(actualValue) {
-		if expectNull {
-			return
-		}
-		a.True(false, "Expected column '%s' to be NOT NULL", columnName)
-		return
-	}
-
-	val := reflect.ValueOf(actualValue)
-	if val.Kind() == reflect.Ptr {
-		if expectNull {
-			a.True(val.IsNil(), "Expected pointer for column '%s' to be nil", columnName)
-		} else {
-			a.False(val.IsNil(), "Expected pointer for column '%s' to not be nil", columnName)
-		}
-		return
-	}
-
-	switch v := actualValue.(type) {
+	switch x := v.(type) {
 	case sql.NullString:
-		a.Equal(expectNull, !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
-	case sql.NullInt64:
-		a.Equal(expectNull, !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
-	case sql.NullInt32:
-		a.Equal(expectNull, !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
-	case sql.NullInt16:
-		a.Equal(expectNull, !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
-	case sql.NullByte:
-		a.Equal(expectNull, !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
-	case sql.NullFloat64:
-		a.Equal(expectNull, !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
-	case sql.NullBool:
-		a.Equal(expectNull, !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
-	case sql.NullTime:
-		a.Equal(expectNull, !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
+		return !x.Valid
 	case *sql.NullString:
-		a.Equal(expectNull, v == nil || !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
+		return x == nil || !x.Valid
+
+	case sql.NullInt64:
+		return !x.Valid
 	case *sql.NullInt64:
-		a.Equal(expectNull, v == nil || !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
+		return x == nil || !x.Valid
+
+	case sql.NullInt32:
+		return !x.Valid
 	case *sql.NullInt32:
-		a.Equal(expectNull, v == nil || !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
+		return x == nil || !x.Valid
+
+	case sql.NullInt16:
+		return !x.Valid
 	case *sql.NullInt16:
-		a.Equal(expectNull, v == nil || !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
+		return x == nil || !x.Valid
+
+	case sql.NullByte:
+		return !x.Valid
 	case *sql.NullByte:
-		a.Equal(expectNull, v == nil || !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
+		return x == nil || !x.Valid
+
+	case sql.NullFloat64:
+		return !x.Valid
 	case *sql.NullFloat64:
-		a.Equal(expectNull, v == nil || !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
+		return x == nil || !x.Valid
+
+	case sql.NullBool:
+		return !x.Valid
 	case *sql.NullBool:
-		a.Equal(expectNull, v == nil || !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
+		return x == nil || !x.Valid
+
+	case sql.NullTime:
+		return !x.Valid
 	case *sql.NullTime:
-		a.Equal(expectNull, v == nil || !v.Valid, "Expected column '%s' NULL=%v", columnName, expectNull)
+		return x == nil || !x.Valid
+
 	default:
-		if !expectNull {
-			return
+		rv := reflect.ValueOf(v)
+		switch rv.Kind() {
+		case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Func, reflect.Chan:
+			return rv.IsNil()
+		default:
+			return false
 		}
-		a.True(false, "Column '%s' type %T does not support NULL check", columnName, actualValue)
 	}
 }
 
@@ -465,14 +432,6 @@ func makeColumnEqualsExpectation[T any](columnName string, expectedValue any) *e
 				}
 			}
 
-			if any(result) == nil {
-				return expect.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "This expectation can only be used with MustFetch()",
-				}
-			}
-
 			actualValue, getErr := getFieldValueByColumnName(result, columnName)
 			if getErr != nil {
 				return expect.CheckResult{
@@ -524,14 +483,6 @@ func makeColumnNotEmptyExpectation[T any](columnName string) *expect.Expectation
 				}
 			}
 
-			if any(result) == nil {
-				return expect.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "This expectation can only be used with MustFetch()",
-				}
-			}
-
 			actualValue, getErr := getFieldValueByColumnName(result, columnName)
 			if getErr != nil {
 				return expect.CheckResult{
@@ -578,14 +529,6 @@ func makeColumnIsNullExpectation[T any](columnName string) *expect.Expectation[T
 					Ok:        false,
 					Retryable: false,
 					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			if any(result) == nil {
-				return expect.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "This expectation can only be used with MustFetch()",
 				}
 			}
 
@@ -641,14 +584,6 @@ func makeColumnIsNotNullExpectation[T any](columnName string) *expect.Expectatio
 				}
 			}
 
-			if any(result) == nil {
-				return expect.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "This expectation can only be used with MustFetch()",
-				}
-			}
-
 			actualValue, getErr := getFieldValueByColumnName(result, columnName)
 			if getErr != nil {
 				return expect.CheckResult{
@@ -698,14 +633,6 @@ func makeColumnTrueExpectation[T any](columnName string) *expect.Expectation[T] 
 					Ok:        false,
 					Retryable: false,
 					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			if any(result) == nil {
-				return expect.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "This expectation can only be used with MustFetch()",
 				}
 			}
 
@@ -775,14 +702,6 @@ func makeColumnFalseExpectation[T any](columnName string) *expect.Expectation[T]
 					Ok:        false,
 					Retryable: false,
 					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			if any(result) == nil {
-				return expect.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "This expectation can only be used with MustFetch()",
 				}
 			}
 

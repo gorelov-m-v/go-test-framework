@@ -28,6 +28,12 @@ type Query[T any] struct {
 }
 
 func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
+	var zero T
+	t := reflect.TypeOf(zero)
+	if t == nil || t.Kind() != reflect.Struct {
+		panic(fmt.Sprintf("dsl.Query[%T] is not supported: T must be a struct type (not pointer/interface)", zero))
+	}
+
 	return &Query[T]{
 		sCtx:   sCtx,
 		client: dbClient,
@@ -91,12 +97,11 @@ func (q *Query[T]) MustFetch() T {
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					if !q.expectsNotFound {
-						extension.NoError(stepCtx, assertMd, err, "Expected row to exist, but got sql.ErrNoRows%s. Use ExpectNotFound() if 'not found' is expected", func() string {
-							if mode == extension.AsyncMode {
-								return " after retry"
-							}
-							return ""
-						}())
+						suffix := ""
+						if useRetry {
+							suffix = " after retry"
+						}
+						extension.NoError(stepCtx, assertMd, err, "Expected row to exist, but got sql.ErrNoRows%s. Use ExpectNotFound() if 'not found' is expected", suffix)
 					}
 				} else {
 					msg := "DB query failed"
@@ -142,6 +147,11 @@ func (q *Query[T]) MustExec() sql.Result {
 }
 
 func getFieldValueByColumnName(target any, columnName string) (any, error) {
+	columnName = strings.TrimSpace(columnName)
+	if columnName == "" {
+		return nil, fmt.Errorf("columnName cannot be empty")
+	}
+
 	val := reflect.ValueOf(target)
 	if val.Kind() == reflect.Ptr {
 		if val.IsNil() {
@@ -153,13 +163,28 @@ func getFieldValueByColumnName(target any, columnName string) (any, error) {
 		return nil, fmt.Errorf("target is not a struct")
 	}
 
+	return findFieldByColumnName(val, columnName)
+}
+
+func findFieldByColumnName(val reflect.Value, columnName string) (any, error) {
 	typ := val.Type()
+
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
 		tag := field.Tag.Get("db")
 
+		if tag == "-" {
+			continue
+		}
+
 		tagParts := strings.SplitN(tag, ",", 2)
-		if tagParts[0] == columnName {
+		tagName := strings.TrimSpace(tagParts[0])
+
+		if tagName == "" {
+			continue
+		}
+
+		if tagName == columnName {
 			fieldVal := val.Field(i)
 			if !fieldVal.CanInterface() {
 				return nil, fmt.Errorf("cannot interface field %s", field.Name)
@@ -168,56 +193,126 @@ func getFieldValueByColumnName(target any, columnName string) (any, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no field with db tag '%s' found in struct %T", columnName, target)
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+
+		if !field.Anonymous {
+			continue
+		}
+
+		fieldVal := val.Field(i)
+
+		if fieldVal.Kind() == reflect.Ptr {
+			if fieldVal.IsNil() {
+				continue
+			}
+			fieldVal = fieldVal.Elem()
+		}
+
+		if fieldVal.Kind() != reflect.Struct {
+			continue
+		}
+
+		result, err := findFieldByColumnName(fieldVal, columnName)
+		if err == nil {
+			return result, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no field with db tag '%s' found in struct %T", columnName, val.Interface())
 }
 
 func extractTableName(query string) string {
 	query = strings.TrimSpace(query)
 	upper := strings.ToUpper(query)
 
-	fromIdx := strings.Index(upper, " FROM ")
-	if fromIdx != -1 {
-		afterFrom := query[fromIdx+6:]
-		words := strings.Fields(afterFrom)
-		if len(words) > 0 {
-			tableName := words[0]
-			tableName = strings.Trim(tableName, "`'\"")
-			if dotIdx := strings.LastIndex(tableName, "."); dotIdx != -1 {
-				tableName = tableName[dotIdx+1:]
+	if strings.HasPrefix(upper, "WITH") {
+		parenDepth := 0
+		for i, char := range upper {
+			switch char {
+			case '(':
+				parenDepth++
+			case ')':
+				parenDepth--
 			}
-			return tableName
+
+			if parenDepth == 0 && i > 0 {
+				remaining := upper[i:]
+				if strings.HasPrefix(remaining, "SELECT") ||
+					strings.HasPrefix(remaining, "INSERT") ||
+					strings.HasPrefix(remaining, "UPDATE") ||
+					strings.HasPrefix(remaining, "DELETE") {
+					return extractTableName(query[i:])
+				}
+			}
 		}
 	}
 
-	intoIdx := strings.Index(upper, " INTO ")
-	if intoIdx != -1 {
-		afterInto := query[intoIdx+6:]
-		words := strings.Fields(afterInto)
-		if len(words) > 0 {
-			tableName := words[0]
-			tableName = strings.Trim(tableName, "`'\"")
-			if dotIdx := strings.LastIndex(tableName, "."); dotIdx != -1 {
-				tableName = tableName[dotIdx+1:]
-			}
-			return tableName
-		}
+	if tableName := extractTableFromKeyword(query, upper, "FROM"); tableName != "" {
+		return tableName
 	}
 
-	updateIdx := strings.Index(upper, "UPDATE ")
-	if updateIdx != -1 {
-		afterUpdate := query[updateIdx+7:]
-		words := strings.Fields(afterUpdate)
-		if len(words) > 0 {
-			tableName := words[0]
-			tableName = strings.Trim(tableName, "`'\"")
-			if dotIdx := strings.LastIndex(tableName, "."); dotIdx != -1 {
-				tableName = tableName[dotIdx+1:]
+	if tableName := extractTableFromKeyword(query, upper, "INTO"); tableName != "" {
+		return tableName
+	}
+
+	if strings.HasPrefix(upper, "UPDATE") || strings.Contains(upper, " UPDATE ") {
+		updateIdx := 0
+		if strings.HasPrefix(upper, "UPDATE") {
+			updateIdx = 0
+		} else {
+			updateIdx = strings.Index(upper, " UPDATE ")
+			if updateIdx != -1 {
+				updateIdx++
 			}
-			return tableName
+		}
+
+		if updateIdx != -1 {
+			afterUpdate := query[updateIdx+6:]
+			words := strings.Fields(afterUpdate)
+			if len(words) > 0 {
+				return cleanTableName(words[0])
+			}
 		}
 	}
 
 	return "query"
+}
+
+func extractTableFromKeyword(query, upper, keyword string) string {
+	tokens := strings.Fields(upper)
+
+	for i, token := range tokens {
+		if token == keyword && i+1 < len(tokens) {
+			keywordPos := strings.Index(upper, keyword)
+			if keywordPos == -1 {
+				continue
+			}
+
+			afterKeyword := query[keywordPos+len(keyword):]
+			afterKeyword = strings.TrimSpace(afterKeyword)
+
+			words := strings.Fields(afterKeyword)
+			if len(words) > 0 {
+				return cleanTableName(words[0])
+			}
+		}
+	}
+
+	return ""
+}
+
+func cleanTableName(tableName string) string {
+	tableName = strings.Trim(tableName, "`'\"")
+
+	if dotIdx := strings.LastIndex(tableName, "."); dotIdx != -1 {
+		tableName = tableName[dotIdx+1:]
+		tableName = strings.Trim(tableName, "`'\"")
+	}
+
+	tableName = strings.TrimRight(tableName, ",;()")
+
+	return tableName
 }
 
 func extractOperation(query string) string {

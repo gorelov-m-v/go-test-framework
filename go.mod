@@ -3,7 +3,6 @@ module go-test-framework
 go 1.25
 
 require (
-	github.com/georgysavva/scany/v2 v2.1.4
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9

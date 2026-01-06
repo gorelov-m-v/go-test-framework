@@ -3,7 +3,6 @@ package dsl
 import (
 	"context"
 
-	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"go-test-framework/pkg/expect"
@@ -20,7 +19,7 @@ func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*ex
 
 	executor := func(ctx context.Context) (T, error) {
 		var result T
-		err := sqlscan.Get(ctx, q.client.DB, &result, q.sql, q.args...)
+		err := q.client.DB.GetContext(ctx, &result, q.sql, q.args...)
 		return result, err
 	}
 
@@ -43,7 +42,7 @@ func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*ex
 func (q *Query[T]) executeSingle() (T, error, extension.PollingSummary) {
 	executor := func(ctx context.Context) (T, error) {
 		var result T
-		err := sqlscan.Get(ctx, q.client.DB, &result, q.sql, q.args...)
+		err := q.client.DB.GetContext(ctx, &result, q.sql, q.args...)
 		return result, err
 	}
 

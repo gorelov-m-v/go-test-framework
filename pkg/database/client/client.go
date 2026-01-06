@@ -2,12 +2,12 @@ package client
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
 	"go-test-framework/pkg/config"
@@ -24,7 +24,7 @@ type Config struct {
 }
 
 type Client struct {
-	DB          *sql.DB
+	DB          *sqlx.DB
 	AsyncConfig config.AsyncConfig
 	maskColumns []string
 }
@@ -38,7 +38,7 @@ func New(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("unsupported driver '%s': must be 'mysql' or 'postgres'", cfg.Driver)
 	}
 
-	db, err := sql.Open(cfg.Driver, cfg.DSN)
+	db, err := sqlx.Open(cfg.Driver, cfg.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open db connection: %w", err)
 	}

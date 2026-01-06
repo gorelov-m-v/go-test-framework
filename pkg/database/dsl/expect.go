@@ -15,7 +15,9 @@ import (
 
 func (q *Query[T]) ExpectFound() *Query[T] {
 	if q.expectsNotFound {
-		panic("ExpectFound cannot be used with ExpectNotFound()")
+		q.sCtx.Break("DB DSL Error: ExpectFound() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
 	}
 	q.expectations = append(q.expectations, makeFoundExpectation[T]())
 	return q
@@ -23,7 +25,9 @@ func (q *Query[T]) ExpectFound() *Query[T] {
 
 func (q *Query[T]) ExpectNotFound() *Query[T] {
 	if len(q.expectations) > 0 {
-		panic("ExpectNotFound cannot be used after other expectations (ExpectFound, ExpectColumnEquals, etc.)")
+		q.sCtx.Break("DB DSL Error: ExpectNotFound() cannot be used after other expectations (ExpectFound, ExpectColumnEquals, etc.)")
+		q.sCtx.BrokenNow()
+		return q
 	}
 	q.expectsNotFound = true
 	q.expectations = []*expect.Expectation[T]{}
@@ -33,7 +37,9 @@ func (q *Query[T]) ExpectNotFound() *Query[T] {
 
 func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Query[T] {
 	if q.expectsNotFound {
-		panic("ExpectColumnEquals cannot be used with ExpectNotFound()")
+		q.sCtx.Break("DB DSL Error: ExpectColumnEquals() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
 	}
 	q.expectations = append(q.expectations, makeColumnEqualsExpectation[T](columnName, expectedValue))
 	return q
@@ -41,7 +47,9 @@ func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Que
 
 func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 	if q.expectsNotFound {
-		panic("ExpectColumnNotEmpty cannot be used with ExpectNotFound()")
+		q.sCtx.Break("DB DSL Error: ExpectColumnNotEmpty() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
 	}
 	q.expectations = append(q.expectations, makeColumnNotEmptyExpectation[T](columnName))
 	return q
@@ -49,7 +57,9 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 
 func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 	if q.expectsNotFound {
-		panic("ExpectColumnIsNull cannot be used with ExpectNotFound()")
+		q.sCtx.Break("DB DSL Error: ExpectColumnIsNull() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
 	}
 	q.expectations = append(q.expectations, makeColumnIsNullExpectation[T](columnName))
 	return q
@@ -57,7 +67,9 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 
 func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 	if q.expectsNotFound {
-		panic("ExpectColumnIsNotNull cannot be used with ExpectNotFound()")
+		q.sCtx.Break("DB DSL Error: ExpectColumnIsNotNull() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
 	}
 	q.expectations = append(q.expectations, makeColumnIsNotNullExpectation[T](columnName))
 	return q
@@ -65,7 +77,9 @@ func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 
 func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
 	if q.expectsNotFound {
-		panic("ExpectColumnTrue cannot be used with ExpectNotFound()")
+		q.sCtx.Break("DB DSL Error: ExpectColumnTrue() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
 	}
 	q.expectations = append(q.expectations, makeColumnTrueExpectation[T](columnName))
 	return q
@@ -73,7 +87,9 @@ func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
 
 func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 	if q.expectsNotFound {
-		panic("ExpectColumnFalse cannot be used with ExpectNotFound()")
+		q.sCtx.Break("DB DSL Error: ExpectColumnFalse() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
 	}
 	q.expectations = append(q.expectations, makeColumnFalseExpectation[T](columnName))
 	return q

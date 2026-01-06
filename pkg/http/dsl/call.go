@@ -99,7 +99,9 @@ func (c *Call[TReq, TResp]) RequestBody(body TReq) *Call[TReq, TResp] {
 
 func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Response[any]]) {
 	if c.sent {
-		panic("httpdsl: expectations must be added before RequestSend()")
+		c.sCtx.Break("HTTP DSL Error: Expectations must be added before RequestSend(). Call ExpectResponseStatus(), ExpectResponseBodyNotEmpty(), etc. before RequestSend().")
+		c.sCtx.BrokenNow()
+		return
 	}
 	c.expectations = append(c.expectations, exp)
 }
@@ -184,15 +186,23 @@ func (c *Call[TReq, TResp]) Response() *client.Response[TResp] {
 
 func (c *Call[TReq, TResp]) validate() {
 	if c.client == nil {
-		panic("httpdsl: client is nil")
+		c.sCtx.Break("HTTP DSL Error: HTTP client is nil. Check test configuration.")
+		c.sCtx.BrokenNow()
+		return
 	}
 	if c.req == nil {
-		panic("httpdsl: request is nil")
+		c.sCtx.Break("HTTP DSL Error: HTTP request is nil. This is an internal error.")
+		c.sCtx.BrokenNow()
+		return
 	}
 	if strings.TrimSpace(c.req.Method) == "" {
-		panic("httpdsl: HTTP method is not set")
+		c.sCtx.Break("HTTP DSL Error: HTTP method is not set. Use .GET(), .POST(), .PUT(), .PATCH(), or .DELETE().")
+		c.sCtx.BrokenNow()
+		return
 	}
 	if strings.TrimSpace(c.req.Path) == "" {
-		panic("httpdsl: HTTP path is not set")
+		c.sCtx.Break("HTTP DSL Error: HTTP path is not set. Provide path in method call like .GET(\"/api/users\").")
+		c.sCtx.BrokenNow()
+		return
 	}
 }

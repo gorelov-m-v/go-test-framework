@@ -34,7 +34,9 @@ func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
 	var zero T
 	t := reflect.TypeOf(zero)
 	if t == nil || t.Kind() != reflect.Struct {
-		panic(fmt.Sprintf("dsl.Query[%T] is not supported: T must be a struct type (not pointer/interface)", zero))
+		sCtx.Break(fmt.Sprintf("DB DSL Error: Query type parameter must be a struct, got %T. Check your NewQuery[T] generic type.", zero))
+		sCtx.BrokenNow()
+		return nil
 	}
 
 	return &Query[T]{

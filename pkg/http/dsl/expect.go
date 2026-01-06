@@ -451,7 +451,7 @@ func makeResponseBodyFieldValueExpectation(path string, expected any) *expect.Ex
 				return expect.CheckResult{
 					Ok:        false,
 					Retryable: true,
-					Reason:    msg, // Use detailed diagnostic message from compareJSONResult
+					Reason:    msg,
 				}
 			}
 
@@ -460,12 +460,10 @@ func makeResponseBodyFieldValueExpectation(path string, expected any) *expect.Ex
 		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
 			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
-				// Use detailed diagnostic message from check function
 				a.True(false, "[Expect JSON field '%s' == %v] %s", path, expected, checkRes.Reason)
 				return
 			}
 
-			// Success case: just confirm the match
 			if resp != nil && len(resp.RawBody) > 0 {
 				res, parseErr := getJSONResult(resp.RawBody, path)
 				if parseErr == nil && res.Exists() {

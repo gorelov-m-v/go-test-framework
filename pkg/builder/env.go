@@ -81,8 +81,8 @@ func validateAndUnwrapStruct(envPtr any) (reflect.Value, string, error) {
 func injectHTTPClient(v *viper.Viper, fieldValue reflect.Value, field reflect.StructField, configKey, structName string) error {
 	debugLog("found tag 'config:%s' on field '%s' (type=%s)", configKey, field.Name, field.Type)
 
-	if err := validateFieldForInjection(fieldValue, field.Name, configKey, structName, "config"); err != nil {
-		return err
+	if !fieldValue.CanSet() {
+		return fmt.Errorf("BuildEnv(%s): field '%s' has tag config:\"%s\" but is not exported", structName, field.Name, configKey)
 	}
 
 	if !v.IsSet(configKey) {
@@ -102,43 +102,14 @@ func injectHTTPClient(v *viper.Viper, fieldValue reflect.Value, field reflect.St
 		DefaultHeaders: svcCfg.DefaultHeaders,
 	})
 
-	if fieldValue.Type() == reflect.TypeOf((*client.Client)(nil)) {
-		fieldValue.Set(reflect.ValueOf(httpClient))
-		debugLog("injected HTTP client into '%s'", field.Name)
-		return nil
+	target := fieldValue.Addr().Interface()
+	setter, ok := target.(client.HTTPSetter)
+	if !ok {
+		return fmt.Errorf("BuildEnv Error: Field '%s' has tag 'config' but does not implement 'httpclient.HTTPSetter'. Please use a Link struct", field.Name)
 	}
 
-	if err := injectHTTPClientIntoWrapper(fieldValue, field, configKey, structName, httpClient); err != nil {
-		return err
-	}
-
-	debugLog("injected HTTP client into '%s'", field.Name)
-	return nil
-}
-
-func injectHTTPClientIntoWrapper(fieldValue reflect.Value, field reflect.StructField, configKey, structName string, httpClient *client.Client) error {
-	if fieldValue.Type().Elem().Kind() != reflect.Struct {
-		return fmt.Errorf("BuildEnv(%s): field '%s' tag config:\"%s\": wrapper must be pointer to struct, got '%s'", structName, field.Name, configKey, fieldValue.Type())
-	}
-
-	wrapperType := fieldValue.Type().Elem()
-	wrapperInstance := reflect.New(wrapperType)
-
-	httpField := wrapperInstance.Elem().FieldByName("HTTP")
-	if !httpField.IsValid() {
-		return fmt.Errorf("BuildEnv(%s): field '%s' tag config:\"%s\": wrapper type '%s' must have exported field 'HTTP *client.Client'", structName, field.Name, configKey, wrapperType.Name())
-	}
-
-	if !httpField.CanSet() {
-		return fmt.Errorf("BuildEnv(%s): field '%s' tag config:\"%s\": wrapper type '%s' field 'HTTP' is not exported", structName, field.Name, configKey, wrapperType.Name())
-	}
-
-	if httpField.Type() != reflect.TypeOf((*client.Client)(nil)) {
-		return fmt.Errorf("BuildEnv(%s): field '%s' tag config:\"%s\": wrapper field 'HTTP' must be '*client.Client', got '%s'", structName, field.Name, configKey, httpField.Type())
-	}
-
-	httpField.Set(reflect.ValueOf(httpClient))
-	fieldValue.Set(wrapperInstance)
+	setter.SetHTTP(httpClient)
+	debugLog("injected HTTP client into '%s' via SetHTTP", field.Name)
 	return nil
 }
 
@@ -147,10 +118,6 @@ func injectDBClient(v *viper.Viper, fieldValue reflect.Value, field reflect.Stru
 
 	if !fieldValue.CanSet() {
 		return fmt.Errorf("BuildEnv(%s): field '%s' has tag db_config:\"%s\" but is not exported", structName, field.Name, dbConfigKey)
-	}
-
-	if fieldValue.Type() != reflect.TypeOf((*dbclient.Client)(nil)) {
-		return fmt.Errorf("BuildEnv(%s): field '%s' tag db_config:\"%s\": field must be '*dbclient.Client', got '%s'", structName, field.Name, dbConfigKey, fieldValue.Type())
 	}
 
 	if !v.IsSet(dbConfigKey) {
@@ -169,8 +136,14 @@ func injectDBClient(v *viper.Viper, fieldValue reflect.Value, field reflect.Stru
 		return fmt.Errorf("BuildEnv(%s): field '%s' tag db_config:\"%s\": failed to create db client: %w", structName, field.Name, dbConfigKey, err)
 	}
 
-	fieldValue.Set(reflect.ValueOf(dbClient))
-	debugLog("injected DB client into '%s'", field.Name)
+	target := fieldValue.Addr().Interface()
+	setter, ok := target.(dbclient.DBSetter)
+	if !ok {
+		return fmt.Errorf("BuildEnv Error: Field '%s' has tag 'db_config' but does not implement 'dbclient.DBSetter'. Please use a Link struct", field.Name)
+	}
+
+	setter.SetDB(dbClient)
+	debugLog("injected DB client into '%s' via SetDB", field.Name)
 	return nil
 }
 
@@ -198,17 +171,5 @@ func injectAsyncConfig(v *viper.Viper, fieldValue reflect.Value, field reflect.S
 
 	fieldValue.Set(reflect.ValueOf(asyncCfg))
 	debugLog("injected async config into '%s'", field.Name)
-	return nil
-}
-
-func validateFieldForInjection(fieldValue reflect.Value, fieldName, configKey, structName, tagName string) error {
-	if !fieldValue.CanSet() {
-		return fmt.Errorf("BuildEnv(%s): field '%s' has tag %s:\"%s\" but is not exported", structName, fieldName, tagName, configKey)
-	}
-
-	if fieldValue.Kind() != reflect.Ptr {
-		return fmt.Errorf("BuildEnv(%s): field '%s' tag %s:\"%s\": field must be a pointer, got %s", structName, fieldName, tagName, configKey, fieldValue.Type())
-	}
-
 	return nil
 }

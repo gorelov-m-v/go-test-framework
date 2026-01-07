@@ -99,14 +99,14 @@ func (c *Call[TReq, TResp]) RequestBody(body TReq) *Call[TReq, TResp] {
 
 func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Response[any]]) {
 	if c.sent {
-		c.sCtx.Break("HTTP DSL Error: Expectations must be added before RequestSend(). Call ExpectResponseStatus(), ExpectResponseBodyNotEmpty(), etc. before RequestSend().")
+		c.sCtx.Break("HTTP DSL Error: Expectations must be added before Send(). Call ExpectResponseStatus(), ExpectResponseBodyNotEmpty(), etc. before Send().")
 		c.sCtx.BrokenNow()
 		return
 	}
 	c.expectations = append(c.expectations, exp)
 }
 
-func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
+func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validate()
 
 	name := c.stepName
@@ -177,10 +177,6 @@ func (c *Call[TReq, TResp]) RequestSend() *Call[TReq, TResp] {
 		expect.ReportAll(stepCtx, assertionMode, c.expectations, err, respAny)
 	})
 
-	return c
-}
-
-func (c *Call[TReq, TResp]) Response() *client.Response[TResp] {
 	return c.resp
 }
 

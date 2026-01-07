@@ -58,7 +58,7 @@ func (q *Query[T]) WithContext(ctx context.Context) *Query[T] {
 	return q
 }
 
-func (q *Query[T]) MustFetch() T {
+func (q *Query[T]) Send() T {
 	tableName := extractTableName(q.sql)
 	stepName := fmt.Sprintf("SELECT %s", tableName)
 

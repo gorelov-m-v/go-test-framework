@@ -49,110 +49,219 @@ E2E тесты часто бывают медленными из-за IO-опе�
 
 ---
 
-## 🚀 Быстрый старт
+# HTTP DSL 
 
-### 1. Конфигурация (`configs/config.local.yaml`)
-Опишите ваши сервисы и базы данных:
+Модуль предназначен для написания функциональных тестов REST API.
+Он построен на **Generics**, что гарантирует строгую типизацию запросов и ответов на этапе компиляции. Вы не сможете отправить неверную структуру или ошибиться в типе ожидаемого ответа.
 
-```yaml
-# HTTP сервис
-capService:
-  baseURL: "http://localhost:8080"
-  timeout: 10s
+---
 
-# База данных
-coreDatabase:
-  driver: "postgres"
-  dsn: "postgres://user:pass@localhost:5432/db?sslmode=disable"
-  # Глобальная настройка стратегии ожидания для этого коннекта
-  asyncConfig:
-    enabled: true
-    timeout: 10s
-    interval: 500ms
+## Реальный пример: Тестирование метода API
+
+Разберем работу модуля на конкретном сценарии.
+Представьте, что нам нужно протестировать метод **создания игрока** в игровом сервисе.
+
+### 1. Спецификация (Контракт)
+
+*   **Endpoint:** `POST /api/v1/players`
+*   **Request:** JSON с именем и регионом.
+*   **Response:** JSON с созданным ID, статусом и датой.
+
+### 2. Описание Моделей
+Переносим JSON-структуру в Go (`internal/models/player.go`). Используем стандартные `json` теги.
+
+```go
+package models
+
+type CreatePlayerReq struct {
+    Username string `json:"username"`
+    Region   string `json:"region"`
+}
+
+type CreatePlayerResp struct {
+    ID        string `json:"id"`
+    Username  string `json:"username"`
+    Status    string `json:"status"`
+}
 ```
 
-### 2. Инициализация окружения (`env.go`)
-Опишите структуру вашего тестового окружения. Используйте теги для связывания с YAML:
+### 3. Реализация Клиента
+Мы используем паттерн **Auto-Wiring** и глобальные функции пакета.
+
+**Файл:** `internal/client/game/client.go`
+
+```go
+package game
+
+import (
+    "go-test-framework/pkg/http/client"
+    "go-test-framework/pkg/http/dsl"
+    "github.com/ozontech/allure-go/pkg/framework/provider"
+    "my-project/internal/models"
+)
+
+// 1. Приватная переменная пакета (хранит http.Client с базовым URL и хедерами)
+var httpClient *client.Client
+
+// 2. Структура Link для Auto-Wiring.
+// Билдер найдет её в TestEnv и автоматически внедрит клиент.
+type Link struct{}
+
+func (l *Link) SetHTTP(c *client.Client) {
+    httpClient = c
+}
+
+// 3. DSL Метод
+// Возвращает типизированный Call: [RequestModel, ResponseModel]
+func CreatePlayer(sCtx provider.StepCtx) *dsl.Call[models.CreatePlayerReq, models.CreatePlayerResp] {
+    // dsl.NewCall связывает шаг теста (sCtx) и транспорт (httpClient).
+    // Далее мы сразу указываем HTTP метод и путь.
+    return dsl.NewCall[models.CreatePlayerReq, models.CreatePlayerResp](sCtx, httpClient).
+        POST("/api/v1/players")
+}
+
+// Пример GET метода с параметром пути
+func GetPlayer(sCtx provider.StepCtx, id string) *dsl.Call[any, models.CreatePlayerResp] {
+    // Используем 'any' в качестве RequestModel, так как у GET запроса нет тела
+    return dsl.NewCall[any, models.CreatePlayerResp](sCtx, httpClient).
+        GET("/api/v1/players/{id}"). // {id} будет заменен в тесте через .PathParam
+        PathParam("id", id)          // Либо можно подставить переменную сразу здесь
+}
+```
+
+### 4. Подключение в Env
+Добавляем связь в `tests/env.go`. Билдер увидит `game.Link` и прокинет зависимости.
 
 ```go
 type TestEnv struct {
-    CapClient *httpclient.Client `config:"capService"`
-    CoreDB    *dbclient.Client   `db_config:"coreDatabase"`
-}
-
-var env *TestEnv
-
-func init() {
-    env = &TestEnv{}
-    // Магия DI: инициализация всех клиентов одной строкой
-    if err := builder.BuildEnv(env); err != nil {
-        log.Fatalf("Failed to build env: %v", err)
-    }
+    // Связываем конфиг "gameService" с пакетом "game"
+    GameService game.Link `config:"gameService"`
 }
 ```
 
-### 3. Написание теста (`tests/my_test.go`)
+### 5. Тест
+Пишем тест. Заметьте, здесь нет никакой инициализации клиентов.
 
 ```go
-type MySuite struct {
-    BaseSuite
-}
+func (s *PlayerSuite) TestCreatePlayer(t provider.T) {
+    t.Title("Game API: Создание игрока")
 
-func (s *MySuite) TestLogin(t provider.T) {
-    t.Title("Auth: Login Check")
-    t.Tags("auth", "smoke")
-
-    s.Step(t, "Запрос авторизации", func(sCtx provider.StepCtx) {
-        capclient.Login(sCtx).
-            RequestBody(models.LoginReq{User: "admin", Pass: "123"}).
-            ExpectResponseStatus(200).
-            ExpectResponseBodyFieldNotEmpty("token").
+    s.Step(t, "Отправка запроса на создание", func(sCtx provider.StepCtx) {
+        game.CreatePlayer(sCtx).
+            // 1. Настройка запроса (строгая типизация)
+            RequestBody(models.CreatePlayerReq{
+                Username: "pro_gamer",
+                Region:   "EU",
+            }).
+            // 2. Проверки (выполняются автоматически после запроса)
+            ExpectResponseStatus(201).
+            ExpectResponseBodyFieldNotEmpty("id").
+            ExpectResponseBodyFieldValue("username", "pro_gamer").
+            ExpectResponseBodyFieldValue("status", "active").
+            // 3. Выполнение
             RequestSend()
     })
-}
-
-func TestMySuite(t *testing.T) {
-    suite.RunSuite(t, new(MySuite))
 }
 ```
 
 ---
 
-## 📚 HTTP DSL (Работа с API)
+## 📘 Справочник возможностей DSL
 
-Для работы с API используется Generic-клиент `dsl.Call[Request, Response]`.
+Объект `dsl.Call[TReq, TResp]` предоставляет богатый набор методов для настройки запроса и валидации ответа.
 
-### Примеры проверок (Expectations)
+### 🔧 1. Настройка запроса (Request Configuration)
 
-Проверки добавляются в цепочку вызова **до** отправки запроса.
+Эти методы определяют, *что* мы отправляем.
 
-```go
-client.User(sCtx).
-    // Проверка статус кода
-    ExpectResponseStatus(http.StatusOK).
-    
-    // Проверка, что тело ответа не пустое
-    ExpectResponseBodyNotEmpty().
-    
-    // Проверка наличия поля (используется синтаксис GJSON)
-    ExpectResponseBodyFieldNotEmpty("meta.pagination").
-    
-    // Точное сравнение значений (Type-Safe: int, bool, string, float, nil)
-    ExpectResponseBodyFieldValue("user.is_active", true).
-    ExpectResponseBodyFieldValue("user.role_id", 105).
-    ExpectResponseBodyFieldValue("errors", nil).
-    
-    RequestSend()
+| Метод | Описание | Пример |
+| :--- | :--- | :--- |
+| `.Header(k, v)` | Добавление заголовка. | `.Header("Authorization", "Bearer ...")` |
+| `.QueryParam(k, v)` | Добавление GET-параметра. | `.QueryParam("page", "1")` -> `?page=1` |
+| `.PathParam(k, v)` | Подстановка переменной в путь. | `.PathParam("id", "123")` -> `/users/123` |
+| `.RequestBody(val)` | Установка тела (структура). | `.RequestBody(models.User{...})` |
+
+### ✅ 2. Ожидания (Expectations)
+
+Проверки добавляются в цепочку **до** отправки запроса. Они работают по принципу "Silent Success, Loud Failure": если всё хорошо, тест идет дальше. Если проверка не прошла, тест падает с детальным описанием в Allure.
+
+#### Статус и Тело
+*   `.ExpectResponseStatus(code int)` — Проверяет HTTP Status Code.
+*   `.ExpectResponseBodyNotEmpty()` — Проверяет, что тело ответа пришло и не пустое.
+
+#### Проверка полей (JSON Path)
+Для навигации по JSON-структуре используется синтаксис [GJSON](https://github.com/tidwall/gjson).
+
+Предположим, API вернул такой ответ:
+```json
+{
+  "token": "eyJhbGciOiJIUz...",
+  "meta": { "server": "auth-01" },
+  "items": [
+    { "id": 101, "code": "read" },
+    { "id": 102, "code": "write" }
+  ]
+}
 ```
 
-### Получение данных из ответа
-Если нужно использовать данные из ответа в следующем шаге:
+**Примеры проверок:**
+
+| Путь (Path) | Значение | DSL Метод |
+| :--- | :--- | :--- |
+| `"token"` | `"eyJ..."` | `.ExpectResponseBodyFieldNotEmpty("token")` |
+| `"meta.server"` | `"auth-01"` | `.ExpectResponseBodyFieldValue("meta.server", "auth-01")` |
+| `"items.0.code"` | `"read"` | `.ExpectResponseBodyFieldValue("items.0.code", "read")` |
+| `"items.#"` | `2` | `.ExpectResponseBodyFieldValue("items.#", 2)` |
+
+**Поддерживаемые типы сравнения:**
+*   `string`: `"active"`
+*   `int`, `float`: `100`, `99.99`
+*   `bool`: `true`, `false`
+*   `nil`: Проверяет, что поле в JSON равно `null` или отсутствует.
+
+### 🚀 3. Выполнение и Результат
+
+*   `.RequestSend()` — **Финализирующий метод.**
+    1.  Собирает HTTP запрос.
+    2.  Создает шаг в Allure.
+    3.  Прикрепляет `curl`, Headers, Body запроса и ответа.
+    4.  Выполняет все `Expect` проверки.
+
+*   `.Response()` — Получение типизированного ответа.
+    Если вам нужно использовать данные из ответа (например, `ID` созданной сущности) в следующих шагах теста, используйте этот метод после `RequestSend()`.
+
+    ```go
+    // Пример chain-requests: Создали -> Забрали ID
+    var playerID string
+    
+    s.Step(t, "Create", func(sCtx provider.StepCtx) {
+        resp := game.CreatePlayer(sCtx).
+            RequestBody(...).
+            ExpectResponseStatus(201).
+            RequestSend().
+            Response() // <-- Возвращает *Response[CreatePlayerResp]
+        
+        playerID = resp.Body.ID // Строго типизированный доступ
+    })
+    ```
+
+### 🔄 4. Асинхронные тесты (Async/Retry)
+
+Если вы тестируете асинхронное API (например, создание занимает время, или метод возвращает `202 Accepted`), оберните вызов в `AsyncStep`.
+
+Фреймворк будет автоматически повторять запрос (Polling), если `Expect` проверки не проходят.
 
 ```go
-resp := client.User(sCtx).RequestSend().Response()
-userID := resp.Body.ID
+// Используем AsyncStep вместо Step
+s.AsyncStep(t, "Wait for status ACTIVE", func(sCtx provider.StepCtx) {
+    game.GetPlayer(sCtx, playerID).
+        ExpectResponseStatus(200).
+        // Если статус все еще "PENDING", тест не упадет, 
+        // а подождет и повторит запрос.
+        ExpectResponseBodyFieldValue("status", "ACTIVE").
+        RequestSend()
+})
 ```
-
 ---
 
 ## 💾 Database DSL (Работа с БД)

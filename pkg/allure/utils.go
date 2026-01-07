@@ -2,7 +2,6 @@ package allure
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -146,16 +145,4 @@ func getFieldName(field reflect.StructField) string {
 	}
 
 	return field.Name
-}
-
-func MarshalJSONIndent(v any) ([]byte, error) {
-	return json.MarshalIndent(v, "", "  ")
-}
-
-func FormatJSON(data []byte) ([]byte, error) {
-	var jsonData any
-	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, err
-	}
-	return MarshalJSONIndent(jsonData)
 }

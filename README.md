@@ -164,7 +164,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// Автоматическая инициализация всех клиентов из config.yaml
+	// Автоматическая инициализация всех клиентов из config.local.yaml
 	env = &TestEnv{}
 	if err := config.BuildEnv(env); err != nil {
 		log.Fatalf("Failed to build test environment: %v", err)
@@ -463,7 +463,7 @@ func (s *CAPTokenSuite) TestLoginAndUsage(t provider.T) {
 ### MySQL
 
 ```yaml
-# config.yaml
+# config.local.yaml
 mainDatabase:
   driver: mysql  # обязательно: mysql или postgres
   dsn: "user:password@tcp(localhost:3306)/dbname?parseTime=true"
@@ -475,7 +475,7 @@ mainDatabase:
 ### PostgreSQL
 
 ```yaml
-# config.yaml
+# config.local.yaml
 mainDatabase:
   driver: postgres  # обязательно: mysql или postgres
   dsn: "postgres://user:password@localhost:5432/dbname?sslmode=disable"

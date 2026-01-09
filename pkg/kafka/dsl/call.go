@@ -10,7 +10,7 @@ import (
 
 func Expect[TTopic topic.TopicName](sCtx provider.StepCtx, kafkaClient *client.Client) *Expectation {
 	var topicName TTopic
-	return NewExpectation(sCtx, kafkaClient, string(topicName))
+	return NewExpectation(sCtx, kafkaClient, topicName.TopicName())
 }
 
 func Register[T any](kafkaClient *client.Client, topicSuffix string) {

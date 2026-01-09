@@ -218,6 +218,7 @@ func injectKafkaClient(v *viper.Viper, fieldValue reflect.Value, field reflect.S
 		return fmt.Errorf("BuildEnv(%s): field '%s' tag kafka_config:\"%s\": failed to create kafka client: %w", structName, field.Name, kafkaConfigKey, err)
 	}
 
+	target := fieldValue.Addr().Interface()
 	setter, ok := target.(kafkaclient.KafkaSetter)
 	if !ok {
 		return fmt.Errorf("BuildEnv Error: Field '%s' has tag 'kafka_config' but does not implement 'kafkaclient.KafkaSetter'. Please use a Link struct", field.Name)

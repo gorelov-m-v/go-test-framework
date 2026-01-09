@@ -132,12 +132,7 @@ func (e *Expectation) ExpectFieldFalse(field string) *Expectation {
 func (e *Expectation) Send() {
 	effectiveTimeout := e.kafkaClient.GetDefaultTimeout()
 
-	filterDesc := e.buildFilterDescription()
-
 	stepName := fmt.Sprintf("Kafka: Expect from topic '%s'", e.topicName)
-	if filterDesc != "" {
-		stepName = fmt.Sprintf("Kafka: Expect from topic '%s' where %s", e.topicName, filterDesc)
-	}
 
 	e.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		mode := extension.GetStepMode(stepCtx)

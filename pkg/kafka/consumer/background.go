@@ -87,8 +87,6 @@ func (bc *BackgroundConsumer) Start() error {
 		return fmt.Errorf("no topics configured for consumption")
 	}
 
-	log.Printf("[Kafka] Starting background consumer for topics: %v", bc.fullTopicNames)
-
 	bc.wg.Add(1)
 	go bc.consumeLoop()
 
@@ -104,8 +102,6 @@ func (bc *BackgroundConsumer) Stop() error {
 	}
 	bc.mu.Unlock()
 
-	log.Println("[Kafka] Stopping background consumer...")
-
 	bc.cancel()
 	bc.wg.Wait()
 
@@ -117,7 +113,6 @@ func (bc *BackgroundConsumer) Stop() error {
 	bc.started = false
 	bc.mu.Unlock()
 
-	log.Println("[Kafka] Background consumer stopped")
 	return nil
 }
 
@@ -184,7 +179,6 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 			}
 
 			h.buffer.AddMessage(kafkaMsg)
-
 			session.MarkMessage(msg, "")
 
 		case <-session.Context().Done():

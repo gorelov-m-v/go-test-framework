@@ -89,10 +89,8 @@ func (mb *MessageBuffer) GetMessages(topicName string) []*types.KafkaMessage {
 	messages := make([]*types.KafkaMessage, 0, buf.size)
 
 	start := buf.ring
-	if buf.size < buf.cap {
-		for i := 0; i < buf.cap-buf.size; i++ {
-			start = start.Prev()
-		}
+	for i := 0; i < buf.size; i++ {
+		start = start.Prev()
 	}
 
 	current := start

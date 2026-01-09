@@ -133,16 +133,39 @@ allure serve allure-results
 
 ---
 
-## Реальный пример: Тестирование метода API
+## Сквозной E2E пример: Шаг 1 - HTTP запрос
 
-Разберем работу модуля на конкретном сценарии.
-Представьте, что нам нужно протестировать метод **создания игрока** в игровом сервисе.
+Начнём полноценный E2E сценарий, который пройдёт через все три DSL.
+**Сценарий:** Создаём игрока через API → проверяем запись в БД → ждём событие в Kafka.
+
+### 0. Конфигурация (`config.local.yaml`)
+
+```yaml
+http:
+  gameService:
+    baseURL: "https://game-api.example.com"
+    timeout: 30s
+    headers:
+      Authorization: "Bearer ${GAME_API_TOKEN}"
+```
 
 ### 1. Спецификация (Контракт)
 
-*   **Endpoint:** `POST /api/v1/players`
-*   **Request:** JSON с именем и регионом.
-*   **Response:** JSON с созданным ID, статусом и датой.
+```bash
+curl -X POST https://game-api.example.com/api/v1/players \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "pro_gamer_2024",
+    "region": "EU"
+  }'
+
+# Response: 201 Created
+{
+  "id": "uuid-12345",
+  "username": "pro_gamer_2024",
+  "status": "active"
+}
+```
 
 ### 2. Описание Моделей
 Переносим JSON-структуру в Go (`internal/models/player.go`). Используем стандартные `json` теги.
@@ -194,50 +217,82 @@ func CreatePlayer(sCtx provider.StepCtx) *dsl.Call[models.CreatePlayerReq, model
     return dsl.NewCall[models.CreatePlayerReq, models.CreatePlayerResp](sCtx, httpClient).
         POST("/api/v1/players")
 }
-
-// Пример GET метода с параметром пути
-func GetPlayer(sCtx provider.StepCtx, id string) *dsl.Call[any, models.CreatePlayerResp] {
-    // Используем 'any' в качестве RequestModel, так как у GET запроса нет тела
-    return dsl.NewCall[any, models.CreatePlayerResp](sCtx, httpClient).
-        GET("/api/v1/players/{id}"). // {id} будет заменен в тесте через .PathParam
-        PathParam("id", id)          // Либо можно подставить переменную сразу здесь
-}
 ```
 
 ### 4. Подключение в Env
 Добавляем связь в `tests/env.go`. Билдер увидит `game.Link` и прокинет зависимости.
 
+**Файл:** `tests/env.go`
+
 ```go
+package tests
+
+import (
+    "go-test-framework/pkg/builder"
+    "log"
+    "my-project/internal/client/game"
+    "my-project/internal/db/players"
+    "my-project/internal/kafka"
+)
+
 type TestEnv struct {
-    // Связываем конфиг "gameService" с пакетом "game"
+    // HTTP клиенты - связываем конфиг "gameService" с пакетом "game"
     GameService game.Link `config:"gameService"`
+
+    // Database - связываем конфиг "coreDatabase" с репозиторием "players"
+    PlayersRepo players.Link `db_config:"coreDatabase"`
+
+    // Kafka - связываем конфиг "kafka" с пакетом "kafka"
+    Kafka kafka.Link `kafka_config:"kafka"`
+}
+
+var env *TestEnv
+
+func init() {
+    env = &TestEnv{}
+
+    if err := builder.BuildEnv(env); err != nil {
+        log.Fatalf("Failed to build test environment: %v", err)
+    }
+}
+
+func Env() *TestEnv {
+    return env
 }
 ```
 
-### 5. Тест
-Пишем тест. Заметьте, здесь нет никакой инициализации клиентов.
+### 5. Тест: Создаём игрока и сохраняем ID
+Это начало нашего сквозного сценария. Мы отправляем HTTP-запрос и **сохраняем `playerID`** для использования в следующих шагах (Database и Kafka).
 
 ```go
-func (s *PlayerSuite) TestCreatePlayer(t provider.T) {
-    t.Title("Game API: Создание игрока")
+func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
+    t.Title("E2E: Создание игрока (HTTP → DB → Kafka)")
 
+    var playerID string
     var username = "pro_gamer_2024"
 
-    s.Step(t, "Отправка запроса на создание", func(sCtx provider.StepCtx) {
-        game.CreatePlayer(sCtx).
+    // ШАГ 1: HTTP - Создаём игрока через API
+    s.Step(t, "HTTP: Создание игрока через API", func(sCtx provider.StepCtx) {
+        resp := game.CreatePlayer(sCtx).
             // 1. Настройка запроса (строгая типизация)
             RequestBody(models.CreatePlayerReq{
                 Username: username,
                 Region:   "EU",
             }).
-            // 2. Проверки (выполняются автоматически после запроса)
+            // 2. Проверки ответа
             ExpectResponseStatus(201).
             ExpectResponseBodyFieldNotEmpty("id").
             ExpectResponseBodyFieldValue("username", username).
             ExpectResponseBodyFieldValue("status", "active").
             // 3. Выполнение
             Send()
+
+        // Сохраняем ID для проверки в БД и Kafka
+        playerID = resp.Body.ID
     })
+
+    // ШАГ 2: Database - см. раздел "Database DSL" ниже
+    // ШАГ 3: Kafka - см. раздел "Kafka DSL" ниже
 }
 ```
 
@@ -352,14 +407,28 @@ s.AsyncStep(t, "Wait for status ACTIVE", func(sCtx provider.StepCtx) {
 
 ---
 
-## Сквозной пример: Верификация по ID
+## Сквозной E2E пример: Шаг 2 - Проверка в БД
 
-Рассмотрим классический E2E сценарий:
-1.  Создаем сущность через API.
-2.  Получаем её `ID` из ответа.
-3.  Идем в базу данных с этим `ID` и проверяем, что строка записалась корректно.
+После создания игрока через API проверим, что запись попала в базу данных.
 
-#### 1. Описание Модели БД
+### 0. Конфигурация (`config.local.yaml`)
+
+```yaml
+database:
+  coreDatabase:
+    driver: "postgres"  # или "mysql"
+    dsn: "postgres://user:password@localhost:5432/game_db?sslmode=disable"
+    maxOpenConns: 10
+    maxIdleConns: 5
+```
+
+**Ожидаемое состояние таблицы `players`:**
+
+| id | username | status | region | is_vip | created_at |
+|:---|:---------|:-------|:-------|:-------|:-----------|
+| uuid-12345 | pro_gamer_2024 | active | EU | false | 2024-01-09 10:30:00 |
+
+### 1. Описание Модели БД
 Опишите Go-структуру, соответствующую таблице. Используйте тег `db` для маппинга колонок.
 
 **Файл:** `internal/models/db_player.go`
@@ -376,13 +445,13 @@ type PlayerDB struct {
     ID        string         `db:"id"`
     Username  string         `db:"username"`
     Status    string         `db:"status"`
-    Region    sql.NullString `db:"region"`     
-    IsVip     bool           `db:"is_vip"`    
+    Region    sql.NullString `db:"region"`
+    IsVip     bool           `db:"is_vip"`
     CreatedAt time.Time      `db:"created_at"`
 }
 ```
 
-#### 2. Реализация Репозитория (Auto-Wiring)
+### 2. Реализация Репозитория (Auto-Wiring)
 **Файл:** `internal/db/players/repo.go`
 
 ```go
@@ -411,58 +480,58 @@ func FindByID(sCtx provider.StepCtx, id string) *dsl.Query[models.PlayerDB] {
 }
 ```
 
-#### 3. Подключение в Env
+### 3. Подключение в Env
 Добавляем связь в `tests/env.go`.
 
 ```go
 type TestEnv struct {
-    // ... HTTP клиенты ...
-    
-    // Связываем конфиг "coreDatabase" с пакетом "players"
+    // HTTP клиенты
+    GameService game.Link `config:"gameService"`
+
+    // Database - связываем конфиг "coreDatabase" с репозиторием "players"
     PlayersRepo players.Link `db_config:"coreDatabase"`
 }
 ```
 
-#### 4. Написание Теста (Chain: API -> Response -> DB)
-В этом тесте мы сохраняем результат API-запроса в переменную `createdPlayer`, чтобы извлечь `ID` для проверки в БД.
+### 4. Продолжение теста: Проверяем БД
+Добавляем второй шаг к нашему E2E-тесту. Используем `playerID`, который получили из HTTP-ответа.
 
 ```go
-func (s *PlayerSuite) TestCreateAndVerify(t provider.T) {
-    t.Title("Game API: Создание игрока")
-	
+func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
+    t.Title("E2E: Создание игрока (HTTP → DB → Kafka)")
+
     var playerID string
     var username = "pro_gamer_2024"
 
-    // 1. HTTP Шаг: Создаем игрока и забираем ID
-    s.Step(t, "Create Player API", func(sCtx provider.StepCtx) {
+    // ШАГ 1: HTTP - Создали игрока (см. раздел HTTP DSL)
+    s.Step(t, "HTTP: Создание игрока через API", func(sCtx provider.StepCtx) {
         resp := game.CreatePlayer(sCtx).
             RequestBody(models.CreatePlayerReq{Username: username, Region: "EU"}).
             ExpectResponseStatus(201).
-            ExpectResponseBodyFieldNotEmpty("id").
-            Send() // Возвращает типизированный Response
-        
-        // Сохраняем ID для следующего шага
-        playerID = resp.Body.ID
+            Send()
+
+        playerID = resp.Body.ID // Получили ID
     })
 
-    // 2. DB Шаг: Проверяем запись по полученному ID
-    s.Step(t, "Verify Player in DB", func(sCtx provider.StepCtx) {
-        // Используем ID из предыдущего шага
-        player := players.FindByID(sCtx, playerID).
-            
+    // ШАГ 2: Database - Проверяем запись по полученному ID
+    s.Step(t, "Database: Проверка записи в БД", func(sCtx provider.StepCtx) {
+        players.FindByID(sCtx, playerID). // Используем ID из HTTP-шага
+
             // Ожидаем, что запись существует
             ExpectFound().
-            
-            // Проверки значений
+
+            // Проверяем значения колонок
             ExpectColumnEquals("username", username).
             ExpectColumnEquals("status", "active").
             ExpectColumnEquals("region", "EU").
-            ExpectColumnFalse("is_vip").         // Проверка bool/tinyint
-            ExpectColumnIsNotNull("created_at"). // Проверка, что дата заполнена
-            
+            ExpectColumnFalse("is_vip").         // Проверка bool
+            ExpectColumnIsNotNull("created_at"). // Дата должна быть заполнена
+
             // Выполнение (SELECT и скан в структуру)
             Send()
     })
+
+    // ШАГ 3: Kafka - см. раздел "Kafka DSL" ниже
 }
 ```
 
@@ -509,7 +578,9 @@ func (s *PlayerSuite) TestCreateAndVerify(t provider.T) {
 
 ---
 
-## Быстрый старт Kafka
+## Сквозной E2E пример: Шаг 3 - Проверка события в Kafka
+
+Финальный шаг: проверяем, что система отправила событие `PLAYER_CREATED` в Kafka.
 
 ### 1. Конфигурация (`config.local.yaml`)
 
@@ -521,24 +592,10 @@ kafka:
 
   # Список топиков для подписки (полные имена)
   topics:
-    - "beta-09-player-events"
-    - "beta-09-payments"
-    - "beta-09-game-sessions"
+    - "game-player-events"
 
   bufferSize: 1000
   uniqueDuplicateWindowMs: 5000
-
-# Async настройки (аналогично db_dsl и http_dsl)
-kafka_dsl:
-  async:
-    enabled: true
-    timeout: 10s
-    interval: 200ms
-    backoff:
-      enabled: true
-      factor: 1.5
-      max_interval: 1s
-    jitter: 0.2
 ```
 
 ### 2. Определите топики и модели сообщений
@@ -562,33 +619,29 @@ type Link struct{}
 func (l *Link) SetKafka(c *kafkaClient.Client) {
     client = c
 
-    // Регистрируем связи топиков с моделями
+    // Регистрируем связь топика с моделью
     dsl.Register[PlayerEventMessage](c, "player-events")
-    dsl.Register[PaymentMessage](c, "payments")
 }
 
 func Client() *kafkaClient.Client {
     return client
 }
 
-// Определите типы топиков (используются как generic параметры)
+// Определите тип топика (используется как generic параметр)
 type PlayerEventsTopic string
-const PlayerEventsTopic PlayerEventsTopic = "beta-09-player-events"
 
-type PaymentsTopic string
-const PaymentsTopic PaymentsTopic = "beta-09-payments"
+const PlayerEventsTopicName PlayerEventsTopic = "game-player-events"
 
-// Модели сообщений
+// TopicName реализует интерфейс topic.TopicName
+func (PlayerEventsTopic) TopicName() string {
+    return string(PlayerEventsTopicName)
+}
+
+// Модель сообщения
 type PlayerEventMessage struct {
     PlayerID   string `json:"playerId"`
     EventType  string `json:"eventType"`
     PlayerName string `json:"playerName"`
-}
-
-type PaymentMessage struct {
-    PaymentID string  `json:"paymentId"`
-    Amount    float64 `json:"amount"`
-    Currency  string  `json:"currency"`
 }
 ```
 
@@ -599,12 +652,20 @@ package tests
 
 import (
     "my-project/internal/kafka"
+    "my-project/internal/client/game"
+    "my-project/internal/db/players"
     "go-test-framework/pkg/builder"
     "log"
 )
 
 type TestEnv struct {
-    // ... другие клиенты ...
+    // HTTP клиенты
+    GameService game.Link `config:"gameService"`
+
+    // Database
+    PlayersRepo players.Link `db_config:"coreDatabase"`
+
+    // Kafka
     Kafka kafka.Link `kafka_config:"kafka"`
 }
 
@@ -621,105 +682,67 @@ func init() {
 
 ---
 
-## Использование Kafka в тестах
+## Полный E2E тест: HTTP → Database → Kafka
+
+Теперь соберём все три шага вместе. Это **полноценный E2E сценарий**:
 
 ```go
 import (
     "my-project/internal/kafka"
+    "my-project/internal/client/game"
+    "my-project/internal/db/players"
     kafkaDSL "go-test-framework/pkg/kafka/dsl"
 )
 
-func (s *EventsSuite) TestPlayerCreatedEvent(sCtx provider.T) {
-    sCtx.Title("Test: Player Created Event")
+func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
+    t.Title("E2E: Создание игрока (HTTP → DB → Kafka)")
 
-    // 1. Триггерим событие через API
-    player := env.GameAPI.CreatePlayer(sCtx, "John Doe")
+    var playerID string
+    var username = "pro_gamer_2024"
 
-    // 2. Ожидаем событие в Kafka с проверками
-    kafkaDSL.Expect[kafka.PlayerEventsTopic](sCtx, kafka.Client()).
-        With("playerId", player.ID).                    // Фильтр для поиска
-        With("eventType", "PLAYER_CREATED").            // Еще фильтр
-        Unique().                                        // Проверка на дубликаты
-        ExpectField("playerName", "John Doe").          // Проверка поля
-        ExpectFieldNotEmpty("createdAt").               // Проверка что не пустое
-        ExpectFieldTrue("isActive").                    // Проверка boolean
-        Send()                                          // Выполнение
+    // ШАГ 1: HTTP - Создаём игрока через API
+    s.Step(t, "HTTP: Создание игрока через API", func(sCtx provider.StepCtx) {
+        resp := game.CreatePlayer(sCtx).
+            RequestBody(models.CreatePlayerReq{Username: username, Region: "EU"}).
+            ExpectResponseStatus(201).
+            ExpectResponseBodyFieldNotEmpty("id").
+            Send()
+
+        playerID = resp.Body.ID // Сохраняем ID
+    })
+
+    // ШАГ 2: Database - Проверяем запись в таблице players
+    s.Step(t, "Database: Проверка записи в БД", func(sCtx provider.StepCtx) {
+        players.FindByID(sCtx, playerID). // Используем ID из HTTP
+            ExpectFound().
+            ExpectColumnEquals("username", username).
+            ExpectColumnEquals("status", "active").
+            ExpectColumnEquals("region", "EU").
+            Send()
+    })
+
+    // ШАГ 3: Kafka - Ждём событие PLAYER_CREATED
+    s.Step(t, "Kafka: Ожидание события PLAYER_CREATED", func(sCtx provider.StepCtx) {
+        kafkaDSL.Expect[kafka.PlayerEventsTopic](sCtx, kafka.Client()).
+            // Фильтры для поиска нужного события
+            With("playerId", playerID).           // Используем ID из HTTP
+            With("eventType", "PLAYER_CREATED").  // Тип события
+
+            // Проверка уникальности (нет дубликатов)
+            Unique().
+
+            // Проверки полей события
+            ExpectField("playerName", username).  // Имя совпадает
+            ExpectFieldNotEmpty("timestamp").     // Дата заполнена
+            ExpectFieldTrue("isActive").          // Флаг активности
+
+            // Выполнение (поиск)
+            Send()
+    })
 }
 ```
 
-### Пример с вложенными полями
-
-Предположим, Kafka возвращает такое сообщение:
-```json
-{
-  "transactionId": "tx-12345",
-  "currency": "USD",
-  "payment": {
-    "id": "pay-67890",
-    "status": "COMPLETED",
-    "amount": 100.0
-  },
-  "items": [
-    { "name": "Product A", "price": 50.0 },
-    { "name": "Product B", "price": 50.0 }
-  ]
-}
-```
-
-```go
-func (s *EventsSuite) TestPaymentEvent(sCtx provider.T) {
-    payment := env.API.CreatePayment(sCtx, 100.0, "USD")
-
-    kafkaDSL.Expect[kafka.PaymentsTopic](sCtx, kafka.Client()).
-        With("payment.id", payment.ID).              // вложенное поле
-        With("payment.status", "COMPLETED").         // вложенное поле
-        ExpectField("currency", "USD").              // проверка корневого поля
-        ExpectField("payment.amount", 100.0).        // проверка вложенного
-        ExpectField("items.#", 2).                   // количество элементов массива
-        ExpectField("items.0.name", "Product A").    // элемент массива
-        ExpectFieldNotEmpty("transactionId").        // не пустое
-        Send()
-}
-```
-
-### Проверка уникальности с кастомным окном
-
-```go
-func (s *EventsSuite) TestUniqueWithWindow(sCtx provider.T) {
-    player := env.API.CreatePlayer(sCtx, "John")
-
-    kafkaDSL.Expect[kafka.PlayerEventsTopic](sCtx, kafka.Client()).
-        With("playerId", player.ID).
-        UniqueWithWindow(3 * time.Second).  // Кастомное окно (вместо 5 сек)
-        ExpectField("eventType", "PLAYER_CREATED").
-        Send()
-
-    // Если найдено >1 события в окне 3 сек → тест упадет
-}
-```
-
-### Все доступные проверки
-
-```go
-kafkaDSL.Expect[TopicName](sCtx, client).
-    // Фильтры (для поиска сообщения)
-    With("playerId", "123").
-    With("$.nested.field", "value").
-
-    // Уникальность
-    Unique().                           // в окне 5 сек (из конфига)
-    UniqueWithWindow(3 * time.Second).  // кастомное окно
-
-    // Проверки полей
-    ExpectField("name", "John").              // значение равно
-    ExpectFieldNotEmpty("id").                // поле не пустое
-    ExpectFieldIsNull("deletedAt").           // поле null
-    ExpectFieldIsNotNull("createdAt").        // поле не null
-    ExpectFieldTrue("isActive").              // boolean = true
-    ExpectFieldFalse("isDeleted").            // boolean = false
-
-    Send()  // ничего не возвращает, только проверяет
-```
+**✅ Результат E2E теста:** Один тест проверил три слоя системы — HTTP API, базу данных и брокер сообщений.
 
 ---
 

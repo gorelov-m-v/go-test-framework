@@ -541,41 +541,58 @@ kafka_dsl:
     jitter: 0.2
 ```
 
-### 2. Создайте Kafka Link
+### 2. Определите топики и модели сообщений
 
-**Файл:** `internal/kafka/link.go`
+**Файл:** `internal/kafka/topics.go`
 
 ```go
 package kafka
 
 import (
     kafkaClient "go-test-framework/pkg/kafka/client"
-    "go-test-framework/pkg/kafka/types"
+    "go-test-framework/pkg/kafka/dsl"
 )
 
-type Link struct {
-    client   *kafkaClient.Client
-    registry *types.TopicRegistry
-}
+// Приватная переменная для хранения клиента
+var client *kafkaClient.Client
+
+// Link для Auto-Wiring (аналогично HTTP и DB)
+type Link struct{}
 
 func (l *Link) SetKafka(c *kafkaClient.Client) {
-    l.client = c
+    client = c
+
+    // Регистрируем связи топиков с моделями
+    dsl.Register[PlayerEventMessage](c, "player-events")
+    dsl.Register[PaymentMessage](c, "payments")
 }
 
-func (l *Link) GetRegistry() *types.TopicRegistry {
-    return l.registry
+func Client() *kafkaClient.Client {
+    return client
 }
 
-func (l *Link) SetRegistry(r *types.TopicRegistry) {
-    l.registry = r
+// Определите типы топиков (используются как generic параметры)
+type PlayerEventsTopic string
+const PlayerEventsTopic PlayerEventsTopic = "beta-09-player-events"
+
+type PaymentsTopic string
+const PaymentsTopic PaymentsTopic = "beta-09-payments"
+
+// Модели сообщений
+type PlayerEventMessage struct {
+    PlayerID   string `json:"playerId"`
+    EventType  string `json:"eventType"`
+    PlayerName string `json:"playerName"`
 }
 
-func (l *Link) Client() *kafkaClient.Client {
-    return l.client
+type PaymentMessage struct {
+    PaymentID string  `json:"paymentId"`
+    Amount    float64 `json:"amount"`
+    Currency  string  `json:"currency"`
 }
 ```
 
-### 3. Определите топики и сообщения в `test_env.go`
+### 3. Подключите в `test_env.go`
 
 ```go
 package tests
@@ -600,26 +617,6 @@ func init() {
         log.Fatalf("Failed to build environment: %v", err)
     }
 }
-
-// Определите типы топиков (используются как generic параметры)
-type PlayerEventsTopic string
-const PlayerEventsTopic PlayerEventsTopic = "beta-09-player-events"
-
-type PaymentsTopic string
-const PaymentsTopic PaymentsTopic = "beta-09-payments"
-
-// Определите структуры сообщений
-type PlayerEventMessage struct {
-    PlayerID   string `json:"playerId"`
-    EventType  string `json:"eventType"`
-    PlayerName string `json:"playerName"`
-}
-
-type PaymentMessage struct {
-    PaymentID string  `json:"paymentId"`
-    Amount    float64 `json:"amount"`
-    Currency  string  `json:"currency"`
-}
 ```
 
 ---
@@ -627,6 +624,11 @@ type PaymentMessage struct {
 ## Использование Kafka в тестах
 
 ```go
+import (
+    "my-project/internal/kafka"
+    kafkaDSL "go-test-framework/pkg/kafka/dsl"
+)
+
 func (s *EventsSuite) TestPlayerCreatedEvent(sCtx provider.T) {
     sCtx.Title("Test: Player Created Event")
 
@@ -634,7 +636,7 @@ func (s *EventsSuite) TestPlayerCreatedEvent(sCtx provider.T) {
     player := env.GameAPI.CreatePlayer(sCtx, "John Doe")
 
     // 2. Ожидаем событие в Kafka с проверками
-    kafkaDSL.Expect[PlayerEventsTopic](sCtx, env.Kafka.Client()).
+    kafkaDSL.Expect[kafka.PlayerEventsTopic](sCtx, kafka.Client()).
         With("playerId", player.ID).                    // Фильтр для поиска
         With("eventType", "PLAYER_CREATED").            // Еще фильтр
         Unique().                                        // Проверка на дубликаты
@@ -668,7 +670,7 @@ func (s *EventsSuite) TestPlayerCreatedEvent(sCtx provider.T) {
 func (s *EventsSuite) TestPaymentEvent(sCtx provider.T) {
     payment := env.API.CreatePayment(sCtx, 100.0, "USD")
 
-    kafkaDSL.Expect[PaymentsTopic](sCtx, env.Kafka.Client()).
+    kafkaDSL.Expect[kafka.PaymentsTopic](sCtx, kafka.Client()).
         With("payment.id", payment.ID).              // вложенное поле
         With("payment.status", "COMPLETED").         // вложенное поле
         ExpectField("currency", "USD").              // проверка корневого поля
@@ -686,7 +688,7 @@ func (s *EventsSuite) TestPaymentEvent(sCtx provider.T) {
 func (s *EventsSuite) TestUniqueWithWindow(sCtx provider.T) {
     player := env.API.CreatePlayer(sCtx, "John")
 
-    kafkaDSL.Expect[PlayerEventsTopic](sCtx, env.Kafka.Client()).
+    kafkaDSL.Expect[kafka.PlayerEventsTopic](sCtx, kafka.Client()).
         With("playerId", player.ID).
         UniqueWithWindow(3 * time.Second).  // Кастомное окно (вместо 5 сек)
         ExpectField("eventType", "PLAYER_CREATED").

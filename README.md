@@ -58,6 +58,10 @@ E2E тесты часто бывают медленными из-за IO-опе�
 - [Database DSL](#database-dsl-sql)
     - [Сквозной пример: Верификация по ID](#сквозной-пример-верификация-по-id)
     - [Справочник методов DB DSL](#справочник-методов-db-dsl)
+- [Kafka DSL](#kafka-dsl)
+    - [Быстрый старт Kafka](#быстрый-старт-kafka)
+    - [Использование в тестах](#использование-kafka-в-тестах)
+    - [Справочник методов Kafka DSL](#справочник-методов-kafka-dsl)
 
 ---
 
@@ -286,6 +290,13 @@ func (s *PlayerSuite) TestCreatePlayer(t provider.T) {
 | `"items.0.code"` | `"read"` | `.ExpectResponseBodyFieldValue("items.0.code", "read")` |
 | `"items.#"` | `2` | `.ExpectResponseBodyFieldValue("items.#", 2)` |
 
+**Поддерживаемый синтаксис путей:**
+- Простые поля: `"name"`
+- Вложенные поля: `"user.email"`
+- Элементы массива: `"items.0"`, `"items.1"`
+- Подсчёт элементов: `"items.#"`
+- Вложенные поля в массиве: `"users.0.name"`
+
 **Поддерживаемые типы сравнения:**
 *   `string`: `"active"`
 *   `int`, `float`: `100`, `99.99`
@@ -488,5 +499,341 @@ func (s *PlayerSuite) TestCreateAndVerify(t provider.T) {
     3.  Запускает все проверки.
     4.  Создает шаг в Allure с Query и Result.
     5.  Возвращает заполненную структуру `Model`.
+
+---
+
+# Kafka DSL
+
+Модуль `pkg/kafka/dsl` предназначен для **верификации событий** в Apache Kafka.
+Он построен на фоновом consumer'е, который непрерывно читает сообщения в буфер, позволяя тестам искать события с retry-логикой.
+
+---
+
+## Быстрый старт Kafka
+
+### 1. Конфигурация (`config.local.yaml`)
+
+```yaml
+kafka:
+  bootstrapServers:
+    - "kafka.example.com:9092"
+  groupId: "qa-test-group"
+
+  # Список топиков для подписки (полные имена)
+  topics:
+    - "beta-09-player-events"
+    - "beta-09-payments"
+    - "beta-09-game-sessions"
+
+  bufferSize: 1000
+  uniqueDuplicateWindowMs: 5000
+
+# Async настройки (аналогично db_dsl и http_dsl)
+kafka_dsl:
+  async:
+    enabled: true
+    timeout: 10s
+    interval: 200ms
+    backoff:
+      enabled: true
+      factor: 1.5
+      max_interval: 1s
+    jitter: 0.2
+```
+
+### 2. Создайте Kafka Link
+
+**Файл:** `internal/kafka/link.go`
+
+```go
+package kafka
+
+import (
+    kafkaClient "go-test-framework/pkg/kafka/client"
+    "go-test-framework/pkg/kafka/types"
+)
+
+type Link struct {
+    client   *kafkaClient.Client
+    registry *types.TopicRegistry
+}
+
+func (l *Link) SetKafka(c *kafkaClient.Client) {
+    l.client = c
+}
+
+func (l *Link) GetRegistry() *types.TopicRegistry {
+    return l.registry
+}
+
+func (l *Link) SetRegistry(r *types.TopicRegistry) {
+    l.registry = r
+}
+
+func (l *Link) Client() *kafkaClient.Client {
+    return l.client
+}
+```
+
+### 3. Определите топики и сообщения в `test_env.go`
+
+```go
+package tests
+
+import (
+    "my-project/internal/kafka"
+    "go-test-framework/pkg/builder"
+    "log"
+)
+
+type TestEnv struct {
+    // ... другие клиенты ...
+    Kafka kafka.Link `kafka_config:"kafka"`
+}
+
+var env *TestEnv
+
+func init() {
+    env = &TestEnv{}
+
+    if err := builder.BuildEnv(env); err != nil {
+        log.Fatalf("Failed to build environment: %v", err)
+    }
+}
+
+// Определите типы топиков (используются как generic параметры)
+type PlayerEventsTopic string
+const PlayerEventsTopic PlayerEventsTopic = "beta-09-player-events"
+
+type PaymentsTopic string
+const PaymentsTopic PaymentsTopic = "beta-09-payments"
+
+// Определите структуры сообщений
+type PlayerEventMessage struct {
+    PlayerID   string `json:"playerId"`
+    EventType  string `json:"eventType"`
+    PlayerName string `json:"playerName"`
+}
+
+type PaymentMessage struct {
+    PaymentID string  `json:"paymentId"`
+    Amount    float64 `json:"amount"`
+    Currency  string  `json:"currency"`
+}
+```
+
+---
+
+## Использование Kafka в тестах
+
+```go
+func (s *EventsSuite) TestPlayerCreatedEvent(sCtx provider.T) {
+    sCtx.Title("Test: Player Created Event")
+
+    // 1. Триггерим событие через API
+    player := env.GameAPI.CreatePlayer(sCtx, "John Doe")
+
+    // 2. Ожидаем событие в Kafka с проверками
+    kafkaDSL.Expect[PlayerEventsTopic](sCtx, env.Kafka.Client()).
+        With("playerId", player.ID).                    // Фильтр для поиска
+        With("eventType", "PLAYER_CREATED").            // Еще фильтр
+        Unique().                                        // Проверка на дубликаты
+        ExpectField("playerName", "John Doe").          // Проверка поля
+        ExpectFieldNotEmpty("createdAt").               // Проверка что не пустое
+        ExpectFieldTrue("isActive").                    // Проверка boolean
+        Send()                                          // Выполнение
+}
+```
+
+### Пример с вложенными полями
+
+Предположим, Kafka возвращает такое сообщение:
+```json
+{
+  "transactionId": "tx-12345",
+  "currency": "USD",
+  "payment": {
+    "id": "pay-67890",
+    "status": "COMPLETED",
+    "amount": 100.0
+  },
+  "items": [
+    { "name": "Product A", "price": 50.0 },
+    { "name": "Product B", "price": 50.0 }
+  ]
+}
+```
+
+```go
+func (s *EventsSuite) TestPaymentEvent(sCtx provider.T) {
+    payment := env.API.CreatePayment(sCtx, 100.0, "USD")
+
+    kafkaDSL.Expect[PaymentsTopic](sCtx, env.Kafka.Client()).
+        With("payment.id", payment.ID).              // вложенное поле
+        With("payment.status", "COMPLETED").         // вложенное поле
+        ExpectField("currency", "USD").              // проверка корневого поля
+        ExpectField("payment.amount", 100.0).        // проверка вложенного
+        ExpectField("items.#", 2).                   // количество элементов массива
+        ExpectField("items.0.name", "Product A").    // элемент массива
+        ExpectFieldNotEmpty("transactionId").        // не пустое
+        Send()
+}
+```
+
+### Проверка уникальности с кастомным окном
+
+```go
+func (s *EventsSuite) TestUniqueWithWindow(sCtx provider.T) {
+    player := env.API.CreatePlayer(sCtx, "John")
+
+    kafkaDSL.Expect[PlayerEventsTopic](sCtx, env.Kafka.Client()).
+        With("playerId", player.ID).
+        UniqueWithWindow(3 * time.Second).  // Кастомное окно (вместо 5 сек)
+        ExpectField("eventType", "PLAYER_CREATED").
+        Send()
+
+    // Если найдено >1 события в окне 3 сек → тест упадет
+}
+```
+
+### Все доступные проверки
+
+```go
+kafkaDSL.Expect[TopicName](sCtx, client).
+    // Фильтры (для поиска сообщения)
+    With("playerId", "123").
+    With("$.nested.field", "value").
+
+    // Уникальность
+    Unique().                           // в окне 5 сек (из конфига)
+    UniqueWithWindow(3 * time.Second).  // кастомное окно
+
+    // Проверки полей
+    ExpectField("name", "John").              // значение равно
+    ExpectFieldNotEmpty("id").                // поле не пустое
+    ExpectFieldIsNull("deletedAt").           // поле null
+    ExpectFieldIsNotNull("createdAt").        // поле не null
+    ExpectFieldTrue("isActive").              // boolean = true
+    ExpectFieldFalse("isDeleted").            // boolean = false
+
+    Send()  // ничего не возвращает, только проверяет
+```
+
+---
+
+## Справочник методов Kafka DSL
+
+### Создание ожидания
+
+| Метод | Описание |
+|:---|:---|
+| `Expect[TTopic](sCtx, client)` | Создает ожидание сообщения из топика |
+
+**Параметр:**
+- `TTopic` - тип топика (string-based type с именем топика)
+
+### Фильтры (для поиска)
+
+| Метод | Описание |
+|:---|:---|
+| `.With(key, value)` | Добавляет фильтр для поиска сообщения |
+
+**Примеры:**
+- `.With("playerId", "123")` - простое поле
+- `.With("player.id", "123")` - вложенное поле
+- `.With("status", "ACTIVE")` - строка
+- `.With("amount", 100)` - число
+
+**Логика:** AND (все фильтры должны совпасть)
+
+### Уникальность
+
+| Метод | Описание |
+|:---|:---|
+| `.Unique()` | Проверяет уникальность в окне (5 сек из конфига) |
+| `.UniqueWithWindow(duration)` | Кастомное окно уникальности |
+
+**Как работает:** Если найдено >1 сообщение в окне → тест падает
+
+### Проверки полей (Expectations)
+
+| Метод | Описание |
+|:---|:---|
+| `.ExpectField(field, value)` | Поле равно значению |
+| `.ExpectFieldNotEmpty(field)` | Поле не пустое |
+| `.ExpectFieldIsNull(field)` | Поле = null |
+| `.ExpectFieldIsNotNull(field)` | Поле ≠ null |
+| `.ExpectFieldTrue(field)` | Поле = true |
+| `.ExpectFieldFalse(field)` | Поле = false |
+
+**Синтаксис путей (GJSON):**
+- Простое поле: `"playerName"`
+- Вложенное поле: `"player.name"`
+- Элемент массива: `"items.0"`
+- Подсчёт элементов: `"items.#"`
+- Вложенное в массиве: `"users.0.email"`
+
+### Выполнение
+
+| Метод | Описание |
+|:---|:---|
+| `.Send()` | Выполняет поиск и проверки (ничего не возвращает) |
+
+**Что происходит:**
+1. Ищет сообщение по фильтрам (`With`)
+2. Если async режим → retry с интервалами
+3. Проверяет уникальность (если `Unique()`)
+4. Выполняет все expectations (`ExpectField*`)
+5. Прикрепляет результат в Allure
+6. Падает если что-то не сошлось
+
+---
+
+## 🎯 Особенности
+
+### Типобезопасные имена топиков
+Имена топиков объявляются как string-based типы:
+```go
+type PlayerEventsTopic string
+const PlayerEventsTopic PlayerEventsTopic = "beta-09-player-events"
+```
+
+Это дает:
+- **Автокомплит** в IDE
+- **Compile-time проверку** топиков
+- **Refactoring-friendly** код
+
+### Буферизация
+- Каждый топик имеет кольцевой буфер (по умолчанию 1000 сообщений)
+- При переполнении старые сообщения вытесняются новыми
+- Поиск идет **с конца буфера** (самые свежие первыми)
+
+### Async режим
+Настраивается через `kafka_dsl.async` (аналогично `db_dsl` и `http_dsl`):
+- Автоматические retry при ненахождении сообщения
+- Backoff с jitter для предотвращения синхронизации
+- Детальный отчет в Allure (сколько попыток, интервалы)
+
+### Интеграция с Allure
+- Автоматическое прикрепление JSON сообщений
+- Визуализация фильтров и результатов
+- Polling summary в async режиме
+
+### Thread-Safe
+Все операции потокобезопасны, можно использовать в параллельных тестах.
+
+---
+
+## 🐛 Отладка
+
+Включите debug логи:
+```bash
+export GO_TEST_FRAMEWORK_DEBUG=1
+```
+
+Вы увидите:
+- Какие топики подписываются
+- Когда сообщения добавляются в буфер
+- Результаты поиска и фильтрации
 
 ---

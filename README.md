@@ -145,8 +145,6 @@ http:
   gameService:
     baseURL: "https://game-api.example.com"
     timeout: 30s
-    headers:
-      Authorization: "Bearer ${GAME_API_TOKEN}"
 ```
 
 ### 1. Спецификация (Контракт)
@@ -231,19 +229,11 @@ import (
     "go-test-framework/pkg/builder"
     "log"
     "my-project/internal/client/game"
-    "my-project/internal/db/players"
-    "my-project/internal/kafka"
 )
 
 type TestEnv struct {
     // HTTP клиенты - связываем конфиг "gameService" с пакетом "game"
     GameService game.Link `config:"gameService"`
-
-    // Database - связываем конфиг "coreDatabase" с репозиторием "players"
-    PlayersRepo players.Link `db_config:"coreDatabase"`
-
-    // Kafka - связываем конфиг "kafka" с пакетом "kafka"
-    Kafka kafka.Link `kafka_config:"kafka"`
 }
 
 var env *TestEnv
@@ -381,23 +371,6 @@ func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
     })
     ```
 
-### 4. Асинхронные тесты (Async/Retry)
-
-Если вы тестируете асинхронное API (например, создание занимает время, или метод возвращает `202 Accepted`), оберните вызов в `AsyncStep`.
-
-Фреймворк будет автоматически повторять запрос (Polling), если `Expect` проверки не проходят.
-
-```go
-// Используем AsyncStep вместо Step
-s.AsyncStep(t, "Wait for status ACTIVE", func(sCtx provider.StepCtx) {
-    game.GetPlayer(sCtx, playerID).
-        ExpectResponseStatus(200).
-        // Если статус все еще "PENDING", тест не упадет,
-        // а подождет и повторит запрос.
-        ExpectResponseBodyFieldValue("status", "ACTIVE").
-        Send()
-})
-```
 ---
 
 # Database DSL (SQL)
@@ -481,15 +454,40 @@ func FindByID(sCtx provider.StepCtx, id string) *dsl.Query[models.PlayerDB] {
 ```
 
 ### 3. Подключение в Env
-Добавляем связь в `tests/env.go`.
+Расширяем `tests/env.go` — добавляем Database к уже существующему HTTP клиенту.
+
+**Файл:** `tests/env.go`
 
 ```go
+package tests
+
+import (
+    "go-test-framework/pkg/builder"
+    "log"
+    "my-project/internal/client/game"
+    "my-project/internal/db/players"
+)
+
 type TestEnv struct {
     // HTTP клиенты
     GameService game.Link `config:"gameService"`
 
     // Database - связываем конфиг "coreDatabase" с репозиторием "players"
     PlayersRepo players.Link `db_config:"coreDatabase"`
+}
+
+var env *TestEnv
+
+func init() {
+    env = &TestEnv{}
+
+    if err := builder.BuildEnv(env); err != nil {
+        log.Fatalf("Failed to build test environment: %v", err)
+    }
+}
+
+func Env() *TestEnv {
+    return env
 }
 ```
 
@@ -503,14 +501,24 @@ func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
     var playerID string
     var username = "pro_gamer_2024"
 
-    // ШАГ 1: HTTP - Создали игрока (см. раздел HTTP DSL)
+    // ШАГ 1: HTTP - Создаём игрока через API
     s.Step(t, "HTTP: Создание игрока через API", func(sCtx provider.StepCtx) {
         resp := game.CreatePlayer(sCtx).
-            RequestBody(models.CreatePlayerReq{Username: username, Region: "EU"}).
+            // 1. Настройка запроса (строгая типизация)
+            RequestBody(models.CreatePlayerReq{
+                Username: username,
+                Region:   "EU",
+            }).
+            // 2. Проверки ответа
             ExpectResponseStatus(201).
+            ExpectResponseBodyFieldNotEmpty("id").
+            ExpectResponseBodyFieldValue("username", username).
+            ExpectResponseBodyFieldValue("status", "active").
+            // 3. Выполнение
             Send()
 
-        playerID = resp.Body.ID // Получили ID
+        // Сохраняем ID для проверки в БД и Kafka
+        playerID = resp.Body.ID
     })
 
     // ШАГ 2: Database - Проверяем запись по полученному ID
@@ -703,12 +711,21 @@ func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
     // ШАГ 1: HTTP - Создаём игрока через API
     s.Step(t, "HTTP: Создание игрока через API", func(sCtx provider.StepCtx) {
         resp := game.CreatePlayer(sCtx).
-            RequestBody(models.CreatePlayerReq{Username: username, Region: "EU"}).
+            // 1. Настройка запроса (строгая типизация)
+            RequestBody(models.CreatePlayerReq{
+                Username: username,
+                Region:   "EU",
+            }).
+            // 2. Проверки ответа
             ExpectResponseStatus(201).
             ExpectResponseBodyFieldNotEmpty("id").
+            ExpectResponseBodyFieldValue("username", username).
+            ExpectResponseBodyFieldValue("status", "active").
+            // 3. Выполнение
             Send()
 
-        playerID = resp.Body.ID // Сохраняем ID
+        // Сохраняем ID для проверки в БД и Kafka
+        playerID = resp.Body.ID
     })
 
     // ШАГ 2: Database - Проверяем запись в таблице players
@@ -718,6 +735,8 @@ func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
             ExpectColumnEquals("username", username).
             ExpectColumnEquals("status", "active").
             ExpectColumnEquals("region", "EU").
+            ExpectColumnFalse("is_vip").
+            ExpectColumnIsNotNull("created_at").
             Send()
     })
 

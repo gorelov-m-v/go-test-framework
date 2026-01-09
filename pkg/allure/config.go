@@ -12,25 +12,19 @@ type MaskingConfig struct {
 
 func DefaultConfig() MaskingConfig {
 	return MaskingConfig{
-		SensitiveHeaders: []string{
-			"authorization",
-			"cookie",
-			"set-cookie",
-			"x-api-key",
-			"api-key",
-			"x-token",
-			"token",
-			"x-secret",
-		},
-		SensitiveFields: []string{"password", "secret", "token"},
-		MaskValue:       "***MASKED***",
+		SensitiveHeaders: []string{},
+		SensitiveFields:  []string{},
+		MaskValue:        "***MASKED***",
 	}
 }
 
 func (c MaskingConfig) ShouldMaskField(key string) bool {
+	if len(c.SensitiveFields) == 0 {
+		return false
+	}
 	key = strings.ToLower(strings.TrimSpace(key))
 	for _, field := range c.SensitiveFields {
-		if strings.Contains(key, strings.ToLower(field)) {
+		if strings.ToLower(field) == key {
 			return true
 		}
 	}
@@ -38,6 +32,9 @@ func (c MaskingConfig) ShouldMaskField(key string) bool {
 }
 
 func (c MaskingConfig) ShouldMaskHeader(key string) bool {
+	if len(c.SensitiveHeaders) == 0 {
+		return false
+	}
 	key = strings.ToLower(strings.TrimSpace(key))
 	for _, header := range c.SensitiveHeaders {
 		if strings.ToLower(header) == key {
@@ -64,9 +61,12 @@ func (c MaskingConfig) MaskHeader(key, value string) string {
 }
 
 func (c MaskingConfig) ShouldMaskValue(value string) bool {
+	if len(c.SensitiveFields) == 0 {
+		return false
+	}
 	lower := strings.ToLower(value)
 	for _, field := range c.SensitiveFields {
-		if strings.Contains(lower, strings.ToLower(field)) {
+		if strings.ToLower(field) == lower {
 			return true
 		}
 	}

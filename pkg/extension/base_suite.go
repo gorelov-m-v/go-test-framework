@@ -1,6 +1,8 @@
 package extension
 
 import (
+	"sync"
+
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -8,7 +10,8 @@ import (
 
 type BaseSuite struct {
 	suite.Suite
-	tExt *TExtension
+	tExt    *TExtension
+	asyncWg sync.WaitGroup
 }
 
 func (s *BaseSuite) BeforeEach(t provider.T) {
@@ -23,9 +26,18 @@ func (s *BaseSuite) T(t provider.T) *TExtension {
 }
 
 func (s *BaseSuite) Step(t provider.T, name string, fn func(sCtx provider.StepCtx), params ...*allure.Parameter) {
+	s.asyncWg.Wait()
 	s.T(t).WithNewStep(name, fn, params...)
 }
 
 func (s *BaseSuite) AsyncStep(t provider.T, name string, fn func(sCtx provider.StepCtx), params ...*allure.Parameter) {
-	s.T(t).WithNewAsyncStep(name, fn, params...)
+	s.asyncWg.Add(1)
+	s.T(t).WithNewAsyncStep(name, func(sCtx provider.StepCtx) {
+		defer s.asyncWg.Done()
+		fn(sCtx)
+	}, params...)
+}
+
+func (s *BaseSuite) AfterEach(t provider.T) {
+	s.asyncWg.Wait()
 }

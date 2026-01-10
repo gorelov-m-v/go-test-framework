@@ -481,11 +481,9 @@ func makeColumnEqualsExpectation[T any](columnName string, expectedValue any) *e
 			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
 				a.True(false, "[Expect: Column '%s' = %v] %s", columnName, expectedValue, checkRes.Reason)
-				return
+			} else {
+				a.True(true, "[Expect: Column '%s' = %v]", columnName, expectedValue)
 			}
-
-			actualValue, _ := getFieldValueByColumnName(result, columnName)
-			a.Equal(expectedValue, actualValue, "[Expect: Column '%s' = %v]", columnName, expectedValue)
 		},
 	)
 }
@@ -825,11 +823,9 @@ func makeColumnNotEqualsExpectation[T any](columnName string, notExpectedValue a
 			a := extension.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
 				a.True(false, "[Expect: Column '%s' != %v] %s", columnName, notExpectedValue, checkRes.Reason)
-				return
+			} else {
+				a.True(true, "[Expect: Column '%s' != %v]", columnName, notExpectedValue)
 			}
-
-			actualValue, _ := getFieldValueByColumnName(result, columnName)
-			a.NotEqual(notExpectedValue, actualValue, "[Expect: Column '%s' != %v]", columnName, notExpectedValue)
 		},
 	)
 }

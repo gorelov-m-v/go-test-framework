@@ -45,6 +45,16 @@ func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Que
 	return q
 }
 
+func (q *Query[T]) ExpectColumnNotEquals(columnName string, notExpectedValue any) *Query[T] {
+	if q.expectsNotFound {
+		q.sCtx.Break("DB DSL Error: ExpectColumnNotEquals() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
+	}
+	q.expectations = append(q.expectations, makeColumnNotEqualsExpectation[T](columnName, notExpectedValue))
+	return q
+}
+
 func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 	if q.expectsNotFound {
 		q.sCtx.Break("DB DSL Error: ExpectColumnNotEmpty() cannot be used with ExpectNotFound()")
@@ -767,6 +777,59 @@ func makeColumnFalseExpectation[T any](columnName string) *expect.Expectation[T]
 			actualValue, _ := getFieldValueByColumnName(result, columnName)
 			b, _ := asBool(actualValue)
 			a.Equal(false, b, "[Expect: Column '%s' = false]", columnName)
+		},
+	)
+}
+
+func makeColumnNotEqualsExpectation[T any](columnName string, notExpectedValue any) *expect.Expectation[T] {
+	return expect.New(
+		fmt.Sprintf("Expect: Column '%s' != %v", columnName, notExpectedValue),
+		func(err error, result T) expect.CheckResult {
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return expect.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
+					}
+				}
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
+				}
+			}
+
+			actualValue, getErr := getFieldValueByColumnName(result, columnName)
+			if getErr != nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				}
+			}
+
+			equal, _, _ := equalsLoose(notExpectedValue, actualValue)
+
+			if equal {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Column '%s' equals %v, but expected NOT to equal", columnName, actualValue),
+				}
+			}
+
+			return expect.CheckResult{Ok: true}
+		},
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, result T, checkRes expect.CheckResult) {
+			a := extension.PickAsserter(stepCtx, mode)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Column '%s' != %v] %s", columnName, notExpectedValue, checkRes.Reason)
+				return
+			}
+
+			actualValue, _ := getFieldValueByColumnName(result, columnName)
+			a.NotEqual(notExpectedValue, actualValue, "[Expect: Column '%s' != %v]", columnName, notExpectedValue)
 		},
 	)
 }

@@ -6,10 +6,10 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/expect"
+	"go-test-framework/internal/expect"
+	"go-test-framework/internal/retry"
 	"go-test-framework/pkg/extension"
 	"go-test-framework/pkg/http/client"
-	"go-test-framework/pkg/retry"
 )
 
 func (c *Call[TReq, TResp]) executeSingle() (*client.Response[TResp], error, extension.PollingSummary) {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/expect"
+	"go-test-framework/internal/expect"
 	"go-test-framework/pkg/extension"
 )
 

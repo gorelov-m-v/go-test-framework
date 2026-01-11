@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"go-test-framework/internal/kafka/consumer"
 	"go-test-framework/pkg/config"
-	"go-test-framework/pkg/kafka/consumer"
 	"go-test-framework/pkg/kafka/types"
 )
 

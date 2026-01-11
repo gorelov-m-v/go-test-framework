@@ -5,9 +5,9 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/expect"
+	"go-test-framework/internal/expect"
+	"go-test-framework/internal/retry"
 	"go-test-framework/pkg/extension"
-	"go-test-framework/pkg/retry"
 )
 
 func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*expect.Expectation[T]) (T, error, extension.PollingSummary) {

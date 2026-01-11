@@ -1,7 +1,7 @@
 package dsl
 
 import (
-	"go-test-framework/pkg/allure"
+	"go-test-framework/internal/allure"
 	"go-test-framework/pkg/http/client"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"

@@ -8,7 +8,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	kafkaErrors "go-test-framework/pkg/kafka/errors"
+	kafkaErrors "go-test-framework/internal/kafka/errors"
 	"go-test-framework/pkg/kafka/types"
 )
 

@@ -11,8 +11,8 @@ import (
 	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"go-test-framework/internal/expect"
 	"go-test-framework/pkg/database/client"
-	"go-test-framework/pkg/expect"
 	"go-test-framework/pkg/extension"
 )
 

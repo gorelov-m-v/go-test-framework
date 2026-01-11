@@ -10,11 +10,11 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/tidwall/gjson"
 
+	kafkaErrors "go-test-framework/internal/kafka/errors"
+	"go-test-framework/internal/retry"
 	"go-test-framework/pkg/extension"
 	"go-test-framework/pkg/kafka/client"
-	kafkaErrors "go-test-framework/pkg/kafka/errors"
 	"go-test-framework/pkg/kafka/types"
-	"go-test-framework/pkg/retry"
 )
 
 type Expectation struct {
@@ -170,7 +170,7 @@ func (e *Expectation) Send() {
 				msg = extension.FinalFailureMessage(summary)
 			}
 
-			extension.NoError(stepCtx, assertionMode, fmt.Errorf(msg), msg)
+			extension.NoError(stepCtx, assertionMode, fmt.Errorf("%s", msg), msg)
 			return
 		}
 

@@ -97,6 +97,11 @@ func (c *Call[TReq, TResp]) RequestBody(body TReq) *Call[TReq, TResp] {
 	return c
 }
 
+func (c *Call[TReq, TResp]) RequestBodyMap(body map[string]interface{}) *Call[TReq, TResp] {
+	c.req.BodyMap = body
+	return c
+}
+
 func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Response[any]]) {
 	if c.sent {
 		c.sCtx.Break("HTTP DSL Error: Expectations must be added before Send(). Call ExpectResponseStatus(), ExpectResponseBodyNotEmpty(), etc. before Send().")

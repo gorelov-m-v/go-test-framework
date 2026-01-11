@@ -45,6 +45,8 @@ func ToHTTPRequestDTO[T any](req *client.Request[T]) HTTPRequestDTO {
 
 	if req.Body != nil {
 		dto.Body = *req.Body
+	} else if req.BodyMap != nil {
+		dto.Body = req.BodyMap
 	}
 
 	return dto

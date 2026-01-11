@@ -61,13 +61,25 @@ E2E тесты часто бывают медленными из-за IO-опе�
     - [Конфигурация](#конфигурация-1)
     - [Примеры использования](#примеры-использования)
     - [Рекомендации](#рекомендации)
+- [Параметризованные тесты (Table-Driven Tests)](#параметризованные-тесты-table-driven-tests)
+    - [Зачем нужны параметризованные тесты](#зачем-нужны-параметризованные-тесты)
+    - [Сквозной пример: Негативное тестирование регистрации](#сквозной-пример-негативное-тестирование-регистрации)
+    - [Использование RequestBodyMap для негативных тестов](#использование-requestbodymap-для-негативных-тестов)
+    - [Полный пример с RequestBodyMap](#полный-пример-с-requestbodymap)
+    - [Рекомендации](#рекомендации-1)
 - [Маскировка чувствительных данных](#маскировка-чувствительных-данных)
     - [Зачем нужна маскировка](#зачем-нужна-маскировка)
     - [Принцип работы](#принцип-работы)
     - [Конфигурация маскировки](#конфигурация-маскировки)
     - [Примеры маскировки](#примеры-маскировки)
     - [Важные замечания](#важные-замечания)
-    - [Рекомендации](#рекомендации-1)
+    - [Рекомендации](#рекомендации-2)
+- [Генерация тестовых данных](#генерация-тестовых-данных)
+    - [Проблема: Хардкод данных в тестах](#проблема-хардкод-данных-в-тестах)
+    - [Решение: Генератор данных](#решение-генератор-данных)
+    - [Справочник функций](#справочник-функций)
+    - [Примеры использования](#примеры-использования-1)
+    - [Рекомендации](#рекомендации-3)
 
 ---
 
@@ -402,6 +414,7 @@ func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
 | `.QueryParam(k, v)` | Добавление GET-параметра. | `.QueryParam("page", "1")` -> `?page=1` |
 | `.PathParam(k, v)` | Подстановка переменной в путь. | `.PathParam("id", "123")` -> `/users/123` |
 | `.RequestBody(val)` | Установка тела (структура). | `.RequestBody(models.User{...})` |
+| `.RequestBodyMap(map)` | Установка тела (map). Для негативных тестов. | `.RequestBodyMap(map[string]interface{}{"password": "123"})` |
 
 ### 2. Ожидания (Expectations)
 
@@ -1497,6 +1510,286 @@ s.Step(t, "Verify all tests passed", ...)
 3. **Ограничивайте max_interval:** не больше 1-2 секунд
 4. **Используйте jitter:** снижает пиковую нагрузку на тестовую среду
 
+---
+
+# Параметризованные тесты (Table-Driven Tests)
+
+Параметризованные тесты позволяют запустить один и тот же тест с разными наборами данных. Это особенно полезно для негативных тестов, когда нужно проверить множество граничных случаев и валидаций.
+
+## Зачем нужны параметризованные тесты
+
+### Проблема: Дублирование кода
+
+Без параметризации приходится писать отдельный тест для каждого случая:
+
+```go
+func (s *RegisterSuite) TestEmptyEmail(t provider.T) {
+    auth.Register(sCtx).
+        RequestBody(models.RegisterRequest{Email: "", Password: "P@ss"}).
+        ExpectResponseStatus(422).
+        ExpectResponseBodyFieldValue("detail.code", "EMAIL_IS_EMPTY").
+        Send()
+}
+
+func (s *RegisterSuite) TestInvalidEmail(t provider.T) {
+    auth.Register(sCtx).
+        RequestBody(models.RegisterRequest{Email: "invalid", Password: "P@ss"}).
+        ExpectResponseStatus(422).
+        ExpectResponseBodyFieldValue("detail.code", "INVALID_EMAIL").
+        Send()
+}
+
+// ... еще 10 похожих тестов
+```
+
+### Решение: Table-Driven подход с Allure-Go
+
+Фреймворк использует встроенную поддержку параметризации из `allure-go`. Allure автоматически обнаруживает параметры и запускает тест для каждого набора данных.
+
+---
+
+## Сквозной пример: Негативное тестирование регистрации
+
+Проверим валидацию email при регистрации пользователя с множеством невалидных входных данных.
+
+### Шаг 1: Создайте структуру для test case
+
+```go
+type EmailTestCase struct {
+    Name           string
+    Email          string
+    Password       string
+    ExpectedStatus int
+    ExpectedCode   string
+    ExpectedDetail string
+    ExpectedField  string
+}
+```
+
+### Шаг 2: Добавьте параметры в Suite
+
+```go
+type RegisterNegativeSuite struct {
+    extension.BaseSuite
+    ParamEmailValidation []EmailTestCase  // Имя ОБЯЗАТЕЛЬНО должно быть Param + <название из метода>
+}
+```
+
+**ВАЖНО:** Имя поля должно соответствовать паттерну: `Param` + название из метода `TableTest<Название>`.
+
+Если метод называется `TableTestEmailValidation`, то поле должно быть `ParamEmailValidation`.
+
+### Шаг 3: Инициализируйте данные в BeforeAll
+
+```go
+func (s *RegisterNegativeSuite) BeforeAll(t provider.T) {
+    s.ParamEmailValidation = []EmailTestCase{
+        {
+            Name:           "Email field is empty",
+            Email:          "",
+            Password:       "P@ssw0rd",
+            ExpectedStatus: http.StatusUnprocessableEntity,
+            ExpectedCode:   "EMAIL_IS_EMPTY",
+            ExpectedDetail: "Данное поле обязательно.",
+            ExpectedField:  "email",
+        },
+        {
+            Name:           "Email without @",
+            Email:          "invalid-email.com",
+            Password:       "P@ssw0rd",
+            ExpectedStatus: http.StatusUnprocessableEntity,
+            ExpectedCode:   "INVALID_EMAIL_FORMAT",
+            ExpectedDetail: "Email должен содержать @ и точку в доменной части",
+            ExpectedField:  "email",
+        },
+        {
+            Name:           "Email without domain",
+            Email:          "test@",
+            Password:       "P@ssw0rd",
+            ExpectedStatus: http.StatusUnprocessableEntity,
+            ExpectedCode:   "INVALID_EMAIL_FORMAT",
+            ExpectedDetail: "Email должен содержать @ и точку в доменной части",
+            ExpectedField:  "email",
+        },
+    }
+}
+```
+
+### Шаг 4: Создайте Table метод
+
+```go
+func (s *RegisterNegativeSuite) TableTestEmailValidation(t provider.T, tc EmailTestCase) {
+    t.Title(tc.Name)
+
+    s.Step(t, "Send registration request with invalid email", func(sCtx provider.StepCtx) {
+        auth_service.Register(sCtx).
+            RequestBody(authModels.RegisterRequest{
+                Email:    tc.Email,
+                Password: tc.Password,
+            }).
+            ExpectResponseStatus(tc.ExpectedStatus).
+            ExpectResponseBodyFieldValue("detail.code", tc.ExpectedCode).
+            ExpectResponseBodyFieldValue("detail.detail", tc.ExpectedDetail).
+            ExpectResponseBodyFieldValue("detail.field", tc.ExpectedField).
+            Send()
+    })
+}
+```
+
+**Важные детали:**
+- Имя метода **ОБЯЗАТЕЛЬНО** должно начинаться с `TableTest`
+- Второй параметр - это структура test case
+- Allure автоматически запустит метод для каждого элемента в `ParamEmailValidation`
+
+### Шаг 5: Запустите Suite
+
+```go
+func TestRegisterNegativeSuite(t *testing.T) {
+    suite.RunSuite(t, new(RegisterNegativeSuite))  // Используйте RunSuite, не RunNamedSuite
+}
+```
+
+**ВАЖНО:** Для параметризованных тестов используйте `suite.RunSuite`, а не `suite.RunNamedSuite`.
+
+---
+
+## Использование RequestBodyMap для негативных тестов
+
+Часто в негативных тестах нужно отправить запрос **без определенных полей** (например, проверить валидацию отсутствующего поля).
+
+### Проблема с типизированными структурами
+
+```go
+type RegisterRequest struct {
+    Email    string `json:"email"`
+    Password string `json:"password"`
+}
+
+// Даже если передать пустую строку, поле всё равно будет в JSON
+auth.Register(sCtx).
+    RequestBody(RegisterRequest{Password: "P@ss"})
+// Отправит: {"email": "", "password": "P@ss"}
+// Поле email присутствует, просто пустое!
+```
+
+### Решение: RequestBodyMap
+
+Используйте `.RequestBodyMap()` вместо `.RequestBody()`:
+
+```go
+s.Step(t, "Register without email field", func(sCtx provider.StepCtx) {
+    auth_service.Register(sCtx).
+        RequestBodyMap(map[string]interface{}{
+            "password": "P@ssw0rd",
+            // email полностью отсутствует в JSON
+        }).
+        ExpectResponseStatus(http.StatusBadRequest).
+        ExpectResponseBodyFieldValue("detail.code", "EMAIL_REQUIRED").
+        Send()
+})
+```
+
+Отправленный JSON:
+```json
+{
+  "password": "P@ssw0rd"
+}
+```
+
+### Другие сценарии использования RequestBodyMap
+
+**1. Дополнительные поля (проверка на лишние поля):**
+```go
+.RequestBodyMap(map[string]interface{}{
+    "email":    "test@test.com",
+    "password": "P@ssw0rd",
+    "extra":    "unexpected_field",
+})
+```
+
+**2. Невалидные типы данных:**
+```go
+.RequestBodyMap(map[string]interface{}{
+    "email":    123,  // number вместо string
+    "password": true, // boolean вместо string
+})
+```
+
+**3. Null значения:**
+```go
+.RequestBodyMap(map[string]interface{}{
+    "email":    nil,
+    "password": "P@ssw0rd",
+})
+```
+
+---
+
+## Полный пример с RequestBodyMap
+
+```go
+type FieldAbsenceTestCase struct {
+    Name           string
+    Body           map[string]interface{}
+    ExpectedStatus int
+    ExpectedCode   string
+}
+
+type RegisterNegativeSuite struct {
+    extension.BaseSuite
+    ParamFieldAbsence []FieldAbsenceTestCase
+}
+
+func (s *RegisterNegativeSuite) BeforeAll(t provider.T) {
+    s.ParamFieldAbsence = []FieldAbsenceTestCase{
+        {
+            Name:           "Email field is missing",
+            Body:           map[string]interface{}{"password": "P@ssw0rd"},
+            ExpectedStatus: http.StatusBadRequest,
+            ExpectedCode:   "EMAIL_REQUIRED",
+        },
+        {
+            Name:           "Password field is missing",
+            Body:           map[string]interface{}{"email": "test@test.com"},
+            ExpectedStatus: http.StatusBadRequest,
+            ExpectedCode:   "PASSWORD_REQUIRED",
+        },
+        {
+            Name:           "Both fields missing",
+            Body:           map[string]interface{}{},
+            ExpectedStatus: http.StatusBadRequest,
+            ExpectedCode:   "VALIDATION_ERROR",
+        },
+    }
+}
+
+func (s *RegisterNegativeSuite) TableTestFieldAbsence(t provider.T, tc FieldAbsenceTestCase) {
+    t.Title(tc.Name)
+
+    s.Step(t, "Send request with missing fields", func(sCtx provider.StepCtx) {
+        auth_service.Register(sCtx).
+            RequestBodyMap(tc.Body).
+            ExpectResponseStatus(tc.ExpectedStatus).
+            ExpectResponseBodyFieldValue("detail.code", tc.ExpectedCode).
+            Send()
+    })
+}
+```
+
+---
+
+## Рекомендации
+
+1. **Именование:** Используйте описательные имена для test cases (`Name` поле)
+2. **Группировка:** Группируйте похожие проверки в один параметризованный тест
+3. **RequestBodyMap vs RequestBody:**
+   - `RequestBody` - для позитивных тестов и случаев с полными данными
+   - `RequestBodyMap` - для негативных тестов с отсутствующими/лишними полями
+4. **Не смешивайте:** Не используйте одновременно `RequestBody` и `RequestBodyMap` - только один из них
+5. **Allure отчеты:** Каждый test case появится как отдельный тест в Allure с названием из поля `Name`
+
+---
+
 # Маскировка чувствительных данных
 
 Тесты часто работают с конфиденциальной информацией: токенами авторизации, паролями, API ключами. Эти данные попадают в Allure отчёты, которые могут быть доступны широкому кругу лиц. Фреймворк предоставляет механизм **настраиваемой маскировки** чувствительных данных в HTTP запросах, SQL запросах и результатах из БД.
@@ -1762,5 +2055,356 @@ http:
 - Проверяйте, что в отчётах нет случайных credentials
 - Не публикуйте отчёты в открытый доступ без проверки
 - Ограничивайте доступ к Allure серверу
+
+---
+# Генерация тестовых данных
+
+Тесты часто требуют уникальных данных для каждого запуска: email адреса, пароли, случайные строки. Модуль `pkg/datagen` предоставляет простой API для генерации тестовых данных с гарантией соответствия требованиям валидации.
+
+---
+
+## Проблема: Хардкод данных в тестах
+
+### Что происходит без генератора
+
+Классический подход - использовать хардкод значения или timestamp:
+
+```go
+func TestRegisterUser(t provider.T) {
+    // Проблема 1: Хардкод - при повторном запуске упадёт (email exists)
+    email := "test@example.com"
+    password := "P@ssw0rd"
+
+    // Проблема 2: Timestamp - работает, но нечитаемо
+    email := fmt.Sprintf("test_%d@example.com", time.Now().UnixNano())
+    password := "P@ssw0rd"  // Всегда один и тот же
+}
+```
+
+**Проблемы:**
+- Хардкод приводит к падениям при повторных запусках (дубликаты)
+- Timestamp создаёт длинные нечитаемые значения в отчётах
+- Пароли одинаковые - не тестируют реальную вариативность
+- Невозможно генерировать специфичные невалидные данные для негативных тестов
+
+---
+
+## Решение: Генератор данных
+
+Модуль `pkg/datagen` автоматически создаёт уникальные валидные данные:
+
+```go
+import "go-test-framework/pkg/datagen"
+
+func TestRegisterUser(t provider.T) {
+    // Решение: Генерация валидных данных
+    email := datagen.Email(10)      // "xK7mP2nQaB@generated.com"
+    password := datagen.Password(8) // "A3!kL9@z" (гарантия: digit + upper + lower + special)
+
+    auth.Register(sCtx).
+        RequestBody(models.RegisterRequest{
+            Email:    email,
+            Password: password,
+        }).
+        Send()
+}
+```
+
+**Преимущества:**
+- **Уникальность:** Каждый запуск создаёт новые данные
+- **Валидность:** Пароли гарантированно содержат все требуемые типы символов
+- **Читаемость:** Короткие значения в отчётах Allure
+- **Гибкость:** Настройка через charset для негативных тестов
+
+---
+
+## Справочник функций
+
+### Email(length int) string
+
+Генерирует случайный email адрес.
+
+**Параметры:**
+- `length` - длина локальной части (до @). Если ≤ 0, используется 10.
+
+**Примеры:**
+```go
+datagen.Email(10)  // "xK7mP2nQaB@generated.com"
+datagen.Email(5)   // "aB3Xz@generated.com"
+datagen.Email(0)   // "kL9pQw2MnV@generated.com" (default 10)
+```
+
+**Формат:** `<random_alphanumeric>@generated.com`
+
+---
+
+### Password(length int, charsets ...string) string
+
+Генерирует случайный пароль с гарантией включения символов из КАЖДОГО переданного charset.
+
+**Параметры:**
+- `length` - длина пароля. Если меньше количества charsets, автоматически увеличивается.
+- `charsets` (variadic) - наборы символов. Если не указаны, используются: `Digits`, `LatinUpper`, `LatinLower`, `SpecialChars`.
+
+**Логика:**
+1. Берётся минимум 1 символ из каждого переданного charset
+2. Остальные позиции заполняются случайными символами из всех charsets
+3. Результат перемешивается (shuffle)
+
+**Примеры:**
+
+```go
+// Дефолтный пароль (Digits + LatinUpper + LatinLower + SpecialChars)
+datagen.Password(8)  // "A3!kL9@z" - гарантия всех типов
+
+// Пароль без uppercase (для негативного теста)
+datagen.Password(8, datagen.LatinLower, datagen.Digits, datagen.SpecialChars)
+// "a7b@2k!9" - только lowercase, digits, special
+
+// Пароль без цифр (для негативного теста)
+datagen.Password(8, datagen.LatinUpper, datagen.LatinLower, datagen.SpecialChars)
+// "AbK@zLp!" - только буквы и спецсимволы
+
+// Пароль только из букв (без special chars - негативный тест)
+datagen.Password(8, datagen.LatinUpper, datagen.LatinLower, datagen.Digits)
+// "A3kL9pZx" - буквы + цифры, без спецсимволов
+
+// Слишком короткий пароль (негативный тест)
+datagen.Password(4)  // "A3!k" - длина 4 (минимальная для 4 charsets)
+```
+
+---
+
+### String(length int, charsets ...string) string
+
+Генерирует случайную строку из указанных наборов символов.
+
+**Параметры:**
+- `length` - длина строки. Если ≤ 0, используется 10.
+- `charsets` (variadic) - наборы символов. Если не указаны, используется `Alphanumeric`.
+
+**Примеры:**
+
+```go
+// Только цифры
+datagen.String(5, datagen.Digits)  // "72849"
+
+// Только буквы (lowercase)
+datagen.String(8, datagen.LatinLower)  // "abkzpmqw"
+
+// Буквы + цифры
+datagen.String(10, datagen.LatinLower, datagen.Digits)  // "a7bx2kp9mq"
+
+// Специальные символы
+datagen.String(6, datagen.SpecialChars)  // "!@#$%^"
+
+// Дефолт (alphanumeric)
+datagen.String(10)  // "xK7mP2nQaB"
+```
+
+---
+
+## Доступные константы (Charsets)
+
+Используйте эти константы для настройки генерации:
+
+| Константа | Значение | Описание |
+|:----------|:---------|:---------|
+| `Digits` | `"0123456789"` | Цифры |
+| `LatinLower` | `"abcdefghijklmnopqrstuvwxyz"` | Строчные латинские буквы |
+| `LatinUpper` | `"ABCDEFGHIJKLMNOPQRSTUVWXYZ"` | Заглавные латинские буквы |
+| `LatinLetters` | `LatinLower + LatinUpper` | Все латинские буквы |
+| `Alphanumeric` | `LatinLetters + Digits` | Буквы + цифры |
+| `SpecialChars` | <code>\`~!@#$%^&*()-_=+[]{}\|;:'",<.>/?</code> | Все спецсимволы английской раскладки |
+
+---
+
+## Примеры использования
+
+### Позитивные тесты: Валидные данные
+
+```go
+func (s *RegisterSuite) TestRegisterNewUser(t provider.T) {
+    email := datagen.Email(10)
+    password := datagen.Password(8)
+
+    s.Step(t, "Register user", func(sCtx provider.StepCtx) {
+        auth.Register(sCtx).
+            RequestBody(models.RegisterRequest{
+                Email:    email,
+                Password: password,
+            }).
+            ExpectResponseStatus(201).
+            Send()
+    })
+}
+```
+
+### Негативные тесты: Невалидные пароли
+
+Используйте комбинации charsets для создания специфичных невалидных данных:
+
+```go
+func (s *RegisterNegativeSuite) BeforeAll(t provider.T) {
+    validEmail := datagen.Email(10)
+
+    s.ParamPasswordValidation = []PasswordTestCase{
+        {
+            Name:     "Password too short",
+            Email:    validEmail,
+            Password: datagen.Password(4),  // Слишком короткий
+            ExpectedCode: "INVALID_PASSWORD",
+        },
+        {
+            Name:     "Password without uppercase",
+            Email:    validEmail,
+            Password: datagen.Password(8, datagen.LatinLower, datagen.Digits, datagen.SpecialChars),
+            ExpectedCode: "INVALID_PASSWORD",
+        },
+        {
+            Name:     "Password without digits",
+            Email:    validEmail,
+            Password: datagen.Password(8, datagen.LatinUpper, datagen.LatinLower, datagen.SpecialChars),
+            ExpectedCode: "INVALID_PASSWORD",
+        },
+        {
+            Name:     "Password without special characters",
+            Email:    validEmail,
+            Password: datagen.Password(8, datagen.LatinUpper, datagen.LatinLower, datagen.Digits),
+            ExpectedCode: "INVALID_PASSWORD",
+        },
+        {
+            Name:     "Password only lowercase",
+            Email:    validEmail,
+            Password: datagen.Password(8, datagen.LatinLower),
+            ExpectedCode: "INVALID_PASSWORD",
+        },
+    }
+}
+```
+
+### Генерация уникальных строк
+
+```go
+func (s *GameSuite) TestCreatePlayer(t provider.T) {
+    // Уникальное имя игрока
+    playerName := datagen.String(12, datagen.LatinLetters)
+
+    // Уникальный ID (только цифры)
+    customID := datagen.String(8, datagen.Digits)
+
+    s.Step(t, "Create player", func(sCtx provider.StepCtx) {
+        game.CreatePlayer(sCtx).
+            RequestBody(models.CreatePlayerReq{
+                Name: playerName,
+                CustomID: customID,
+            }).
+            Send()
+    })
+}
+```
+
+### BeforeAll для переиспользования
+
+Если один пароль нужен в нескольких тестах:
+
+```go
+type RegisterNegativeSuite struct {
+    extension.BaseSuite
+    validPassword string
+    ParamEmailValidation []EmailTestCase
+}
+
+func (s *RegisterNegativeSuite) BeforeAll(t provider.T) {
+    // Генерируем один раз, используем во всех тест-кейсах
+    s.validPassword = datagen.Password(8)
+
+    s.ParamEmailValidation = []EmailTestCase{
+        {
+            Name:     "Empty email",
+            Email:    "",
+            Password: s.validPassword,  // Используем общий валидный пароль
+            ExpectedCode: "EMAIL_IS_EMPTY",
+        },
+        {
+            Name:     "Invalid email format",
+            Email:    "invalid-email",
+            Password: s.validPassword,  // Используем общий валидный пароль
+            ExpectedCode: "INVALID_EMAIL_FORMAT",
+        },
+    }
+}
+```
+
+---
+
+## Рекомендации
+
+### 1. Используйте для всех динамических данных
+
+**Хорошо:**
+```go
+email := datagen.Email(10)
+password := datagen.Password(8)
+username := datagen.String(10, datagen.LatinLetters)
+```
+
+**Плохо:**
+```go
+email := "test@test.com"  // Хардкод - упадёт при повторном запуске
+password := "P@ssw0rd"     // Всегда одинаковый
+```
+
+### 2. Для негативных тестов используйте charsets
+
+Не хардкодьте невалидные значения - генерируйте их:
+
+**Хорошо:**
+```go
+// Генерируем пароль без uppercase для теста валидации
+password := datagen.Password(8, datagen.LatinLower, datagen.Digits, datagen.SpecialChars)
+```
+
+**Плохо:**
+```go
+password := "p@ssw0rd123"  // Хардкод - может случайно стать валидным при изменении требований
+```
+
+### 3. Сохраняйте сгенерированные значения в BeforeAll
+
+Если данные нужны в нескольких тестах - генерируйте один раз:
+
+```go
+func (s *Suite) BeforeAll(t provider.T) {
+    s.validEmail = datagen.Email(10)
+    s.validPassword = datagen.Password(8)
+}
+```
+
+### 4. Используйте осмысленную длину
+
+- Email: 8-12 символов (читаемо в отчётах)
+- Password: 8-12 символов (покрывает большинство требований)
+- Username/Names: 6-10 символов (естественная длина)
+
+### 5. Не генерируйте внутри циклов без необходимости
+
+**Плохо:**
+```go
+for i := 0; i < 100; i++ {
+    email := datagen.Email(10)  // 100 вызовов RNG
+    // ...
+}
+```
+
+**Хорошо:**
+```go
+emails := make([]string, 100)
+for i := 0; i < 100; i++ {
+    emails[i] = datagen.Email(10)
+}
+```
+
+Или генерируйте по требованию, если нужна уникальность для каждой итерации.
 
 ---

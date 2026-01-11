@@ -12,6 +12,7 @@ type Request[T any] struct {
 	QueryParams map[string]string
 	Headers     map[string]string
 	Body        *T
+	BodyMap     map[string]interface{}
 	RawBody     []byte
 	Multipart   *MultipartForm
 }

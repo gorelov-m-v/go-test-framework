@@ -119,9 +119,28 @@ func applyPathParams(pathTemplate string, pathParams map[string]string) string {
 }
 
 func buildBody[TReq any](req *Request[TReq]) (io.Reader, string, error) {
+	bodyCount := 0
+	if req.Multipart != nil {
+		bodyCount++
+	}
+	if req.Body != nil {
+		bodyCount++
+	}
+	if req.BodyMap != nil {
+		bodyCount++
+	}
+	if len(req.RawBody) > 0 {
+		bodyCount++
+	}
+	if bodyCount > 1 {
+		return nil, "", fmt.Errorf("only one body type can be set: Body, BodyMap, RawBody, or Multipart")
+	}
+
 	switch {
 	case req.Multipart != nil:
 		return buildMultipartBody(req.Multipart)
+	case req.BodyMap != nil:
+		return buildJSONBodyFromMap(req.BodyMap)
 	case req.Body != nil:
 		return buildJSONBody(req.Body)
 	case len(req.RawBody) > 0:
@@ -135,6 +154,14 @@ func buildJSONBody[TReq any](body *TReq) (io.Reader, string, error) {
 	jsonBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to marshal JSON body: %w", err)
+	}
+	return bytes.NewReader(jsonBytes), "application/json", nil
+}
+
+func buildJSONBodyFromMap(body map[string]interface{}) (io.Reader, string, error) {
+	jsonBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to marshal JSON body from map: %w", err)
 	}
 	return bytes.NewReader(jsonBytes), "application/json", nil
 }

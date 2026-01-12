@@ -1,4 +1,4 @@
-module go-test-framework
+module github.com/gorelov-m-v/go-test-framework
 
 go 1.25
 

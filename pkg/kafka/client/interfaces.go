@@ -1,6 +1,6 @@
 package client
 
-import "go-test-framework/pkg/kafka/types"
+import "github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 
 type MessageBufferInterface = types.MessageBufferInterface
 type MessageFinderInterface = types.MessageFinderInterface

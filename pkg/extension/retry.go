@@ -9,7 +9,7 @@ import (
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/config"
+	"github.com/gorelov-m-v/go-test-framework/pkg/config"
 )
 
 type PollingSummary struct {

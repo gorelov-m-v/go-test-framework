@@ -10,11 +10,11 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/tidwall/gjson"
 
-	kafkaErrors "go-test-framework/internal/kafka/errors"
-	"go-test-framework/internal/retry"
-	"go-test-framework/pkg/extension"
-	"go-test-framework/pkg/kafka/client"
-	"go-test-framework/pkg/kafka/types"
+	kafkaErrors "github.com/gorelov-m-v/go-test-framework/internal/kafka/errors"
+	"github.com/gorelov-m-v/go-test-framework/internal/retry"
+	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/client"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
 type Expectation struct {

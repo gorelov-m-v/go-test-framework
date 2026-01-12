@@ -10,8 +10,8 @@ import (
 
 	"github.com/IBM/sarama"
 
-	kafkaErrors "go-test-framework/internal/kafka/errors"
-	"go-test-framework/pkg/kafka/types"
+	kafkaErrors "github.com/gorelov-m-v/go-test-framework/internal/kafka/errors"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
 type BackgroundConsumer struct {
@@ -44,8 +44,12 @@ func NewBackgroundConsumer(
 	saramaConfig.Version = version
 
 	saramaConfig.Consumer.Return.Errors = true
-	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetNewest // Читаем только новые сообщения
+	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest // По умолчанию читаем с начала (для тестов)
 	saramaConfig.Consumer.Group.Rebalance.Strategy = sarama.NewBalanceStrategyRoundRobin()
+
+	if err := applySaramaConfig(saramaConfig, cfg.SaramaConfig); err != nil {
+		return nil, fmt.Errorf("failed to apply SaramaConfig: %w", err)
+	}
 
 	consumerGroup, err := sarama.NewConsumerGroup(cfg.BootstrapServers, cfg.GroupID, saramaConfig)
 	if err != nil {
@@ -262,4 +266,98 @@ func (bc *BackgroundConsumer) FindAndCountWithinWindow(
 
 	messages := bc.buffer.GetMessages(fullTopicName)
 	return bc.finder.FindAndCountWithinWindow(messages, filters, messageType, windowMs)
+}
+
+func applySaramaConfig(saramaConfig *sarama.Config, userConfig map[string]interface{}) error {
+	if userConfig == nil || len(userConfig) == 0 {
+		return nil
+	}
+
+	configValue := reflect.ValueOf(saramaConfig).Elem()
+
+	for key, value := range userConfig {
+		if err := setNestedField(configValue, key, value); err != nil {
+			return fmt.Errorf("failed to set field '%s': %w", key, err)
+		}
+	}
+
+	return nil
+}
+
+func setNestedField(structValue reflect.Value, path string, value interface{}) error {
+	parts := splitPath(path)
+
+	current := structValue
+	for i := 0; i < len(parts)-1; i++ {
+		field := current.FieldByName(parts[i])
+		if !field.IsValid() {
+			return fmt.Errorf("field '%s' not found in path '%s'", parts[i], path)
+		}
+		current = field
+	}
+
+	lastField := current.FieldByName(parts[len(parts)-1])
+	if !lastField.IsValid() {
+		return fmt.Errorf("field '%s' not found", parts[len(parts)-1])
+	}
+
+	if !lastField.CanSet() {
+		return fmt.Errorf("field '%s' cannot be set (unexported?)", parts[len(parts)-1])
+	}
+
+	return setFieldValue(lastField, value)
+}
+
+func setFieldValue(field reflect.Value, value interface{}) error {
+	fieldType := field.Type()
+	valueRefl := reflect.ValueOf(value)
+
+	if valueRefl.Type().ConvertibleTo(fieldType) {
+		field.Set(valueRefl.Convert(fieldType))
+		return nil
+	}
+
+	switch fieldType.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		intVal := reflect.ValueOf(value).Convert(reflect.TypeOf(int64(0))).Int()
+		field.SetInt(intVal)
+		return nil
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		uintVal := reflect.ValueOf(value).Convert(reflect.TypeOf(uint64(0))).Uint()
+		field.SetUint(uintVal)
+		return nil
+
+	case reflect.Bool:
+		field.SetBool(reflect.ValueOf(value).Bool())
+		return nil
+
+	case reflect.String:
+		field.SetString(reflect.ValueOf(value).String())
+		return nil
+	}
+
+	return fmt.Errorf("cannot convert %T to %s", value, fieldType)
+}
+
+func splitPath(path string) []string {
+	var parts []string
+	var current string
+
+	for _, ch := range path {
+		if ch == '.' {
+			if current != "" {
+				parts = append(parts, current)
+				current = ""
+			}
+		} else {
+			current += string(ch)
+		}
+	}
+
+	if current != "" {
+		parts = append(parts, current)
+	}
+
+	return parts
 }

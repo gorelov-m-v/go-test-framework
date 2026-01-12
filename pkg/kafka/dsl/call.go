@@ -3,9 +3,9 @@ package dsl
 import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/kafka/client"
-	"go-test-framework/pkg/kafka/topic"
-	"go-test-framework/pkg/kafka/types"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/client"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/topic"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
 func Expect[TTopic topic.TopicName](sCtx provider.StepCtx, kafkaClient *client.Client) *Expectation {

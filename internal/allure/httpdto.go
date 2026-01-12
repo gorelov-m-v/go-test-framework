@@ -3,7 +3,7 @@ package allure
 import (
 	"time"
 
-	"go-test-framework/pkg/http/client"
+	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 )
 
 type HTTPRequestDTO struct {

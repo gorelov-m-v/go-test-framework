@@ -8,9 +8,9 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/internal/expect"
-	"go-test-framework/pkg/extension"
-	"go-test-framework/pkg/http/client"
+	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 )
 
 type Call[TReq any, TResp any] struct {

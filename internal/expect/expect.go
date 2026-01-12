@@ -3,7 +3,7 @@ package expect
 import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
 )
 
 type CheckResult struct {

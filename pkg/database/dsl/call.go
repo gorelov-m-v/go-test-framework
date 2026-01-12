@@ -11,9 +11,9 @@ import (
 	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/internal/expect"
-	"go-test-framework/pkg/database/client"
-	"go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/pkg/database/client"
+	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
 )
 
 var structMapper = reflectx.NewMapper("db")

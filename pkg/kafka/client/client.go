@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"go-test-framework/internal/kafka/consumer"
-	"go-test-framework/pkg/config"
-	"go-test-framework/pkg/kafka/types"
+	"github.com/gorelov-m-v/go-test-framework/internal/kafka/consumer"
+	"github.com/gorelov-m-v/go-test-framework/pkg/config"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
 type Client struct {

@@ -10,7 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
-	"go-test-framework/pkg/config"
+	"github.com/gorelov-m-v/go-test-framework/pkg/config"
 )
 
 type Config struct {

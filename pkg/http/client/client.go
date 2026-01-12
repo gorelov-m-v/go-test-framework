@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"go-test-framework/pkg/config"
+	"github.com/gorelov-m-v/go-test-framework/pkg/config"
 )
 
 type Client struct {

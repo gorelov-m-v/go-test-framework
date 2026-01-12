@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"go-test-framework/pkg/http/client"
+	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"

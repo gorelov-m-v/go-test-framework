@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/viper"
 
-	"go-test-framework/pkg/config"
-	dbclient "go-test-framework/pkg/database/client"
-	"go-test-framework/pkg/http/client"
-	kafkaclient "go-test-framework/pkg/kafka/client"
-	"go-test-framework/pkg/kafka/types"
+	"github.com/gorelov-m-v/go-test-framework/pkg/config"
+	dbclient "github.com/gorelov-m-v/go-test-framework/pkg/database/client"
+	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
+	kafkaclient "github.com/gorelov-m-v/go-test-framework/pkg/kafka/client"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
 var debugEnabled = os.Getenv("GO_TEST_FRAMEWORK_DEBUG") == "1"

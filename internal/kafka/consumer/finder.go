@@ -8,8 +8,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	kafkaErrors "go-test-framework/internal/kafka/errors"
-	"go-test-framework/pkg/kafka/types"
+	kafkaErrors "github.com/gorelov-m-v/go-test-framework/internal/kafka/errors"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
 type MessageFinder struct{}

@@ -4,7 +4,7 @@ import (
 	"container/ring"
 	"sync"
 
-	"go-test-framework/pkg/kafka/types"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
 type MessageBuffer struct {

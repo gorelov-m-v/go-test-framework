@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	dbclient "go-test-framework/pkg/database/client"
+	dbclient "github.com/gorelov-m-v/go-test-framework/pkg/database/client"
 
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"

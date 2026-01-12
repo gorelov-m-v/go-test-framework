@@ -9,8 +9,8 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"go-test-framework/internal/expect"
-	"go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
 )
 
 func (q *Query[T]) ExpectFound() *Query[T] {

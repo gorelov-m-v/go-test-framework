@@ -10,9 +10,11 @@ import (
 
 	"github.com/gorelov-m-v/go-test-framework/pkg/config"
 	dbclient "github.com/gorelov-m-v/go-test-framework/pkg/database/client"
+	grpcclient "github.com/gorelov-m-v/go-test-framework/pkg/grpc/client"
 	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 	kafkaclient "github.com/gorelov-m-v/go-test-framework/pkg/kafka/client"
 	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
+	redisclient "github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
 
 var debugEnabled = os.Getenv("GO_TEST_FRAMEWORK_DEBUG") == "1"
@@ -64,6 +66,20 @@ func BuildEnv(envPtr any) error {
 
 		if kafkaConfigKey := field.Tag.Get("kafka_config"); kafkaConfigKey != "" {
 			if err := injectKafkaClient(v, fieldValue, field, kafkaConfigKey, structName); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if grpcConfigKey := field.Tag.Get("grpc_config"); grpcConfigKey != "" {
+			if err := injectGRPCClient(v, fieldValue, field, grpcConfigKey, structName); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if redisConfigKey := field.Tag.Get("redis_config"); redisConfigKey != "" {
+			if err := injectRedisClient(v, fieldValue, field, redisConfigKey, structName); err != nil {
 				return err
 			}
 			continue
@@ -226,5 +242,101 @@ func injectKafkaClient(v *viper.Viper, fieldValue reflect.Value, field reflect.S
 
 	setter.SetKafka(kafkaClient)
 	debugLog("injected Kafka client into '%s' via SetKafka", field.Name)
+	return nil
+}
+
+func injectGRPCClient(v *viper.Viper, fieldValue reflect.Value, field reflect.StructField, grpcConfigKey, structName string) error {
+	debugLog("found tag 'grpc_config:%s' on field '%s' (type=%s)", grpcConfigKey, field.Name, field.Type)
+
+	if !fieldValue.CanSet() {
+		return fmt.Errorf("BuildEnv(%s): field '%s' has tag grpc_config:\"%s\" but is not exported", structName, field.Name, grpcConfigKey)
+	}
+
+	if !v.IsSet(grpcConfigKey) {
+		return fmt.Errorf("BuildEnv(%s): field '%s' tag grpc_config:\"%s\": config key '%s' not found", structName, field.Name, grpcConfigKey, grpcConfigKey)
+	}
+
+	var grpcCfg grpcclient.Config
+	if err := v.UnmarshalKey(grpcConfigKey, &grpcCfg); err != nil {
+		return fmt.Errorf("BuildEnv(%s): field '%s' tag grpc_config:\"%s\": failed to unmarshal config: %w", structName, field.Name, grpcConfigKey, err)
+	}
+
+	var asyncCfg config.AsyncConfig
+	asyncKey := "grpc_dsl.async"
+	if v.IsSet(asyncKey) {
+		if err := v.UnmarshalKey(asyncKey, &asyncCfg); err != nil {
+			return fmt.Errorf("BuildEnv(%s): field '%s' tag grpc_config:\"%s\": failed to unmarshal async config from '%s': %w", structName, field.Name, grpcConfigKey, asyncKey, err)
+		}
+		debugLog("loaded async config from '%s' for gRPC", asyncKey)
+	} else {
+		asyncCfg = config.DefaultAsyncConfig()
+		debugLog("using default async config for gRPC field '%s'", field.Name)
+	}
+
+	grpcCfg.AsyncConfig = asyncCfg
+
+	debugLog("injecting config '%s' into field '%s'", grpcConfigKey, field.Name)
+
+	grpcClient, err := grpcclient.New(grpcCfg)
+	if err != nil {
+		return fmt.Errorf("BuildEnv(%s): field '%s' tag grpc_config:\"%s\": failed to create gRPC client: %w", structName, field.Name, grpcConfigKey, err)
+	}
+
+	target := fieldValue.Addr().Interface()
+	setter, ok := target.(grpcclient.GRPCSetter)
+	if !ok {
+		return fmt.Errorf("BuildEnv Error: Field '%s' has tag 'grpc_config' but does not implement 'grpcclient.GRPCSetter'. Please use a Link struct", field.Name)
+	}
+
+	setter.SetGRPC(grpcClient)
+	debugLog("injected gRPC client into '%s' via SetGRPC", field.Name)
+	return nil
+}
+
+func injectRedisClient(v *viper.Viper, fieldValue reflect.Value, field reflect.StructField, redisConfigKey, structName string) error {
+	debugLog("found tag 'redis_config:%s' on field '%s' (type=%s)", redisConfigKey, field.Name, field.Type)
+
+	if !fieldValue.CanSet() {
+		return fmt.Errorf("BuildEnv(%s): field '%s' has tag redis_config:\"%s\" but is not exported", structName, field.Name, redisConfigKey)
+	}
+
+	if !v.IsSet(redisConfigKey) {
+		return fmt.Errorf("BuildEnv(%s): field '%s' tag redis_config:\"%s\": config key '%s' not found", structName, field.Name, redisConfigKey, redisConfigKey)
+	}
+
+	var redisCfg redisclient.Config
+	if err := v.UnmarshalKey(redisConfigKey, &redisCfg); err != nil {
+		return fmt.Errorf("BuildEnv(%s): field '%s' tag redis_config:\"%s\": failed to unmarshal config: %w", structName, field.Name, redisConfigKey, err)
+	}
+
+	var asyncCfg config.AsyncConfig
+	asyncKey := "redis_dsl.async"
+	if v.IsSet(asyncKey) {
+		if err := v.UnmarshalKey(asyncKey, &asyncCfg); err != nil {
+			return fmt.Errorf("BuildEnv(%s): field '%s' tag redis_config:\"%s\": failed to unmarshal async config from '%s': %w", structName, field.Name, redisConfigKey, asyncKey, err)
+		}
+		debugLog("loaded async config from '%s' for Redis", asyncKey)
+	} else {
+		asyncCfg = config.DefaultAsyncConfig()
+		debugLog("using default async config for Redis field '%s'", field.Name)
+	}
+
+	redisCfg.AsyncConfig = asyncCfg
+
+	debugLog("injecting config '%s' into field '%s'", redisConfigKey, field.Name)
+
+	redisClient, err := redisclient.New(redisCfg)
+	if err != nil {
+		return fmt.Errorf("BuildEnv(%s): field '%s' tag redis_config:\"%s\": failed to create Redis client: %w", structName, field.Name, redisConfigKey, err)
+	}
+
+	target := fieldValue.Addr().Interface()
+	setter, ok := target.(redisclient.RedisSetter)
+	if !ok {
+		return fmt.Errorf("BuildEnv Error: Field '%s' has tag 'redis_config' but does not implement 'redisclient.RedisSetter'. Please use a Link struct", field.Name)
+	}
+
+	setter.SetRedis(redisClient)
+	debugLog("injected Redis client into '%s' via SetRedis", field.Name)
 	return nil
 }

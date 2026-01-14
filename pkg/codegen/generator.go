@@ -91,26 +91,20 @@ func DetectServices(spec *openapi3.T) []string {
 	return services
 }
 
-func (g *Generator) Generate(outputDir, modelsPath, clientPath string) (*GenerationResult, error) {
+func (g *Generator) Generate(outputDir, clientPath string) (*GenerationResult, error) {
 	sanitizedName := sanitizeServiceName(g.serviceName)
 
-	if modelsPath == "" {
-		modelsPath = filepath.Join(outputDir, "internal", "models", "http", sanitizedName)
-	}
 	if clientPath == "" {
-		clientPath = filepath.Join(outputDir, "internal", "client", sanitizedName)
+		clientPath = filepath.Join(outputDir, "internal", "http_client", sanitizedName)
 	}
 
-	if err := os.MkdirAll(modelsPath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create models dir: %w", err)
-	}
 	if err := os.MkdirAll(clientPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create client dir: %w", err)
 	}
 
 	usedSchemas := g.collectUsedSchemas()
 
-	modelsFile := filepath.Join(modelsPath, fmt.Sprintf("%s_models.go", sanitizedName))
+	modelsFile := filepath.Join(clientPath, "models.go")
 	modelsCode, err := g.generateModels(usedSchemas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate models: %w", err)
@@ -119,7 +113,7 @@ func (g *Generator) Generate(outputDir, modelsPath, clientPath string) (*Generat
 		return nil, fmt.Errorf("failed to write models file: %w", err)
 	}
 
-	clientFile := filepath.Join(clientPath, fmt.Sprintf("%s_client.go", sanitizedName))
+	clientFile := filepath.Join(clientPath, "client.go")
 	clientCode, methodsCount, err := g.generateClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate client: %w", err)

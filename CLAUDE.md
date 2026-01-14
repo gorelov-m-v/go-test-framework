@@ -122,6 +122,41 @@ your-api-tests/
 **Execute:**
 - `.Send()` -> Returns nothing (fails test if not found)
 
+### 4. gRPC DSL (`dsl.Call[Req, Resp]`)
+**Setup:**
+- `.Method("/package.Service/Method")` - Full gRPC method path
+- `.Service("player.PlayerService")` + `.MethodName("CreatePlayer")` - Alternative syntax
+- `.RequestBody(reqModel)` - Protobuf request message
+- `.Metadata("key", "value")` / `.MetadataMap(map[string]string{})`
+
+**Expectations:**
+- `.ExpectNoError()` / `.ExpectError()`
+- `.ExpectStatusCode(codes.OK)` - gRPC status code
+- `.ExpectFieldValue("json.path", value)` - Uses GJSON paths
+- `.ExpectFieldNotEmpty("path")` / `.ExpectFieldExists("path")`
+- `.ExpectMetadata("key", "value")`
+
+**Execute:**
+- `.Send()` -> Returns `*client.Response[Resp]`
+
+### 5. Redis DSL (`dsl.Query`)
+**Setup:**
+- `.Key("player:123")` - Redis key to query
+
+**Expectations:**
+- `.ExpectExists()` / `.ExpectNotExists()`
+- `.ExpectValue("expected_string")` / `.ExpectValueNotEmpty()`
+- `.ExpectJSONField("json.path", value)` / `.ExpectJSONFieldNotEmpty("path")`
+- `.ExpectTTL(minDuration, maxDuration)` / `.ExpectNoTTL()`
+
+**Execute:**
+- `.Send()` -> Returns `*client.Result`
+
+**Utilities (for setup/cleanup):**
+- `client.Set(ctx, "key", "value", ttl)`
+- `client.Del(ctx, "key1", "key2")`
+- `client.RDB()` -> Returns underlying `*redis.Client`
+
 ---
 
 ## Step Types: Step vs AsyncStep
@@ -181,6 +216,17 @@ kafka:
   topics: ["events-topic"]
   bufferSize: 1000
 
+grpc:
+  serviceName:
+    target: "localhost:9090"
+    insecure: true  # No TLS for local development
+
+redis:
+  cacheName:
+    addr: "localhost:6379"
+    password: ""
+    db: 0
+
 # Async retry settings per DSL
 http_dsl:
   async:
@@ -201,6 +247,18 @@ kafka_dsl:
     enabled: true
     timeout: 30s
     interval: 200ms
+
+grpc_dsl:
+  async:
+    enabled: true
+    timeout: 10s
+    interval: 200ms
+
+redis_dsl:
+  async:
+    enabled: true
+    timeout: 10s
+    interval: 200ms
 ```
 
 ---
@@ -217,6 +275,12 @@ type TestEnv struct {
 
     // Kafka
     Kafka kafka.Link `kafka_config:"kafka"`
+
+    // gRPC clients
+    PlayerGRPC playergrpc.Link `grpc_config:"grpc.serviceName"`
+
+    // Redis
+    RedisCache rediscache.Link `redis_config:"redis.cacheName"`
 }
 
 func init() {

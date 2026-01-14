@@ -20,9 +20,7 @@ Arguments:
 Options:
     -service string    Service name (default: auto-detect from spec)
     -output string     Output directory (default: current directory)
-    -models string     Models output path (default: internal/models/http/{service})
-    -client string     Client output path (default: internal/client/{service})
-    -module string     Go module name for imports (default: auto-detect from go.mod)
+    -client string     Client output path (default: internal/http_client/{service})
 
 Examples:
     # Generate from openapi.json
@@ -31,20 +29,18 @@ Examples:
     # Specify service name and output directory
     openapi-gen -service auth -output ./generated openapi.yaml
 
-    # Custom paths
-    openapi-gen -models pkg/models -client pkg/client openapi.json
+    # Custom path
+    openapi-gen -client pkg/http_client/auth openapi.json
 
 Generated files:
-    - internal/models/http/{service}/generated_models.go
-    - internal/client/{service}/generated_client.go
+    - internal/http_client/{service}/client.go   (Link + DSL methods)
+    - internal/http_client/{service}/models.go   (Request/Response types)
 `
 
 func main() {
 	serviceName := flag.String("service", "", "Service name (default: auto-detect)")
 	outputDir := flag.String("output", ".", "Output directory")
-	modelsPath := flag.String("models", "", "Models output path")
-	clientPath := flag.String("client", "", "Client output path")
-	moduleName := flag.String("module", "", "Go module name (default: auto-detect)")
+	clientPath := flag.String("client", "", "Client output path (default: internal/http_client/{service})")
 
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, usage)
@@ -84,9 +80,9 @@ func main() {
 
 		fmt.Printf("🔨 Generating for service: %s\n", svcName)
 
-		gen := codegen.NewGenerator(spec, svcName, *moduleName)
+		gen := codegen.NewGenerator(spec, svcName, "")
 
-		result, err := gen.Generate(*outputDir, *modelsPath, *clientPath)
+		result, err := gen.Generate(*outputDir, *clientPath)
 		if err != nil {
 			log.Fatalf("Generation failed for %s: %v", svcName, err)
 		}

@@ -17,13 +17,24 @@ func (g *Generator) generateClient() (string, int, error) {
 	buf.WriteString(fmt.Sprintf("package %s\n\n", sanitizedName))
 
 	buf.WriteString("import (\n")
-	buf.WriteString(fmt.Sprintf("\t\"%s/internal/models/http/%s\"\n\n", g.getModuleName(), sanitizedName))
-	buf.WriteString("\t\"github.com/gorelov-m-v/go-test-framework/pkg/http/dsl\"\n\n")
+	buf.WriteString("\t\"github.com/gorelov-m-v/go-test-framework/pkg/http/client\"\n")
+	buf.WriteString("\t\"github.com/gorelov-m-v/go-test-framework/pkg/http/dsl\"\n")
 	buf.WriteString("\t\"github.com/ozontech/allure-go/pkg/framework/provider\"\n")
 	buf.WriteString(")\n\n")
 
-	buf.WriteString("// NOTE: This file contains generated DSL methods.\n")
-	buf.WriteString("// Ensure you have httpClient variable and Link struct defined in client.go\n\n")
+	// Generate Link struct and httpClient variable
+	buf.WriteString("// httpClient holds the HTTP client instance\n")
+	buf.WriteString("var httpClient *client.Client\n\n")
+	buf.WriteString("// Link is used for auto-wiring via BuildEnv\n")
+	buf.WriteString("type Link struct{}\n\n")
+	buf.WriteString("// SetHTTP implements httpclient.HTTPSetter interface\n")
+	buf.WriteString("func (l *Link) SetHTTP(c *client.Client) {\n")
+	buf.WriteString("\thttpClient = c\n")
+	buf.WriteString("}\n\n")
+	buf.WriteString("// Client returns the underlying HTTP client for advanced usage\n")
+	buf.WriteString("func Client() *client.Client {\n")
+	buf.WriteString("\treturn httpClient\n")
+	buf.WriteString("}\n")
 
 	paths := make([]string, 0, len(g.spec.Paths.Map()))
 	for path := range g.spec.Paths.Map() {
@@ -95,27 +106,16 @@ func (g *Generator) generateClientMethod(path, httpMethod string, op *openapi3.O
 		funcParams = append(funcParams, fmt.Sprintf("%s string", param))
 	}
 
-	sanitizedName := g.getSanitizedName()
-
-	reqTypeWithPkg := reqType
-	if !strings.Contains(reqType, ".") {
-		reqTypeWithPkg = sanitizedName + "." + reqType
-	}
-	respTypeWithPkg := respType
-	if !strings.Contains(respType, ".") {
-		respTypeWithPkg = sanitizedName + "." + respType
-	}
-
 	buf.WriteString(fmt.Sprintf("func %s(%s) *dsl.Call[%s, %s] {\n",
 		funcName,
 		strings.Join(funcParams, ", "),
-		reqTypeWithPkg,
-		respTypeWithPkg,
+		reqType,
+		respType,
 	))
 
 	buf.WriteString(fmt.Sprintf("\treturn dsl.NewCall[%s, %s](sCtx, httpClient).\n",
-		reqTypeWithPkg,
-		respTypeWithPkg,
+		reqType,
+		respType,
 	))
 
 	cleanPath := g.cleanPath(path)

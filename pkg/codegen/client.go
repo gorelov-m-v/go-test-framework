@@ -3,7 +3,6 @@ package codegen
 import (
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -11,7 +10,6 @@ import (
 
 func (g *Generator) generateClient() (string, int, error) {
 	var buf strings.Builder
-	methodCount := 0
 
 	sanitizedName := g.getSanitizedName()
 	buf.WriteString(fmt.Sprintf("package %s\n\n", sanitizedName))
@@ -29,80 +27,37 @@ func (g *Generator) generateClient() (string, int, error) {
 	buf.WriteString("}\n\n")
 	buf.WriteString("func Client() *client.Client {\n")
 	buf.WriteString("\treturn httpClient\n")
-	buf.WriteString("}\n\n")
+	buf.WriteString("}\n")
 
-	paths := make([]string, 0, len(g.spec.Paths.Map()))
-	for path := range g.spec.Paths.Map() {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-
-	usedNames := make(map[string]bool)
-
-	for _, path := range paths {
-		pathItem := g.spec.Paths.Map()[path]
-
-		for _, methodName := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
-			var op *openapi3.Operation
-			switch methodName {
-			case "GET":
-				op = pathItem.Get
-			case "POST":
-				op = pathItem.Post
-			case "PUT":
-				op = pathItem.Put
-			case "PATCH":
-				op = pathItem.Patch
-			case "DELETE":
-				op = pathItem.Delete
-			}
-
-			if op == nil {
-				continue
-			}
-
-			if !g.belongsToService(op) {
-				continue
-			}
-
-			methodCode, err := g.generateClientMethod(path, methodName, op, usedNames)
-			if err != nil {
-				return "", 0, fmt.Errorf("failed to generate method for %s %s: %w", methodName, path, err)
-			}
-
-			buf.WriteString(methodCode)
-			buf.WriteString("\n\n")
-			methodCount++
-		}
+	for _, method := range g.methods {
+		methodCode := g.generateClientMethod(method)
+		buf.WriteString("\n")
+		buf.WriteString(methodCode)
 	}
 
-	return buf.String(), methodCount, nil
+	return buf.String(), len(g.methods), nil
 }
 
-func (g *Generator) generateClientMethod(path, httpMethod string, op *openapi3.Operation, usedNames map[string]bool) (string, error) {
+func (g *Generator) generateClientMethod(method HTTPMethodInfo) string {
 	var buf strings.Builder
 
-	funcName := g.operationToFuncName(op, path, httpMethod)
+	reqType := "dsl.EmptyRequest"
+	respType := "dsl.EmptyResponse"
 
-	if usedNames[funcName] {
-		httpPrefix := getHTTPPrefix(httpMethod)
-		funcName = httpPrefix + funcName
+	if method.RequestSchemaRef != "" {
+		reqType = method.Name + "Request"
 	}
-
-	usedNames[funcName] = true
-
-	pathParams := extractPathParams(path)
-
-	reqType := g.getRequestType(op)
-	respType := g.getResponseType(op)
+	if method.ResponseSchemaRef != "" {
+		respType = method.Name + "Response"
+	}
 
 	funcParams := []string{"sCtx provider.StepCtx"}
-	for _, param := range pathParams {
-		funcParams = append(funcParams, fmt.Sprintf("%s string", param))
+	for _, param := range method.PathParams {
+		funcParams = append(funcParams, fmt.Sprintf("%s string", snakeToCamelLower(param)))
 	}
 
-	buf.WriteString(fmt.Sprintf("func %s(%s) *dsl.Call[%s, %s] {\n",
-		funcName,
+	buf.WriteString(fmt.Sprintf("\nfunc %s(%s) *dsl.Call[%s, %s] {\n",
+		method.Name,
 		strings.Join(funcParams, ", "),
 		reqType,
 		respType,
@@ -113,28 +68,27 @@ func (g *Generator) generateClientMethod(path, httpMethod string, op *openapi3.O
 		respType,
 	))
 
-	cleanPath := g.cleanPath(path)
+	cleanPath := g.cleanPath(method.Path)
+	buf.WriteString(fmt.Sprintf("\t\t%s(\"%s\")", method.HTTPMethod, cleanPath))
 
-	buf.WriteString(fmt.Sprintf("\t\t%s(\"%s\")", httpMethod, cleanPath))
-
-	for _, param := range pathParams {
+	for _, param := range method.PathParams {
 		buf.WriteString(".\n")
-		buf.WriteString(fmt.Sprintf("\t\tPathParam(\"%s\", %s)", param, param))
+		buf.WriteString(fmt.Sprintf("\t\tPathParam(\"%s\", %s)", param, snakeToCamelLower(param)))
 	}
 
-	if op.RequestBody != nil && op.RequestBody.Value != nil {
-		if _, ok := op.RequestBody.Value.Content["application/x-www-form-urlencoded"]; ok {
+	if method.Operation.RequestBody != nil && method.Operation.RequestBody.Value != nil {
+		if _, ok := method.Operation.RequestBody.Value.Content["application/x-www-form-urlencoded"]; ok {
 			buf.WriteString(".\n")
 			buf.WriteString("\t\tHeader(\"Content-Type\", \"application/x-www-form-urlencoded\")")
 		}
 	}
 
-	buf.WriteString("\n}")
+	buf.WriteString("\n}\n")
 
-	return buf.String(), nil
+	return buf.String()
 }
 
-func (g *Generator) operationToFuncName(op *openapi3.Operation, path string, httpMethod string) string {
+func (g *Generator) operationToMethodName(op *openapi3.Operation, path string, httpMethod string, usedNames map[string]bool) string {
 	pathName := g.extractNameFromPath(path, httpMethod)
 
 	if op.OperationID != "" {
@@ -142,30 +96,38 @@ func (g *Generator) operationToFuncName(op *openapi3.Operation, path string, htt
 
 		if isGenericName(operationName) || len(operationName) < 3 {
 			if pathName != "" && !isGenericName(pathName) {
-				return pathName
+				return g.ensureUniqueName(pathName, httpMethod, usedNames)
 			}
 		}
 
 		if strings.Contains(path, "{") && strings.Count(path, "/") <= 2 {
 			if pathName != "" && !isGenericName(pathName) {
-				return pathName
+				return g.ensureUniqueName(pathName, httpMethod, usedNames)
 			}
 		}
 
 		if pathName != "" && !isGenericName(pathName) {
 			if isCRUDPath(path) || len(pathName) < len(operationName) {
-				return pathName
+				return g.ensureUniqueName(pathName, httpMethod, usedNames)
 			}
 		}
 
-		return operationName
+		return g.ensureUniqueName(operationName, httpMethod, usedNames)
 	}
 
 	if pathName != "" {
-		return pathName
+		return g.ensureUniqueName(pathName, httpMethod, usedNames)
 	}
 
-	return "Request"
+	return g.ensureUniqueName("Request", httpMethod, usedNames)
+}
+
+func (g *Generator) ensureUniqueName(name string, httpMethod string, usedNames map[string]bool) string {
+	if !usedNames[name] {
+		return name
+	}
+	httpPrefix := getHTTPPrefix(httpMethod)
+	return httpPrefix + name
 }
 
 func (g *Generator) extractNameFromPath(path string, httpMethod string) string {
@@ -184,7 +146,6 @@ func (g *Generator) extractNameFromPath(path string, httpMethod string) string {
 	}
 
 	lastPart := meaningfulParts[len(meaningfulParts)-1]
-
 	lastPart = strings.ReplaceAll(lastPart, "-", "_")
 
 	if len(meaningfulParts) == 1 && strings.Contains(path, "{") {
@@ -224,7 +185,6 @@ func httpMethodToPrefix(method string) string {
 }
 
 func isShortName(name string) bool {
-	// Names with 2 or fewer characters need more context
 	return len(name) <= 2
 }
 
@@ -329,38 +289,6 @@ func (g *Generator) cleanOperationID(operationID string) string {
 	return result.String()
 }
 
-func (g *Generator) getRequestType(op *openapi3.Operation) string {
-	if op.RequestBody == nil || op.RequestBody.Value == nil {
-		return "dsl.EmptyRequest"
-	}
-
-	for _, content := range op.RequestBody.Value.Content {
-		if content.Schema != nil && content.Schema.Ref != "" {
-			refName := getRefName(content.Schema.Ref)
-			return snakeToCamel(refName)
-		}
-	}
-
-	return "dsl.EmptyRequest"
-}
-
-func (g *Generator) getResponseType(op *openapi3.Operation) string {
-	for _, code := range []string{"200", "201", "204"} {
-		resp := op.Responses.Value(code)
-		if resp == nil || resp.Value == nil {
-			continue
-		}
-
-		content := resp.Value.Content.Get("application/json")
-		if content != nil && content.Schema != nil && content.Schema.Ref != "" {
-			refName := getRefName(content.Schema.Ref)
-			return snakeToCamel(refName)
-		}
-	}
-
-	return "dsl.EmptyResponse"
-}
-
 func (g *Generator) cleanPath(path string) string {
 	prefixes := []string{
 		"/api/v1",
@@ -395,15 +323,6 @@ func extractPathParams(path string) []string {
 	}
 
 	return params
-}
-
-func (g *Generator) getModuleName() string {
-	if g.moduleName != "" {
-		return g.moduleName
-	}
-
-	// TODO: implement go.mod parsing
-	return "generated"
 }
 
 func getHTTPPrefix(httpMethod string) string {

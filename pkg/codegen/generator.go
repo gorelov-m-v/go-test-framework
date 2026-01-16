@@ -14,6 +14,17 @@ type Generator struct {
 	spec        *openapi3.T
 	serviceName string
 	moduleName  string
+	methods     []HTTPMethodInfo
+}
+
+type HTTPMethodInfo struct {
+	Name              string
+	Path              string
+	HTTPMethod        string
+	Operation         *openapi3.Operation
+	RequestSchemaRef  string
+	ResponseSchemaRef string
+	PathParams        []string
 }
 
 type GenerationResult struct {
@@ -102,10 +113,10 @@ func (g *Generator) Generate(outputDir, clientPath string) (*GenerationResult, e
 		return nil, fmt.Errorf("failed to create client dir: %w", err)
 	}
 
-	usedSchemas := g.collectUsedSchemas()
+	g.collectMethods()
 
 	modelsFile := filepath.Join(clientPath, "models.go")
-	modelsCode, err := g.generateModels(usedSchemas)
+	modelsCode, schemasCount, err := g.generateModels()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate models: %w", err)
 	}
@@ -125,94 +136,9 @@ func (g *Generator) Generate(outputDir, clientPath string) (*GenerationResult, e
 	return &GenerationResult{
 		ModelsFile:   modelsFile,
 		ClientFile:   clientFile,
-		SchemasCount: len(usedSchemas),
+		SchemasCount: schemasCount,
 		MethodsCount: methodsCount,
 	}, nil
-}
-
-func (g *Generator) collectUsedSchemas() []string {
-	schemasSet := make(map[string]bool)
-
-	for _, pathItem := range g.spec.Paths.Map() {
-		for _, op := range []*openapi3.Operation{
-			pathItem.Get, pathItem.Post, pathItem.Put,
-			pathItem.Patch, pathItem.Delete,
-		} {
-			if op == nil {
-				continue
-			}
-
-			if !g.belongsToService(op) {
-				continue
-			}
-
-			if op.RequestBody != nil && op.RequestBody.Value != nil {
-				for _, content := range op.RequestBody.Value.Content {
-					if content.Schema != nil {
-						g.collectSchemaRefs(content.Schema, schemasSet)
-					}
-				}
-			}
-
-			for _, resp := range op.Responses.Map() {
-				if resp.Value == nil {
-					continue
-				}
-				for _, content := range resp.Value.Content {
-					if content.Schema != nil {
-						g.collectSchemaRefs(content.Schema, schemasSet)
-					}
-				}
-			}
-		}
-	}
-
-	schemas := make([]string, 0, len(schemasSet))
-	for name := range schemasSet {
-		schemas = append(schemas, name)
-	}
-	return schemas
-}
-
-func (g *Generator) collectSchemaRefs(schemaRef *openapi3.SchemaRef, result map[string]bool) {
-	if schemaRef == nil {
-		return
-	}
-
-	if schemaRef.Ref != "" {
-		name := getRefName(schemaRef.Ref)
-		if result[name] {
-			return
-		}
-		result[name] = true
-		if refSchema := g.spec.Components.Schemas[name]; refSchema != nil {
-			g.collectSchemaRefs(refSchema, result)
-		}
-		return
-	}
-
-	schema := schemaRef.Value
-	if schema == nil {
-		return
-	}
-
-	for _, propSchema := range schema.Properties {
-		g.collectSchemaRefs(propSchema, result)
-	}
-
-	if schema.Items != nil {
-		g.collectSchemaRefs(schema.Items, result)
-	}
-
-	for _, s := range schema.AnyOf {
-		g.collectSchemaRefs(s, result)
-	}
-	for _, s := range schema.OneOf {
-		g.collectSchemaRefs(s, result)
-	}
-	for _, s := range schema.AllOf {
-		g.collectSchemaRefs(s, result)
-	}
 }
 
 func getRefName(ref string) string {
@@ -222,7 +148,6 @@ func getRefName(ref string) string {
 
 func (g *Generator) belongsToService(op *openapi3.Operation) bool {
 	if len(op.Tags) == 0 {
-		// No tags - exclude from all services
 		return false
 	}
 
@@ -233,4 +158,72 @@ func (g *Generator) belongsToService(op *openapi3.Operation) bool {
 	}
 
 	return false
+}
+
+func (g *Generator) collectMethods() {
+	g.methods = nil
+	usedNames := make(map[string]bool)
+
+	paths := make([]string, 0, len(g.spec.Paths.Map()))
+	for path := range g.spec.Paths.Map() {
+		paths = append(paths, path)
+	}
+
+	for _, path := range paths {
+		pathItem := g.spec.Paths.Map()[path]
+
+		for _, httpMethod := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
+			var op *openapi3.Operation
+			switch httpMethod {
+			case "GET":
+				op = pathItem.Get
+			case "POST":
+				op = pathItem.Post
+			case "PUT":
+				op = pathItem.Put
+			case "PATCH":
+				op = pathItem.Patch
+			case "DELETE":
+				op = pathItem.Delete
+			}
+
+			if op == nil || !g.belongsToService(op) {
+				continue
+			}
+
+			methodName := g.operationToMethodName(op, path, httpMethod, usedNames)
+			usedNames[methodName] = true
+
+			info := HTTPMethodInfo{
+				Name:       methodName,
+				Path:       path,
+				HTTPMethod: httpMethod,
+				Operation:  op,
+				PathParams: extractPathParams(path),
+			}
+
+			if op.RequestBody != nil && op.RequestBody.Value != nil {
+				for _, content := range op.RequestBody.Value.Content {
+					if content.Schema != nil && content.Schema.Ref != "" {
+						info.RequestSchemaRef = content.Schema.Ref
+						break
+					}
+				}
+			}
+
+			for _, code := range []string{"200", "201", "204"} {
+				resp := op.Responses.Value(code)
+				if resp == nil || resp.Value == nil {
+					continue
+				}
+				content := resp.Value.Content.Get("application/json")
+				if content != nil && content.Schema != nil && content.Schema.Ref != "" {
+					info.ResponseSchemaRef = content.Schema.Ref
+					break
+				}
+			}
+
+			g.methods = append(g.methods, info)
+		}
+	}
 }

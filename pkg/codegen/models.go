@@ -8,38 +8,122 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-func (g *Generator) generateModels(schemaNames []string) (string, error) {
+func (g *Generator) generateModels() (string, int, error) {
 	var buf strings.Builder
 
 	sanitizedName := g.getSanitizedName()
 	buf.WriteString(fmt.Sprintf("package %s\n\n", sanitizedName))
 
-	sort.Strings(schemaNames)
+	generatedSchemas := make(map[string]bool)
+	nestedSchemas := make(map[string]bool)
 
-	for _, name := range schemaNames {
+	for _, method := range g.methods {
+		if method.RequestSchemaRef != "" {
+			schemaName := getRefName(method.RequestSchemaRef)
+			schemaRef := g.spec.Components.Schemas[schemaName]
+			if schemaRef != nil && schemaRef.Value != nil {
+				modelName := method.Name + "Request"
+				structCode, err := g.generateStruct(modelName, schemaRef.Value)
+				if err != nil {
+					return "", 0, fmt.Errorf("failed to generate struct %s: %w", modelName, err)
+				}
+				buf.WriteString(structCode)
+				buf.WriteString("\n\n")
+				generatedSchemas[schemaName] = true
+
+				g.collectNestedSchemas(schemaRef, nestedSchemas)
+			}
+		}
+
+		if method.ResponseSchemaRef != "" {
+			schemaName := getRefName(method.ResponseSchemaRef)
+			schemaRef := g.spec.Components.Schemas[schemaName]
+			if schemaRef != nil && schemaRef.Value != nil {
+				modelName := method.Name + "Response"
+				structCode, err := g.generateStruct(modelName, schemaRef.Value)
+				if err != nil {
+					return "", 0, fmt.Errorf("failed to generate struct %s: %w", modelName, err)
+				}
+				buf.WriteString(structCode)
+				buf.WriteString("\n\n")
+				generatedSchemas[schemaName] = true
+
+				g.collectNestedSchemas(schemaRef, nestedSchemas)
+			}
+		}
+	}
+
+	nestedNames := make([]string, 0, len(nestedSchemas))
+	for name := range nestedSchemas {
+		if !generatedSchemas[name] {
+			nestedNames = append(nestedNames, name)
+		}
+	}
+	sort.Strings(nestedNames)
+
+	for _, name := range nestedNames {
 		schemaRef := g.spec.Components.Schemas[name]
 		if schemaRef == nil || schemaRef.Value == nil {
 			continue
 		}
 
-		structCode, err := g.generateStruct(name, schemaRef.Value)
+		structCode, err := g.generateStruct(snakeToCamel(name), schemaRef.Value)
 		if err != nil {
-			return "", fmt.Errorf("failed to generate struct %s: %w", name, err)
+			return "", 0, fmt.Errorf("failed to generate struct %s: %w", name, err)
 		}
-
 		buf.WriteString(structCode)
 		buf.WriteString("\n\n")
 	}
 
-	return buf.String(), nil
+	totalSchemas := len(generatedSchemas) + len(nestedNames)
+	return buf.String(), totalSchemas, nil
+}
+
+func (g *Generator) collectNestedSchemas(schemaRef *openapi3.SchemaRef, result map[string]bool) {
+	if schemaRef == nil {
+		return
+	}
+
+	if schemaRef.Ref != "" {
+		name := getRefName(schemaRef.Ref)
+		if result[name] {
+			return
+		}
+		result[name] = true
+		if refSchema := g.spec.Components.Schemas[name]; refSchema != nil {
+			g.collectNestedSchemas(refSchema, result)
+		}
+		return
+	}
+
+	schema := schemaRef.Value
+	if schema == nil {
+		return
+	}
+
+	for _, propSchema := range schema.Properties {
+		g.collectNestedSchemas(propSchema, result)
+	}
+
+	if schema.Items != nil {
+		g.collectNestedSchemas(schema.Items, result)
+	}
+
+	for _, s := range schema.AnyOf {
+		g.collectNestedSchemas(s, result)
+	}
+	for _, s := range schema.OneOf {
+		g.collectNestedSchemas(s, result)
+	}
+	for _, s := range schema.AllOf {
+		g.collectNestedSchemas(s, result)
+	}
 }
 
 func (g *Generator) generateStruct(name string, schema *openapi3.Schema) (string, error) {
 	var buf strings.Builder
 
-	structName := snakeToCamel(name)
-
-	buf.WriteString(fmt.Sprintf("type %s struct {\n", structName))
+	buf.WriteString(fmt.Sprintf("type %s struct {\n", name))
 
 	requiredMap := make(map[string]bool)
 	for _, req := range schema.Required {
@@ -157,6 +241,20 @@ func snakeToCamel(s string) string {
 	for i := range parts {
 		if len(parts[i]) > 0 {
 			parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		}
+	}
+	return strings.Join(parts, "")
+}
+
+func snakeToCamelLower(s string) string {
+	parts := strings.Split(s, "_")
+	for i := range parts {
+		if len(parts[i]) > 0 {
+			if i == 0 {
+				parts[i] = strings.ToLower(parts[i])
+			} else {
+				parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+			}
 		}
 	}
 	return strings.Join(parts, "")

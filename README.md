@@ -340,6 +340,10 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 *   `.ExpectResponseBodyFieldIsNull(path string)` — Проверяет, что поле существует и равно `null`.
 *   `.ExpectResponseBodyFieldIsNotNull(path string)` — Проверяет, что поле существует и НЕ равно `null`.
 
+#### Проверка boolean true/false
+*   `.ExpectResponseBodyFieldTrue(path string)` — Проверяет, что поле существует и равно `true`.
+*   `.ExpectResponseBodyFieldFalse(path string)` — Проверяет, что поле существует и равно `false`.
+
 #### Проверка полей (JSON Path)
 Для навигации по JSON-структуре используется синтаксис [GJSON](https://github.com/tidwall/gjson).
 
@@ -365,6 +369,8 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 | `"items.#"` | `2` | `.ExpectResponseBodyFieldValue("items.#", 2)` |
 | `"created_at"` | не `null` | `.ExpectResponseBodyFieldIsNotNull("created_at")` |
 | `"updated_at"` | `null` | `.ExpectResponseBodyFieldIsNull("updated_at")` |
+| `"is_active"` | `true` | `.ExpectResponseBodyFieldTrue("is_active")` |
+| `"is_verified"` | `false` | `.ExpectResponseBodyFieldFalse("is_verified")` |
 
 **Поддерживаемый синтаксис путей:**
 - Простые поля: `"name"`

@@ -227,6 +227,16 @@ func (c *Call[TReq, TResp]) ExpectResponseBodyFieldIsNotNull(path string) *Call[
 	return c
 }
 
+func (c *Call[TReq, TResp]) ExpectResponseBodyFieldTrue(path string) *Call[TReq, TResp] {
+	c.addExpectation(makeResponseBodyFieldTrueExpectation(path))
+	return c
+}
+
+func (c *Call[TReq, TResp]) ExpectResponseBodyFieldFalse(path string) *Call[TReq, TResp] {
+	c.addExpectation(makeResponseBodyFieldFalseExpectation(path))
+	return c
+}
+
 func makeResponseStatusExpectation(code int) *expect.Expectation[*client.Response[any]] {
 	return expect.New(
 		fmt.Sprintf("Expect response status %d %s", code, http.StatusText(code)),
@@ -643,6 +653,164 @@ func makeResponseBodyFieldIsNotNullExpectation(path string) *expect.Expectation[
 			} else {
 				res, _ := getJSONResult(resp.RawBody, path)
 				a.True(true, "[Expect JSON field '%s' is not null] actual: %s", path, debugValue(res))
+			}
+		},
+	)
+}
+
+func makeResponseBodyFieldTrueExpectation(path string) *expect.Expectation[*client.Response[any]] {
+	return expect.New(
+		fmt.Sprintf("Expect JSON field '%s' is true", path),
+		func(err error, resp *client.Response[any]) expect.CheckResult {
+			if pathErr := validateJSONPath(path); pathErr != nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
+				}
+			}
+
+			if err != nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Request failed",
+				}
+			}
+			if resp == nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Response is nil",
+				}
+			}
+			if resp.NetworkError != "" {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Network error occurred",
+				}
+			}
+			if len(resp.RawBody) == 0 {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Response body is empty",
+				}
+			}
+
+			res, parseErr := getJSONResult(resp.RawBody, path)
+			if parseErr != nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Invalid JSON response body",
+				}
+			}
+
+			if !res.Exists() {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
+				}
+			}
+
+			if res.Type != gjson.True {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Expected true, got %s: %s", gjsonTypeToString(res.Type), debugValue(res)),
+				}
+			}
+
+			return expect.CheckResult{Ok: true}
+		},
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
+			a := extension.PickAsserter(stepCtx, mode)
+			if !checkRes.Ok {
+				a.True(false, "[Expect JSON field '%s' is true] %s", path, checkRes.Reason)
+			} else {
+				a.True(true, "[Expect JSON field '%s' is true]", path)
+			}
+		},
+	)
+}
+
+func makeResponseBodyFieldFalseExpectation(path string) *expect.Expectation[*client.Response[any]] {
+	return expect.New(
+		fmt.Sprintf("Expect JSON field '%s' is false", path),
+		func(err error, resp *client.Response[any]) expect.CheckResult {
+			if pathErr := validateJSONPath(path); pathErr != nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
+				}
+			}
+
+			if err != nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Request failed",
+				}
+			}
+			if resp == nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Response is nil",
+				}
+			}
+			if resp.NetworkError != "" {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Network error occurred",
+				}
+			}
+			if len(resp.RawBody) == 0 {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Response body is empty",
+				}
+			}
+
+			res, parseErr := getJSONResult(resp.RawBody, path)
+			if parseErr != nil {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Invalid JSON response body",
+				}
+			}
+
+			if !res.Exists() {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
+				}
+			}
+
+			if res.Type != gjson.False {
+				return expect.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Expected false, got %s: %s", gjsonTypeToString(res.Type), debugValue(res)),
+				}
+			}
+
+			return expect.CheckResult{Ok: true}
+		},
+		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
+			a := extension.PickAsserter(stepCtx, mode)
+			if !checkRes.Ok {
+				a.True(false, "[Expect JSON field '%s' is false] %s", path, checkRes.Reason)
+			} else {
+				a.True(true, "[Expect JSON field '%s' is false]", path)
 			}
 		},
 	)

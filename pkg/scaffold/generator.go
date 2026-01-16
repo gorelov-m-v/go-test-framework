@@ -6,34 +6,53 @@ import (
 	"path/filepath"
 )
 
+// Options configures which DSLs to include in the project
+type Options struct {
+	WithExample bool
+	WithGRPC    bool
+	WithDB      bool
+	WithRedis   bool
+	WithKafka   bool
+}
+
 // Generator creates new test project structure
 type Generator struct {
 	projectName string
 	moduleName  string
-	withExample bool
+	options     Options
 }
 
 // NewGenerator creates a new project generator
-func NewGenerator(projectName, moduleName string, withExample bool) *Generator {
+func NewGenerator(projectName, moduleName string, opts Options) *Generator {
 	return &Generator{
 		projectName: projectName,
 		moduleName:  moduleName,
-		withExample: withExample,
+		options:     opts,
 	}
 }
 
 // Generate creates the project structure
 func (g *Generator) Generate() error {
-	// Create directories
+	// Base directories (always created)
 	dirs := []string{
 		"configs",
-		"internal/http_client",
-		"internal/grpc_client",
-		"internal/db",
-		"internal/redis",
-		"internal/kafka",
+		"internal/client",
 		"tests",
-		"proto",
+		"openapi",
+	}
+
+	// Optional directories based on selected DSLs
+	if g.options.WithGRPC {
+		dirs = append(dirs, "internal/grpc_client", "proto")
+	}
+	if g.options.WithDB {
+		dirs = append(dirs, "internal/db")
+	}
+	if g.options.WithRedis {
+		dirs = append(dirs, "internal/redis")
+	}
+	if g.options.WithKafka {
+		dirs = append(dirs, "internal/kafka")
 	}
 
 	for _, dir := range dirs {
@@ -46,18 +65,18 @@ func (g *Generator) Generate() error {
 
 	// Create files
 	files := map[string]string{
-		"go.mod":                g.goModTemplate(),
-		".gitignore":            gitignoreTemplate(),
-		"Makefile":              makefileTemplate(),
+		"go.mod":                    g.goModTemplate(),
+		".gitignore":                gitignoreTemplate(),
+		"Makefile":                  makefileTemplate(),
 		"configs/config.local.yaml": g.configTemplate(),
-		"tests/env.go":          g.envTemplate(),
+		"tests/env.go":              g.envTemplate(),
 	}
 
 	// Add example if requested
-	if g.withExample {
+	if g.options.WithExample {
 		files["tests/example_test.go"] = g.exampleTestTemplate()
-		files["internal/http_client/example/client.go"] = g.exampleClientTemplate()
-		files["internal/http_client/example/models.go"] = g.exampleModelsTemplate()
+		files["internal/client/jsonplaceholder/client.go"] = g.exampleClientTemplate()
+		files["internal/client/jsonplaceholder/models.go"] = g.exampleModelsTemplate()
 	}
 
 	for path, content := range files {
@@ -76,16 +95,22 @@ func (g *Generator) Generate() error {
 	}
 
 	// Create .gitkeep files for empty directories
-	gitkeepDirs := []string{
-		"internal/grpc_client",
-		"internal/db",
-		"internal/redis",
-		"internal/kafka",
-		"proto",
-	}
+	gitkeepDirs := []string{"openapi"}
 
-	if !g.withExample {
-		gitkeepDirs = append(gitkeepDirs, "internal/http_client")
+	if g.options.WithGRPC {
+		gitkeepDirs = append(gitkeepDirs, "internal/grpc_client", "proto")
+	}
+	if g.options.WithDB {
+		gitkeepDirs = append(gitkeepDirs, "internal/db")
+	}
+	if g.options.WithRedis {
+		gitkeepDirs = append(gitkeepDirs, "internal/redis")
+	}
+	if g.options.WithKafka {
+		gitkeepDirs = append(gitkeepDirs, "internal/kafka")
+	}
+	if !g.options.WithExample {
+		gitkeepDirs = append(gitkeepDirs, "internal/client")
 	}
 
 	for _, dir := range gitkeepDirs {

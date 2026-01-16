@@ -207,7 +207,7 @@ type CreatePlayerResp struct {
 ```
 
 ### 3. Реализация Клиента
-**Файл:** `internal/client/game/client.go`
+**Файл:** `internal/http_client/game/client.go`
 
 ```go
 package game
@@ -251,7 +251,7 @@ package tests
 import (
     "go-test-framework/pkg/builder"
     "log"
-    "my-project/internal/client/game"
+    "my-project/internal/http_client/game"
 )
 
 type TestEnv struct {
@@ -516,7 +516,7 @@ import (
     "time"
 )
 
-type PlayerDB struct {
+type PlayerRow struct {
     ID        string         `db:"id"`
     Username  string         `db:"username"`
     Status    string         `db:"status"`
@@ -549,8 +549,8 @@ func (l *Link) SetDB(c *client.Client) {
 }
 
 // DSL Метод: Поиск по ID
-func FindByID(sCtx provider.StepCtx, id string) *dsl.Query[models.PlayerDB] {
-    return dsl.NewQuery[models.PlayerDB](sCtx, dbClient).
+func FindByID(sCtx provider.StepCtx, id string) *dsl.Query[models.PlayerRow] {
+    return dsl.NewQuery[models.PlayerRow](sCtx, dbClient).
         SQL("SELECT * FROM players WHERE id = ?", id)
 }
 ```
@@ -566,7 +566,7 @@ package tests
 import (
     "go-test-framework/pkg/builder"
     "log"
-    "my-project/internal/client/game"
+    "my-project/internal/http_client/game"
     "my-project/internal/db/players"
 )
 
@@ -752,7 +752,7 @@ package tests
 
 import (
     "my-project/internal/kafka"
-    "my-project/internal/client/game"
+    "my-project/internal/http_client/game"
     "my-project/internal/db/players"
     "go-test-framework/pkg/builder"
     "log"
@@ -1082,7 +1082,7 @@ message GetPlayerResponse {
 
 ### 2. Реализация Клиента
 
-**Файл:** `internal/client/grpc/player/client.go`
+**Файл:** `internal/grpc_client/player/client.go`
 
 ```go
 package player
@@ -1196,11 +1196,11 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 ```go
 import (
     "time"
-    "my-project/internal/client/game"
+    "my-project/internal/http_client/game"
     "my-project/internal/db/players"
     "my-project/internal/kafka"
     "my-project/internal/cache/player"
-    grpcPlayer "my-project/internal/client/grpc/player"
+    grpcPlayer "my-project/internal/grpc_client/player"
     kafkaDSL "go-test-framework/pkg/kafka/dsl"
     httpClient "go-test-framework/pkg/http/client"
     pb "my-project/internal/models/grpc/player"
@@ -2926,18 +2926,33 @@ make gen-http SPEC=openapi.json   # Сгенерировать HTTP клиент
 
 ### Вариант 2: Демо-проект (для изучения)
 
-Если хотите посмотреть готовые примеры всех возможностей фреймворка:
+Демо-проект показывает все возможности фреймворка на реальном примере — game-service с полным стеком: HTTP API, gRPC, PostgreSQL, Redis, Kafka.
+
+#### Что входит в демо
+
+| Репозиторий | Описание |
+|-------------|----------|
+| [game-service](https://github.com/gorelov-m-v/game-service) | Микросервис на Go: HTTP + gRPC + PostgreSQL + Redis + Kafka |
+| [game-service-tests](https://github.com/gorelov-m-v/game-service-tests) | E2E тесты: 11 test suites, 50+ тестов |
+
+#### Запуск демо
 
 ```bash
 # 1. Скачайте сервис и тесты
 git clone https://github.com/gorelov-m-v/game-service.git
 git clone https://github.com/gorelov-m-v/game-service-tests.git
 
-# 2. Запустите инфраструктуру (PostgreSQL + Kafka + API)
+# 2. Запустите инфраструктуру
 cd game-service
 docker-compose up -d
 
-# 3. Подождите 30 сек и запустите тесты
+# Поднимается:
+# - PostgreSQL (5432)
+# - Redis (6379)
+# - Kafka + Zookeeper (9092)
+# - game-service HTTP (8080) + gRPC (9090)
+
+# 3. Подождите ~30 сек и запустите тесты
 cd ../game-service-tests
 go mod tidy
 go test ./... -v
@@ -2963,21 +2978,52 @@ cd ../game-service && docker-compose down
 
 ### Обзор демо-тестов
 
-В демо-проекте 9 test suites, покрывающих 100% функционала DSL:
+В демо-проекте **11 test suites**, покрывающих 100% функционала фреймворка:
+
+#### HTTP DSL
 
 | Test Suite | Что демонстрирует |
 |------------|-------------------|
 | **SimpleSuite** | Базовый E2E: HTTP → Kafka |
 | **PlayerSuite** | Полный E2E: HTTP → DB + Kafka (параллельно) |
-| **PlayerNegativeSuite** | Table-Driven тесты, RequestBodyMap |
-| **PlayerGetSuite** | GET + PathParam + GJSON пути |
-| **PlayerListSuite** | QueryParam, пагинация, массивы |
-| **PlayerUpdateSuite** | PATCH + AsyncStep с HTTP retry |
-| **PlayerDeleteSuite** | DELETE + ExpectNotFound |
-| **DatabaseFeaturesSuite** | Все методы Database DSL |
-| **KafkaFeaturesSuite** | Все методы Kafka DSL |
+| **PlayerNegativeSuite** | Table-Driven тесты, `RequestBodyMap` |
+| **PlayerGetSuite** | `GET` + `PathParam` + GJSON пути |
+| **PlayerListSuite** | `QueryParam`, пагинация, массивы |
+| **PlayerUpdateSuite** | `PATCH` + AsyncStep с HTTP retry |
+| **PlayerDeleteSuite** | `DELETE` + `ExpectNotFound` |
 
-**Рекомендация:** Начните с `SimpleSuite`, затем изучите `PlayerSuite` — они показывают основной паттерн E2E тестов.
+#### Database DSL
+
+| Test Suite | Что демонстрирует |
+|------------|-------------------|
+| **DatabaseFeaturesSuite** | `ExpectFound`, `ExpectNotFound`, `ExpectColumnEquals`, `ExpectColumnNotEquals`, `ExpectColumnTrue/False`, `ExpectColumnIsNull/IsNotNull` |
+
+#### Kafka DSL
+
+| Test Suite | Что демонстрирует |
+|------------|-------------------|
+| **KafkaFeaturesSuite** | `With` фильтры, `Unique`, `UniqueWithWindow`, `ExpectField`, `ExpectFieldTrue/False`, `ExpectFieldIsNull/IsNotNull` |
+
+#### gRPC DSL
+
+| Test Suite | Что демонстрирует |
+|------------|-------------------|
+| **GRPCFeaturesSuite** | CRUD через gRPC, `ExpectNoError`, `ExpectError`, `ExpectStatusCode`, `ExpectFieldValue`, `ExpectFieldNotEmpty`, AsyncStep retry |
+
+#### Redis DSL
+
+| Test Suite | Что демонстрирует |
+|------------|-------------------|
+| **RedisFeaturesSuite** | `ExpectExists`, `ExpectNotExists`, `ExpectJSONField`, `ExpectJSONFieldNotEmpty`, cache invalidation, AsyncStep retry |
+
+---
+
+#### Рекомендация по изучению
+
+1. **Начните с `SimpleSuite`** — минимальный E2E: HTTP → Kafka
+2. **Изучите `PlayerSuite`** — полный паттерн: HTTP → DB + Kafka (параллельно)
+3. **Посмотрите `GRPCFeaturesSuite`** и **`RedisFeaturesSuite`** — gRPC/Redis DSL в действии
+4. **Изучите `PlayerNegativeSuite`** — Table-Driven параметризованные тесты
 
 ---
 
@@ -3016,18 +3062,15 @@ your-api-tests/
 │           ├── topic.go          # Определение топика + Link
 │           └── models.go         # Модели сообщений
 │
-├── tests/
-│   ├── env.go                    # TestEnv с DI тегами
-│   └── *_test.go                 # Тесты
-│
 ├── proto/                        # Исходные .proto файлы (опционально)
 │   └── [service_name].proto
 │
-├── allure-results/
-├── Makefile
-├── .gitignore
-├── go.mod
-└── go.sum
+├── openapi.json                  # OpenAPI спецификация (или openapi/)
+│
+└── tests/
+    ├── env.go                    # TestEnv с DI тегами
+    ├── *_test.go                 # Тесты
+    └── allure-results/           # Сгенерированные Allure отчёты
 ```
 
 ## Где создавать файлы

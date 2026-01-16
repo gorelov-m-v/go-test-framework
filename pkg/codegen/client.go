@@ -22,19 +22,14 @@ func (g *Generator) generateClient() (string, int, error) {
 	buf.WriteString("\t\"github.com/ozontech/allure-go/pkg/framework/provider\"\n")
 	buf.WriteString(")\n\n")
 
-	// Generate Link struct and httpClient variable
-	buf.WriteString("// httpClient holds the HTTP client instance\n")
 	buf.WriteString("var httpClient *client.Client\n\n")
-	buf.WriteString("// Link is used for auto-wiring via BuildEnv\n")
 	buf.WriteString("type Link struct{}\n\n")
-	buf.WriteString("// SetHTTP implements httpclient.HTTPSetter interface\n")
 	buf.WriteString("func (l *Link) SetHTTP(c *client.Client) {\n")
 	buf.WriteString("\thttpClient = c\n")
 	buf.WriteString("}\n\n")
-	buf.WriteString("// Client returns the underlying HTTP client for advanced usage\n")
 	buf.WriteString("func Client() *client.Client {\n")
 	buf.WriteString("\treturn httpClient\n")
-	buf.WriteString("}\n")
+	buf.WriteString("}\n\n")
 
 	paths := make([]string, 0, len(g.spec.Paths.Map()))
 	for path := range g.spec.Paths.Map() {

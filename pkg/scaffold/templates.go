@@ -8,9 +8,12 @@ func (g *Generator) goModTemplate() string {
 go 1.21
 
 require (
-	github.com/gorelov-m-v/go-test-framework v0.1.0
-	github.com/ozontech/allure-go/pkg/framework v0.6.32
+	github.com/gorelov-m-v/go-test-framework v0.3.0
+	github.com/ozontech/allure-go/pkg/framework v0.8.0
 )
+
+// Uncomment for local development:
+// replace github.com/gorelov-m-v/go-test-framework => ../go-test-framework
 `, g.moduleName)
 }
 
@@ -161,40 +164,78 @@ help:
 }
 
 func (g *Generator) configTemplate() string {
-	return `# HTTP services configuration
+	config := `#===============================================================================
+# HTTP SERVICES
+#===============================================================================
 http:
-  exampleService:
-    baseURL: "http://localhost:8080"
+  jsonplaceholder:
+    baseURL: "https://jsonplaceholder.typicode.com"
     timeout: 30s
+    # defaultHeaders:
+    #   X-Custom-Header: "value"
     # maskHeaders: "Authorization,Cookie"  # Headers to mask in Allure reports
+`
 
-# Database configuration
-# database:
-#   mainDB:
-#     driver: "postgres"  # or "mysql"
-#     dsn: "postgres://user:password@localhost:5432/dbname?sslmode=disable"
-#     # maskColumns: "password,token"  # Columns to mask in Allure reports
+	if g.options.WithDB {
+		config += `
+#===============================================================================
+# DATABASE
+#===============================================================================
+database:
+  mainDB:
+    driver: "postgres"                    # "postgres" or "mysql"
+    dsn: "postgres://user:password@localhost:5432/dbname?sslmode=disable"
+    maxOpenConns: 10
+    maxIdleConns: 5
+    connMaxLifetime: 1h
+    # maskColumns: "password,token,secret"
+`
+	}
 
-# Redis configuration
-# redis:
-#   cache:
-#     addr: "localhost:6379"
-#     password: ""
-#     db: 0
+	if g.options.WithGRPC {
+		config += `
+#===============================================================================
+# gRPC SERVICES
+#===============================================================================
+grpc:
+  playerService:
+    target: "localhost:9090"
+    timeout: 30s
+    insecure: true
+`
+	}
 
-# gRPC configuration
-# grpc:
-#   playerService:
-#     target: "localhost:9090"
-#     insecure: true
+	if g.options.WithRedis {
+		config += `
+#===============================================================================
+# REDIS
+#===============================================================================
+redis:
+  cache:
+    addr: "localhost:6379"
+    password: ""
+    db: 0
+`
+	}
 
-# Kafka configuration
-# kafka:
-#   bootstrapServers: ["localhost:9092"]
-#   groupId: "test-group"
-#   topics: ["events"]
+	if g.options.WithKafka {
+		config += `
+#===============================================================================
+# KAFKA
+#===============================================================================
+kafka:
+  bootstrapServers: ["localhost:9092"]
+  groupId: "test-group"
+  topics: ["events"]
+  bufferSize: 1000
+`
+	}
 
-# Async retry settings
+	// Async settings
+	config += `
+#===============================================================================
+# ASYNC RETRY SETTINGS
+#===============================================================================
 http_dsl:
   async:
     enabled: true
@@ -204,35 +245,80 @@ http_dsl:
       enabled: true
       factor: 1.5
       max_interval: 2s
+    jitter: 0.2
+`
 
+	if g.options.WithDB {
+		config += `
 db_dsl:
   async:
     enabled: true
     timeout: 10s
     interval: 500ms
+    backoff:
+      enabled: true
+      factor: 1.5
+      max_interval: 2s
+    jitter: 0.1
+`
+	}
 
-kafka_dsl:
+	if g.options.WithGRPC {
+		config += `
+grpc_dsl:
   async:
     enabled: true
-    timeout: 30s
-    interval: 500ms
+    timeout: 10s
+    interval: 200ms
+    backoff:
+      enabled: true
+      factor: 1.5
+      max_interval: 2s
+    jitter: 0.2
+`
+	}
 
+	if g.options.WithRedis {
+		config += `
 redis_dsl:
   async:
     enabled: true
     timeout: 10s
     interval: 200ms
+    backoff:
+      enabled: true
+      factor: 1.5
+      max_interval: 1s
+    jitter: 0.1
 `
+	}
+
+	if g.options.WithKafka {
+		config += `
+kafka_dsl:
+  async:
+    enabled: true
+    timeout: 30s
+    interval: 500ms
+    backoff:
+      enabled: true
+      factor: 1.5
+      max_interval: 3s
+    jitter: 0.2
+`
+	}
+
+	return config
 }
 
 func (g *Generator) envTemplate() string {
-	if g.withExample {
+	if g.options.WithExample {
 		return fmt.Sprintf(`package tests
 
 import (
 	"log"
 
-	"%s/internal/http_client/example"
+	"%s/internal/client/jsonplaceholder"
 
 	"github.com/gorelov-m-v/go-test-framework/pkg/builder"
 )
@@ -242,7 +328,7 @@ var env *TestEnv
 // TestEnv contains all dependencies for tests
 type TestEnv struct {
 	// HTTP clients
-	Example example.Link `+"`config:\"exampleService\"`"+`
+	JSONPlaceholder jsonplaceholder.Link `+"`config:\"jsonplaceholder\"`"+`
 
 	// gRPC clients
 	// PlayerGRPC player.Link `+"`grpc_config:\"playerService\"`"+`
@@ -251,7 +337,7 @@ type TestEnv struct {
 	// Users users.Link `+"`db_config:\"mainDB\"`"+`
 
 	// Redis
-	// Session session.Link `+"`redis_config:\"cache\"`"+`
+	// Cache cache.Link `+"`redis_config:\"cache\"`"+`
 
 	// Kafka
 	// Events events.Link `+"`kafka_config:\"kafka\"`"+`
@@ -279,19 +365,19 @@ var env *TestEnv
 // TestEnv contains all dependencies for tests
 type TestEnv struct {
 	// HTTP clients
-	// Auth auth.Link `+"`config:\"authService\"`"+`
+	// MyService myservice.Link ` + "`config:\"myService\"`" + `
 
 	// gRPC clients
-	// PlayerGRPC player.Link `+"`grpc_config:\"playerService\"`"+`
+	// PlayerGRPC player.Link ` + "`grpc_config:\"playerService\"`" + `
 
 	// Database repositories
-	// Users users.Link `+"`db_config:\"mainDB\"`"+`
+	// Users users.Link ` + "`db_config:\"mainDB\"`" + `
 
 	// Redis
-	// Session session.Link `+"`redis_config:\"cache\"`"+`
+	// Cache cache.Link ` + "`redis_config:\"cache\"`" + `
 
 	// Kafka
-	// Events events.Link `+"`kafka_config:\"kafka\"`"+`
+	// Events events.Link ` + "`kafka_config:\"kafka\"`" + `
 }
 
 func init() {
@@ -309,11 +395,11 @@ func (g *Generator) exampleTestTemplate() string {
 import (
 	"testing"
 
-	"%s/internal/http_client/example"
-
 	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
+
+	"%s/internal/client/jsonplaceholder"
 )
 
 type ExampleSuite struct {
@@ -324,45 +410,22 @@ func TestExampleSuite(t *testing.T) {
 	suite.RunNamedSuite(t, "Example API Tests", new(ExampleSuite))
 }
 
-func (s *ExampleSuite) TestHealthCheck(t provider.T) {
-	t.Title("Health check endpoint")
-	t.Description("Verify that the API health endpoint returns OK status")
+func (s *ExampleSuite) TestGetPost(t provider.T) {
+	t.Title("Get post by ID")
 
-	s.Step(t, "Check health endpoint", func(sCtx provider.StepCtx) {
-		example.Health(sCtx).
+	s.Step(t, "Get post with ID=1", func(sCtx provider.StepCtx) {
+		jsonplaceholder.GetPost(sCtx, "1").
 			ExpectResponseStatus(200).
-			ExpectResponseBodyFieldValue("status", "ok").
+			ExpectResponseBodyFieldValue("id", float64(1)).
+			ExpectResponseBodyFieldNotEmpty("title").
 			Send()
-	})
-}
-
-func (s *ExampleSuite) TestCreateResource(t provider.T) {
-	t.Title("Create resource")
-	t.Description("Create a new resource via API")
-
-	var resp *example.CreateResourceResponse
-
-	s.Step(t, "Create resource", func(sCtx provider.StepCtx) {
-		result := example.CreateResource(sCtx).
-			RequestBody(example.CreateResourceRequest{
-				Name:        "test-resource",
-				Description: "Test description",
-			}).
-			ExpectResponseStatus(201).
-			ExpectResponseBodyFieldNotEmpty("id").
-			Send()
-		resp = &result.Body
-	})
-
-	s.Step(t, "Verify resource was created", func(sCtx provider.StepCtx) {
-		sCtx.Logf("Created resource with ID: %%s", resp.ID)
 	})
 }
 `, g.moduleName)
 }
 
 func (g *Generator) exampleClientTemplate() string {
-	return `package example
+	return `package jsonplaceholder
 
 import (
 	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
@@ -380,69 +443,24 @@ func (l *Link) SetHTTP(c *client.Client) {
 	httpClient = c
 }
 
-// Client returns the underlying HTTP client
-func Client() *client.Client {
-	return httpClient
-}
-
-// Health checks the API health endpoint
-func Health(sCtx provider.StepCtx) *dsl.Call[dsl.EmptyRequest, HealthResponse] {
-	return dsl.NewCall[dsl.EmptyRequest, HealthResponse](sCtx, httpClient).
-		GET("/health")
-}
-
-// CreateResource creates a new resource
-func CreateResource(sCtx provider.StepCtx) *dsl.Call[CreateResourceRequest, CreateResourceResponse] {
-	return dsl.NewCall[CreateResourceRequest, CreateResourceResponse](sCtx, httpClient).
-		POST("/resources")
-}
-
-// GetResource retrieves a resource by ID
-func GetResource(sCtx provider.StepCtx, id string) *dsl.Call[dsl.EmptyRequest, GetResourceResponse] {
-	return dsl.NewCall[dsl.EmptyRequest, GetResourceResponse](sCtx, httpClient).
-		GET("/resources/{id}").
-		PathParam("id", id)
-}
-
-// DeleteResource deletes a resource by ID
-func DeleteResource(sCtx provider.StepCtx, id string) *dsl.Call[dsl.EmptyRequest, dsl.EmptyResponse] {
-	return dsl.NewCall[dsl.EmptyRequest, dsl.EmptyResponse](sCtx, httpClient).
-		DELETE("/resources/{id}").
+// GetPost retrieves a post by ID
+func GetPost(sCtx provider.StepCtx, id string) *dsl.Call[dsl.EmptyRequest, Post] {
+	return dsl.NewCall[dsl.EmptyRequest, Post](sCtx, httpClient).
+		GET("/posts/{id}").
 		PathParam("id", id)
 }
 `
 }
 
 func (g *Generator) exampleModelsTemplate() string {
-	return `package example
+	return `package jsonplaceholder
 
-// HealthResponse represents the health check response
-type HealthResponse struct {
-	Status  string ` + "`json:\"status\"`" + `
-	Version string ` + "`json:\"version,omitempty\"`" + `
-}
-
-// CreateResourceRequest represents the request to create a resource
-type CreateResourceRequest struct {
-	Name        string ` + "`json:\"name\"`" + `
-	Description string ` + "`json:\"description,omitempty\"`" + `
-}
-
-// CreateResourceResponse represents the response after creating a resource
-type CreateResourceResponse struct {
-	ID          string ` + "`json:\"id\"`" + `
-	Name        string ` + "`json:\"name\"`" + `
-	Description string ` + "`json:\"description\"`" + `
-	CreatedAt   string ` + "`json:\"created_at\"`" + `
-}
-
-// GetResourceResponse represents the response when getting a resource
-type GetResourceResponse struct {
-	ID          string ` + "`json:\"id\"`" + `
-	Name        string ` + "`json:\"name\"`" + `
-	Description string ` + "`json:\"description\"`" + `
-	CreatedAt   string ` + "`json:\"created_at\"`" + `
-	UpdatedAt   string ` + "`json:\"updated_at,omitempty\"`" + `
+// Post represents a post from JSONPlaceholder API
+type Post struct {
+	ID     int    ` + "`json:\"id\"`" + `
+	UserID int    ` + "`json:\"userId\"`" + `
+	Title  string ` + "`json:\"title\"`" + `
+	Body   string ` + "`json:\"body\"`" + `
 }
 `
 }

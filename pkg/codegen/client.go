@@ -31,7 +31,6 @@ func (g *Generator) generateClient() (string, int, error) {
 
 	for _, method := range g.methods {
 		methodCode := g.generateClientMethod(method)
-		buf.WriteString("\n")
 		buf.WriteString(methodCode)
 	}
 

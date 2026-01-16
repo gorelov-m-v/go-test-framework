@@ -268,10 +268,6 @@ func init() {
         log.Fatalf("Failed to build test environment: %v", err)
     }
 }
-
-func Env() *TestEnv {
-    return env
-}
 ```
 
 ### 5. Тест
@@ -598,10 +594,6 @@ func init() {
     if err := builder.BuildEnv(env); err != nil {
         log.Fatalf("Failed to build test environment: %v", err)
     }
-}
-
-func Env() *TestEnv {
-    return env
 }
 ```
 
@@ -1514,10 +1506,6 @@ type Link struct{}
 
 func (l *Link) SetGRPC(c *client.Client) {
     grpcClient = c
-}
-
-func Client() *client.Client {
-    return grpcClient
 }
 
 // CreatePlayer calls /player.PlayerService/CreatePlayer

@@ -24,9 +24,6 @@ func (g *Generator) generateClient() (string, int, error) {
 	buf.WriteString("type Link struct{}\n\n")
 	buf.WriteString("func (l *Link) SetHTTP(c *client.Client) {\n")
 	buf.WriteString("\thttpClient = c\n")
-	buf.WriteString("}\n\n")
-	buf.WriteString("func Client() *client.Client {\n")
-	buf.WriteString("\treturn httpClient\n")
 	buf.WriteString("}\n")
 
 	for _, method := range g.methods {

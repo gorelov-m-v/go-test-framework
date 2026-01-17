@@ -13,6 +13,7 @@ require (
 	github.com/redis/go-redis/v9 v9.4.0
 	github.com/spf13/viper v1.21.0
 	github.com/tidwall/gjson v1.18.0
+	github.com/yoheimuta/go-protoparser/v4 v4.14.2
 	google.golang.org/grpc v1.60.1
 	google.golang.org/protobuf v1.34.2-0.20240506121844-09393c19510d
 )
@@ -61,7 +62,6 @@ require (
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
-	github.com/yoheimuta/go-protoparser/v4 v4.14.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/net v0.46.0 // indirect

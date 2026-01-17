@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+
+	"github.com/gorelov-m-v/go-test-framework/internal/typeconv"
 )
 
 func equalsLoose(expected, actual any) (bool, bool, string) {
@@ -11,18 +13,18 @@ func equalsLoose(expected, actual any) (bool, bool, string) {
 		return true, true, ""
 	}
 	if expected == nil || actual == nil {
-		if isValueNull(actual) && expected == nil {
+		if typeconv.IsNull(actual) && expected == nil {
 			return true, true, ""
 		}
 		return false, true, fmt.Sprintf("expected %v, got %v", expected, actual)
 	}
 
-	if isValueNull(actual) {
+	if typeconv.IsNull(actual) {
 		return false, true, "column is NULL yet"
 	}
 
-	expBool, expIsBool := asBool(expected)
-	actBool, actIsBool := asBool(actual)
+	expBool, expIsBool := typeconv.ToBool(expected)
+	actBool, actIsBool := typeconv.ToBool(actual)
 	if expIsBool && actIsBool {
 		if expBool == actBool {
 			return true, true, ""

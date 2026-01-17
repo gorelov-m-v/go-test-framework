@@ -2,14 +2,13 @@ package dsl
 
 import (
 	"fmt"
-	"math"
 	"net/http"
-	"strings"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/tidwall/gjson"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/internal/jsonutil"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 )
@@ -21,175 +20,43 @@ func getJSONResult(raw []byte, path string) (gjson.Result, error) {
 	return gjson.GetBytes(raw, path), nil
 }
 
-func gjsonTypeToString(t gjson.Type) string {
-	switch t {
-	case gjson.Null:
-		return "null"
-	case gjson.False, gjson.True:
-		return "boolean"
-	case gjson.Number:
-		return "number"
-	case gjson.String:
-		return "string"
-	case gjson.JSON:
-		return "object/array"
-	default:
-		return "unknown"
+func preCheck(err error, resp *client.Response[any]) (polling.CheckResult, bool) {
+	if err != nil {
+		return polling.CheckResult{
+			Ok:        false,
+			Retryable: true,
+			Reason:    "Request failed",
+		}, false
 	}
+	if resp == nil {
+		return polling.CheckResult{
+			Ok:        false,
+			Retryable: true,
+			Reason:    "Response is nil",
+		}, false
+	}
+	if resp.NetworkError != "" {
+		return polling.CheckResult{
+			Ok:        false,
+			Retryable: true,
+			Reason:    "Network error occurred",
+		}, false
+	}
+	return polling.CheckResult{}, true
 }
 
-func debugValue(res gjson.Result) string {
-	if res.Raw != "" {
-		return res.Raw
+func preCheckWithBody(err error, resp *client.Response[any]) (polling.CheckResult, bool) {
+	if res, ok := preCheck(err, resp); !ok {
+		return res, false
 	}
-	return fmt.Sprintf("%v", res.Value())
-}
-
-func toInt64(v any) (int64, bool) {
-	switch val := v.(type) {
-	case int:
-		return int64(val), true
-	case int8:
-		return int64(val), true
-	case int16:
-		return int64(val), true
-	case int32:
-		return int64(val), true
-	case int64:
-		return val, true
-	default:
-		return 0, false
+	if len(resp.RawBody) == 0 {
+		return polling.CheckResult{
+			Ok:        false,
+			Retryable: true,
+			Reason:    "Response body is empty",
+		}, false
 	}
-}
-
-func toUint64(v any) (uint64, bool) {
-	switch val := v.(type) {
-	case uint:
-		return uint64(val), true
-	case uint8:
-		return uint64(val), true
-	case uint16:
-		return uint64(val), true
-	case uint32:
-		return uint64(val), true
-	case uint64:
-		return val, true
-	default:
-		return 0, false
-	}
-}
-
-func toFloat64(v any) (float64, bool) {
-	switch val := v.(type) {
-	case float32:
-		return float64(val), true
-	case float64:
-		return val, true
-	default:
-		return 0, false
-	}
-}
-
-func isEmptyJSONResult(res gjson.Result) bool {
-	if !res.Exists() {
-		return true
-	}
-	if res.Type == gjson.Null {
-		return true
-	}
-
-	switch res.Type {
-	case gjson.String:
-		return strings.TrimSpace(res.String()) == ""
-	case gjson.JSON:
-		if res.IsArray() {
-			return len(res.Array()) == 0
-		}
-		if res.IsObject() {
-			return len(res.Map()) == 0
-		}
-		return false
-	default:
-		return false
-	}
-}
-
-func compareJSONResult(res gjson.Result, expected any) (bool, string) {
-	if expected == nil {
-		if !res.Exists() {
-			return false, "field does not exist (expected null)"
-		}
-		if res.Type != gjson.Null {
-			return false, fmt.Sprintf("expected null, got %s: %s", gjsonTypeToString(res.Type), debugValue(res))
-		}
-		return true, ""
-	}
-
-	switch exp := expected.(type) {
-	case string:
-		if res.Type != gjson.String {
-			return false, fmt.Sprintf("expected string %q, got %s: %s", exp, gjsonTypeToString(res.Type), debugValue(res))
-		}
-		actual := res.String()
-		if actual != exp {
-			return false, fmt.Sprintf("expected %q, got %q", exp, actual)
-		}
-		return true, ""
-
-	case bool:
-		if res.Type != gjson.True && res.Type != gjson.False {
-			return false, fmt.Sprintf("expected boolean %v, got %s: %s", exp, gjsonTypeToString(res.Type), debugValue(res))
-		}
-		actual := res.Bool()
-		if actual != exp {
-			return false, fmt.Sprintf("expected %v, got %v", exp, actual)
-		}
-		return true, ""
-
-	default:
-		if expectedInt, ok := toInt64(expected); ok {
-			if res.Type != gjson.Number {
-				return false, fmt.Sprintf("expected number %d, got %s: %s", expectedInt, gjsonTypeToString(res.Type), debugValue(res))
-			}
-			actualFloat := res.Float()
-			if math.Trunc(actualFloat) != actualFloat {
-				return false, fmt.Sprintf("expected integer %d, got float %v", expectedInt, actualFloat)
-			}
-			actualInt := res.Int()
-			if actualInt != expectedInt {
-				return false, fmt.Sprintf("expected %d, got %d", expectedInt, actualInt)
-			}
-			return true, ""
-		}
-
-		if expectedUint, ok := toUint64(expected); ok {
-			if res.Type != gjson.Number {
-				return false, fmt.Sprintf("expected number %d, got %s: %s", expectedUint, gjsonTypeToString(res.Type), debugValue(res))
-			}
-			actualFloat := res.Float()
-			if math.Trunc(actualFloat) != actualFloat {
-				return false, fmt.Sprintf("expected integer %d, got float %v", expectedUint, actualFloat)
-			}
-			actualUint := res.Uint()
-			if actualUint != expectedUint {
-				return false, fmt.Sprintf("expected %d, got %d", expectedUint, actualUint)
-			}
-			return true, ""
-		}
-
-		if expectedFloat, ok := toFloat64(expected); ok {
-			if res.Type != gjson.Number {
-				return false, fmt.Sprintf("expected number %v, got %s: %s", expectedFloat, gjsonTypeToString(res.Type), debugValue(res))
-			}
-			actualFloat := res.Float()
-			if actualFloat != expectedFloat {
-				return false, fmt.Sprintf("expected %v, got %v", expectedFloat, actualFloat)
-			}
-			return true, ""
-		}
-
-		return false, fmt.Sprintf("unsupported expected type %T; supported: string/bool/int*/uint*/float*/nil", expected)
-	}
+	return polling.CheckResult{}, true
 }
 
 func (c *Call[TReq, TResp]) ExpectResponseStatus(code int) *Call[TReq, TResp] {
@@ -236,26 +103,8 @@ func makeResponseStatusExpectation(code int) *expect.Expectation[*client.Respons
 	return expect.New(
 		fmt.Sprintf("Expect response status %d %s", code, http.StatusText(code)),
 		func(err error, resp *client.Response[any]) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Request failed",
-				}
-			}
-			if resp == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response is nil",
-				}
-			}
-			if resp.NetworkError != "" {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Network error occurred",
-				}
+			if res, ok := preCheck(err, resp); !ok {
+				return res
 			}
 			if resp.StatusCode != code {
 				return polling.CheckResult{
@@ -280,53 +129,23 @@ func makeResponseStatusExpectation(code int) *expect.Expectation[*client.Respons
 }
 
 func makeResponseBodyNotEmptyExpectation() *expect.Expectation[*client.Response[any]] {
+	name := "Expect response body not empty"
 	return expect.New(
-		"Expect response body not empty",
+		name,
 		func(err error, resp *client.Response[any]) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Request failed",
-				}
-			}
-			if resp == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response is nil",
-				}
-			}
-			if resp.NetworkError != "" {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Network error occurred",
-				}
-			}
-			if len(resp.RawBody) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response body is empty",
-				}
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
 			}
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect response body not empty] %s", checkRes.Reason)
-			} else {
-				a.True(true, "[Expect response body not empty]")
-			}
-		},
+		expect.StandardReport[*client.Response[any]](name),
 	)
 }
 
 func makeResponseBodyFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Response[any]] {
+	name := fmt.Sprintf("Expect JSON field '%s' not empty", path)
 	return expect.New(
-		fmt.Sprintf("Expect JSON field not empty: %s", path),
+		name,
 		func(err error, resp *client.Response[any]) polling.CheckResult {
 			if pathErr := validateJSONPath(path); pathErr != nil {
 				return polling.CheckResult{
@@ -335,37 +154,10 @@ func makeResponseBodyFieldNotEmptyExpectation(path string) *expect.Expectation[*
 					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
 				}
 			}
-
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Request failed",
-				}
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
 			}
-			if resp == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response is nil",
-				}
-			}
-			if resp.NetworkError != "" {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Network error occurred",
-				}
-			}
-			if len(resp.RawBody) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response body is empty",
-				}
-			}
-
-			res, parseErr := getJSONResult(resp.RawBody, path)
+			jsonRes, parseErr := getJSONResult(resp.RawBody, path)
 			if parseErr != nil {
 				return polling.CheckResult{
 					Ok:        false,
@@ -373,33 +165,23 @@ func makeResponseBodyFieldNotEmptyExpectation(path string) *expect.Expectation[*
 					Reason:    "Invalid JSON response body",
 				}
 			}
-
-			if !res.Exists() {
+			if !jsonRes.Exists() {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("JSON field '%s' does not exist yet", path),
 				}
 			}
-
-			if isEmptyJSONResult(res) {
+			if jsonutil.IsEmpty(jsonRes) {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("JSON field '%s' is empty", path),
 				}
 			}
-
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect JSON field not empty: %s] %s", path, checkRes.Reason)
-			} else {
-				a.True(true, "[Expect JSON field '%s' not empty]", path)
-			}
-		},
+		expect.StandardReport[*client.Response[any]](name),
 	)
 }
 
@@ -414,37 +196,10 @@ func makeResponseBodyFieldValueExpectation(path string, expected any) *expect.Ex
 					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
 				}
 			}
-
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Request failed",
-				}
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
 			}
-			if resp == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response is nil",
-				}
-			}
-			if resp.NetworkError != "" {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Network error occurred",
-				}
-			}
-			if len(resp.RawBody) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response body is empty",
-				}
-			}
-
-			res, parseErr := getJSONResult(resp.RawBody, path)
+			jsonRes, parseErr := getJSONResult(resp.RawBody, path)
 			if parseErr != nil {
 				return polling.CheckResult{
 					Ok:        false,
@@ -452,16 +207,14 @@ func makeResponseBodyFieldValueExpectation(path string, expected any) *expect.Ex
 					Reason:    "Invalid JSON response body",
 				}
 			}
-
-			if !res.Exists() {
+			if !jsonRes.Exists() {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Path '%s' does not exist in response yet", path),
 				}
 			}
-
-			ok, msg := compareJSONResult(res, expected)
+			ok, msg := jsonutil.Compare(jsonRes, expected)
 			if !ok {
 				return polling.CheckResult{
 					Ok:        false,
@@ -469,7 +222,6 @@ func makeResponseBodyFieldValueExpectation(path string, expected any) *expect.Ex
 					Reason:    msg,
 				}
 			}
-
 			return polling.CheckResult{Ok: true}
 		},
 		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
@@ -482,7 +234,7 @@ func makeResponseBodyFieldValueExpectation(path string, expected any) *expect.Ex
 			if resp != nil && len(resp.RawBody) > 0 {
 				res, parseErr := getJSONResult(resp.RawBody, path)
 				if parseErr == nil && res.Exists() {
-					actualValue := debugValue(res)
+					actualValue := jsonutil.DebugValue(res)
 					a.True(true, "[Expect JSON field '%s' == %v] actual: %s", path, expected, actualValue)
 				} else {
 					a.True(true, "[Expect JSON field '%s' == %v]", path, expected)
@@ -495,8 +247,9 @@ func makeResponseBodyFieldValueExpectation(path string, expected any) *expect.Ex
 }
 
 func makeResponseBodyFieldIsNullExpectation(path string) *expect.Expectation[*client.Response[any]] {
+	name := fmt.Sprintf("Expect JSON field '%s' is null", path)
 	return expect.New(
-		fmt.Sprintf("Expect JSON field '%s' is null", path),
+		name,
 		func(err error, resp *client.Response[any]) polling.CheckResult {
 			if pathErr := validateJSONPath(path); pathErr != nil {
 				return polling.CheckResult{
@@ -505,37 +258,10 @@ func makeResponseBodyFieldIsNullExpectation(path string) *expect.Expectation[*cl
 					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
 				}
 			}
-
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Request failed",
-				}
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
 			}
-			if resp == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response is nil",
-				}
-			}
-			if resp.NetworkError != "" {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Network error occurred",
-				}
-			}
-			if len(resp.RawBody) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response body is empty",
-				}
-			}
-
-			res, parseErr := getJSONResult(resp.RawBody, path)
+			jsonRes, parseErr := getJSONResult(resp.RawBody, path)
 			if parseErr != nil {
 				return polling.CheckResult{
 					Ok:        false,
@@ -543,33 +269,23 @@ func makeResponseBodyFieldIsNullExpectation(path string) *expect.Expectation[*cl
 					Reason:    "Invalid JSON response body",
 				}
 			}
-
-			if !res.Exists() {
+			if !jsonRes.Exists() {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
 				}
 			}
-
-			if res.Type != gjson.Null {
+			if jsonRes.Type != gjson.Null {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
-					Reason:    fmt.Sprintf("Expected null, got %s: %s", gjsonTypeToString(res.Type), debugValue(res)),
+					Reason:    fmt.Sprintf("Expected null, got %s: %s", jsonutil.TypeToString(jsonRes.Type), jsonutil.DebugValue(jsonRes)),
 				}
 			}
-
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect JSON field '%s' is null] %s", path, checkRes.Reason)
-			} else {
-				a.True(true, "[Expect JSON field '%s' is null]", path)
-			}
-		},
+		expect.StandardReport[*client.Response[any]](name),
 	)
 }
 
@@ -584,37 +300,10 @@ func makeResponseBodyFieldIsNotNullExpectation(path string) *expect.Expectation[
 					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
 				}
 			}
-
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Request failed",
-				}
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
 			}
-			if resp == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response is nil",
-				}
-			}
-			if resp.NetworkError != "" {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Network error occurred",
-				}
-			}
-			if len(resp.RawBody) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response body is empty",
-				}
-			}
-
-			res, parseErr := getJSONResult(resp.RawBody, path)
+			jsonRes, parseErr := getJSONResult(resp.RawBody, path)
 			if parseErr != nil {
 				return polling.CheckResult{
 					Ok:        false,
@@ -622,23 +311,20 @@ func makeResponseBodyFieldIsNotNullExpectation(path string) *expect.Expectation[
 					Reason:    "Invalid JSON response body",
 				}
 			}
-
-			if !res.Exists() {
+			if !jsonRes.Exists() {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
 				}
 			}
-
-			if res.Type == gjson.Null {
+			if jsonRes.Type == gjson.Null {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
 					Reason:    "Expected non-null value, got null",
 				}
 			}
-
 			return polling.CheckResult{Ok: true}
 		},
 		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
@@ -647,15 +333,16 @@ func makeResponseBodyFieldIsNotNullExpectation(path string) *expect.Expectation[
 				a.True(false, "[Expect JSON field '%s' is not null] %s", path, checkRes.Reason)
 			} else {
 				res, _ := getJSONResult(resp.RawBody, path)
-				a.True(true, "[Expect JSON field '%s' is not null] actual: %s", path, debugValue(res))
+				a.True(true, "[Expect JSON field '%s' is not null] actual: %s", path, jsonutil.DebugValue(res))
 			}
 		},
 	)
 }
 
 func makeResponseBodyFieldTrueExpectation(path string) *expect.Expectation[*client.Response[any]] {
+	name := fmt.Sprintf("Expect JSON field '%s' is true", path)
 	return expect.New(
-		fmt.Sprintf("Expect JSON field '%s' is true", path),
+		name,
 		func(err error, resp *client.Response[any]) polling.CheckResult {
 			if pathErr := validateJSONPath(path); pathErr != nil {
 				return polling.CheckResult{
@@ -664,37 +351,10 @@ func makeResponseBodyFieldTrueExpectation(path string) *expect.Expectation[*clie
 					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
 				}
 			}
-
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Request failed",
-				}
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
 			}
-			if resp == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response is nil",
-				}
-			}
-			if resp.NetworkError != "" {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Network error occurred",
-				}
-			}
-			if len(resp.RawBody) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response body is empty",
-				}
-			}
-
-			res, parseErr := getJSONResult(resp.RawBody, path)
+			jsonRes, parseErr := getJSONResult(resp.RawBody, path)
 			if parseErr != nil {
 				return polling.CheckResult{
 					Ok:        false,
@@ -702,39 +362,30 @@ func makeResponseBodyFieldTrueExpectation(path string) *expect.Expectation[*clie
 					Reason:    "Invalid JSON response body",
 				}
 			}
-
-			if !res.Exists() {
+			if !jsonRes.Exists() {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
 				}
 			}
-
-			if res.Type != gjson.True {
+			if jsonRes.Type != gjson.True {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
-					Reason:    fmt.Sprintf("Expected true, got %s: %s", gjsonTypeToString(res.Type), debugValue(res)),
+					Reason:    fmt.Sprintf("Expected true, got %s: %s", jsonutil.TypeToString(jsonRes.Type), jsonutil.DebugValue(jsonRes)),
 				}
 			}
-
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect JSON field '%s' is true] %s", path, checkRes.Reason)
-			} else {
-				a.True(true, "[Expect JSON field '%s' is true]", path)
-			}
-		},
+		expect.StandardReport[*client.Response[any]](name),
 	)
 }
 
 func makeResponseBodyFieldFalseExpectation(path string) *expect.Expectation[*client.Response[any]] {
+	name := fmt.Sprintf("Expect JSON field '%s' is false", path)
 	return expect.New(
-		fmt.Sprintf("Expect JSON field '%s' is false", path),
+		name,
 		func(err error, resp *client.Response[any]) polling.CheckResult {
 			if pathErr := validateJSONPath(path); pathErr != nil {
 				return polling.CheckResult{
@@ -743,37 +394,10 @@ func makeResponseBodyFieldFalseExpectation(path string) *expect.Expectation[*cli
 					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
 				}
 			}
-
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Request failed",
-				}
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
 			}
-			if resp == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response is nil",
-				}
-			}
-			if resp.NetworkError != "" {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Network error occurred",
-				}
-			}
-			if len(resp.RawBody) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Response body is empty",
-				}
-			}
-
-			res, parseErr := getJSONResult(resp.RawBody, path)
+			jsonRes, parseErr := getJSONResult(resp.RawBody, path)
 			if parseErr != nil {
 				return polling.CheckResult{
 					Ok:        false,
@@ -781,32 +405,22 @@ func makeResponseBodyFieldFalseExpectation(path string) *expect.Expectation[*cli
 					Reason:    "Invalid JSON response body",
 				}
 			}
-
-			if !res.Exists() {
+			if !jsonRes.Exists() {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
 				}
 			}
-
-			if res.Type != gjson.False {
+			if jsonRes.Type != gjson.False {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
-					Reason:    fmt.Sprintf("Expected false, got %s: %s", gjsonTypeToString(res.Type), debugValue(res)),
+					Reason:    fmt.Sprintf("Expected false, got %s: %s", jsonutil.TypeToString(jsonRes.Type), jsonutil.DebugValue(jsonRes)),
 				}
 			}
-
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect JSON field '%s' is false] %s", path, checkRes.Reason)
-			} else {
-				a.True(true, "[Expect JSON field '%s' is false]", path)
-			}
-		},
+		expect.StandardReport[*client.Response[any]](name),
 	)
 }

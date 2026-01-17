@@ -1,15 +1,14 @@
 package dsl
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/tidwall/gjson"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/internal/jsonutil"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
@@ -54,75 +53,66 @@ func (q *Query) ExpectNoTTL() *Query {
 	return q
 }
 
+func preCheck(err error, result *client.Result) (polling.CheckResult, bool) {
+	if err != nil {
+		return polling.CheckResult{
+			Ok:        false,
+			Retryable: true,
+			Reason:    fmt.Sprintf("Query failed: %v", err),
+		}, false
+	}
+	if result == nil {
+		return polling.CheckResult{
+			Ok:        false,
+			Retryable: true,
+			Reason:    "Result is nil",
+		}, false
+	}
+	if result.Error != nil {
+		return polling.CheckResult{
+			Ok:        false,
+			Retryable: true,
+			Reason:    fmt.Sprintf("Redis error: %v", result.Error),
+		}, false
+	}
+	return polling.CheckResult{}, true
+}
+
+func preCheckKeyExists(err error, result *client.Result) (polling.CheckResult, bool) {
+	if res, ok := preCheck(err, result); !ok {
+		return res, false
+	}
+	if !result.Exists {
+		return polling.CheckResult{
+			Ok:        false,
+			Retryable: true,
+			Reason:    fmt.Sprintf("Key '%s' does not exist", result.Key),
+		}, false
+	}
+	return polling.CheckResult{}, true
+}
+
 func makeExistsExpectation() *expect.Expectation[*client.Result] {
+	name := "Expect: Key exists"
 	return expect.New(
-		"Expect: Key exists",
+		name,
 		func(err error, result *client.Result) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Query failed: %v", err),
-				}
-			}
-			if result == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Result is nil",
-				}
-			}
-			if result.Error != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Redis error: %v", result.Error),
-				}
-			}
-			if !result.Exists {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Key '%s' does not exist", result.Key),
-				}
+			if res, ok := preCheckKeyExists(err, result); !ok {
+				return res
 			}
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result *client.Result, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: Key exists] %s", checkRes.Reason)
-			} else {
-				a.True(true, "[Expect: Key exists]")
-			}
-		},
+		expect.StandardReport[*client.Result](name),
 	)
 }
 
 func makeNotExistsExpectation() *expect.Expectation[*client.Result] {
+	name := "Expect: Key not exists"
 	return expect.New(
-		"Expect: Key not exists",
+		name,
 		func(err error, result *client.Result) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Query failed: %v", err),
-				}
-			}
-			if result == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Result is nil",
-				}
-			}
-			if result.Error != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Redis error: %v", result.Error),
-				}
+			if res, ok := preCheck(err, result); !ok {
+				return res
 			}
 			if result.Exists {
 				return polling.CheckResult{
@@ -133,48 +123,17 @@ func makeNotExistsExpectation() *expect.Expectation[*client.Result] {
 			}
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result *client.Result, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: Key not exists] %s", checkRes.Reason)
-			} else {
-				a.True(true, "[Expect: Key not exists]")
-			}
-		},
+		expect.StandardReport[*client.Result](name),
 	)
 }
 
 func makeValueExpectation(expected string) *expect.Expectation[*client.Result] {
+	name := fmt.Sprintf("Expect: Value = %q", expected)
 	return expect.New(
-		fmt.Sprintf("Expect: Value = %q", expected),
+		name,
 		func(err error, result *client.Result) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Query failed: %v", err),
-				}
-			}
-			if result == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Result is nil",
-				}
-			}
-			if result.Error != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Redis error: %v", result.Error),
-				}
-			}
-			if !result.Exists {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Key '%s' does not exist", result.Key),
-				}
+			if res, ok := preCheckKeyExists(err, result); !ok {
+				return res
 			}
 			if result.Value != expected {
 				return polling.CheckResult{
@@ -185,48 +144,17 @@ func makeValueExpectation(expected string) *expect.Expectation[*client.Result] {
 			}
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result *client.Result, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: Value = %q] %s", expected, checkRes.Reason)
-			} else {
-				a.True(true, "[Expect: Value = %q]", expected)
-			}
-		},
+		expect.StandardReport[*client.Result](name),
 	)
 }
 
 func makeValueNotEmptyExpectation() *expect.Expectation[*client.Result] {
+	name := "Expect: Value not empty"
 	return expect.New(
-		"Expect: Value not empty",
+		name,
 		func(err error, result *client.Result) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Query failed: %v", err),
-				}
-			}
-			if result == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Result is nil",
-				}
-			}
-			if result.Error != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Redis error: %v", result.Error),
-				}
-			}
-			if !result.Exists {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Key '%s' does not exist", result.Key),
-				}
+			if res, ok := preCheckKeyExists(err, result); !ok {
+				return res
 			}
 			if strings.TrimSpace(result.Value) == "" {
 				return polling.CheckResult{
@@ -237,50 +165,18 @@ func makeValueNotEmptyExpectation() *expect.Expectation[*client.Result] {
 			}
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result *client.Result, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: Value not empty] %s", checkRes.Reason)
-			} else {
-				a.True(true, "[Expect: Value not empty]")
-			}
-		},
+		expect.StandardReport[*client.Result](name),
 	)
 }
 
 func makeJSONFieldExpectation(path string, expected any) *expect.Expectation[*client.Result] {
+	name := fmt.Sprintf("Expect: JSON field '%s' = %v", path, expected)
 	return expect.New(
-		fmt.Sprintf("Expect: JSON field '%s' = %v", path, expected),
+		name,
 		func(err error, result *client.Result) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Query failed: %v", err),
-				}
+			if res, ok := preCheckKeyExists(err, result); !ok {
+				return res
 			}
-			if result == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Result is nil",
-				}
-			}
-			if result.Error != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Redis error: %v", result.Error),
-				}
-			}
-			if !result.Exists {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Key '%s' does not exist", result.Key),
-				}
-			}
-
 			if !gjson.Valid(result.Value) {
 				return polling.CheckResult{
 					Ok:        false,
@@ -288,7 +184,6 @@ func makeJSONFieldExpectation(path string, expected any) *expect.Expectation[*cl
 					Reason:    "Value is not valid JSON",
 				}
 			}
-
 			gjResult := gjson.Get(result.Value, path)
 			if !gjResult.Exists() {
 				return polling.CheckResult{
@@ -297,8 +192,7 @@ func makeJSONFieldExpectation(path string, expected any) *expect.Expectation[*cl
 					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
 				}
 			}
-
-			ok, msg := compareJSONValue(gjResult, expected)
+			ok, msg := jsonutil.Compare(gjResult, expected)
 			if !ok {
 				return polling.CheckResult{
 					Ok:        false,
@@ -306,53 +200,20 @@ func makeJSONFieldExpectation(path string, expected any) *expect.Expectation[*cl
 					Reason:    msg,
 				}
 			}
-
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result *client.Result, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: JSON field '%s' = %v] %s", path, expected, checkRes.Reason)
-			} else {
-				a.True(true, "[Expect: JSON field '%s' = %v]", path, expected)
-			}
-		},
+		expect.StandardReport[*client.Result](name),
 	)
 }
 
 func makeJSONFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Result] {
+	name := fmt.Sprintf("Expect: JSON field '%s' not empty", path)
 	return expect.New(
-		fmt.Sprintf("Expect: JSON field '%s' not empty", path),
+		name,
 		func(err error, result *client.Result) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Query failed: %v", err),
-				}
+			if res, ok := preCheckKeyExists(err, result); !ok {
+				return res
 			}
-			if result == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Result is nil",
-				}
-			}
-			if result.Error != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Redis error: %v", result.Error),
-				}
-			}
-			if !result.Exists {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Key '%s' does not exist", result.Key),
-				}
-			}
-
 			if !gjson.Valid(result.Value) {
 				return polling.CheckResult{
 					Ok:        false,
@@ -360,7 +221,6 @@ func makeJSONFieldNotEmptyExpectation(path string) *expect.Expectation[*client.R
 					Reason:    "Value is not valid JSON",
 				}
 			}
-
 			gjResult := gjson.Get(result.Value, path)
 			if !gjResult.Exists() {
 				return polling.CheckResult{
@@ -369,59 +229,26 @@ func makeJSONFieldNotEmptyExpectation(path string) *expect.Expectation[*client.R
 					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
 				}
 			}
-
-			if isEmptyJSONValue(gjResult) {
+			if jsonutil.IsEmpty(gjResult) {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("JSON field '%s' is empty", path),
 				}
 			}
-
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result *client.Result, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: JSON field '%s' not empty] %s", path, checkRes.Reason)
-			} else {
-				a.True(true, "[Expect: JSON field '%s' not empty]", path)
-			}
-		},
+		expect.StandardReport[*client.Result](name),
 	)
 }
 
 func makeTTLExpectation(minTTL, maxTTL time.Duration) *expect.Expectation[*client.Result] {
+	name := fmt.Sprintf("Expect: TTL between %v and %v", minTTL, maxTTL)
 	return expect.New(
-		fmt.Sprintf("Expect: TTL between %v and %v", minTTL, maxTTL),
+		name,
 		func(err error, result *client.Result) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Query failed: %v", err),
-				}
-			}
-			if result == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Result is nil",
-				}
-			}
-			if result.Error != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Redis error: %v", result.Error),
-				}
-			}
-			if !result.Exists {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Key '%s' does not exist", result.Key),
-				}
+			if res, ok := preCheckKeyExists(err, result); !ok {
+				return res
 			}
 			if result.TTL < minTTL || result.TTL > maxTTL {
 				return polling.CheckResult{
@@ -432,50 +259,18 @@ func makeTTLExpectation(minTTL, maxTTL time.Duration) *expect.Expectation[*clien
 			}
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result *client.Result, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: TTL between %v and %v] %s", minTTL, maxTTL, checkRes.Reason)
-			} else {
-				a.True(true, "[Expect: TTL between %v and %v]", minTTL, maxTTL)
-			}
-		},
+		expect.StandardReport[*client.Result](name),
 	)
 }
 
 func makeNoTTLExpectation() *expect.Expectation[*client.Result] {
+	name := "Expect: No TTL (persistent)"
 	return expect.New(
-		"Expect: No TTL (persistent)",
+		name,
 		func(err error, result *client.Result) polling.CheckResult {
-			if err != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Query failed: %v", err),
-				}
+			if res, ok := preCheckKeyExists(err, result); !ok {
+				return res
 			}
-			if result == nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    "Result is nil",
-				}
-			}
-			if result.Error != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Redis error: %v", result.Error),
-				}
-			}
-			if !result.Exists {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Key '%s' does not exist", result.Key),
-				}
-			}
-			// TTL of -1 means no expiration
 			if result.TTL != -1 {
 				return polling.CheckResult{
 					Ok:        false,
@@ -485,100 +280,6 @@ func makeNoTTLExpectation() *expect.Expectation[*client.Result] {
 			}
 			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result *client.Result, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: No TTL (persistent)] %s", checkRes.Reason)
-			} else {
-				a.True(true, "[Expect: No TTL (persistent)]")
-			}
-		},
+		expect.StandardReport[*client.Result](name),
 	)
-}
-
-func isEmptyJSONValue(result gjson.Result) bool {
-	if !result.Exists() {
-		return true
-	}
-
-	switch result.Type {
-	case gjson.Null:
-		return true
-	case gjson.String:
-		return strings.TrimSpace(result.String()) == ""
-	case gjson.JSON:
-		if result.IsArray() {
-			return len(result.Array()) == 0
-		}
-		if result.IsObject() {
-			return len(result.Map()) == 0
-		}
-	}
-
-	return false
-}
-
-func compareJSONValue(result gjson.Result, expected any) (bool, string) {
-	if expected == nil {
-		if result.Type != gjson.Null {
-			return false, fmt.Sprintf("expected null, got %v", result.Value())
-		}
-		return true, ""
-	}
-
-	// Marshal expected to JSON and compare
-	expectedJSON, err := json.Marshal(expected)
-	if err != nil {
-		return false, fmt.Sprintf("failed to marshal expected value: %v", err)
-	}
-
-	actualJSON := result.Raw
-	if actualJSON == "" {
-		actualJSON = fmt.Sprintf("%v", result.Value())
-	}
-
-	switch exp := expected.(type) {
-	case string:
-		if result.Type != gjson.String {
-			return false, fmt.Sprintf("expected string %q, got %v", exp, result.Value())
-		}
-		if result.String() != exp {
-			return false, fmt.Sprintf("expected %q, got %q", exp, result.String())
-		}
-	case bool:
-		if result.Type != gjson.True && result.Type != gjson.False {
-			return false, fmt.Sprintf("expected bool %v, got %v", exp, result.Value())
-		}
-		if result.Bool() != exp {
-			return false, fmt.Sprintf("expected %v, got %v", exp, result.Bool())
-		}
-	case float64:
-		if result.Type != gjson.Number {
-			return false, fmt.Sprintf("expected number %v, got %v", exp, result.Value())
-		}
-		if result.Float() != exp {
-			return false, fmt.Sprintf("expected %v, got %v", exp, result.Float())
-		}
-	case int:
-		if result.Type != gjson.Number {
-			return false, fmt.Sprintf("expected number %d, got %v", exp, result.Value())
-		}
-		if result.Int() != int64(exp) {
-			return false, fmt.Sprintf("expected %d, got %d", exp, result.Int())
-		}
-	case int64:
-		if result.Type != gjson.Number {
-			return false, fmt.Sprintf("expected number %d, got %v", exp, result.Value())
-		}
-		if result.Int() != exp {
-			return false, fmt.Sprintf("expected %d, got %d", exp, result.Int())
-		}
-	default:
-		// For complex types, compare JSON
-		if string(expectedJSON) != actualJSON {
-			return false, fmt.Sprintf("expected %s, got %s", string(expectedJSON), actualJSON)
-		}
-	}
-
-	return true, ""
 }

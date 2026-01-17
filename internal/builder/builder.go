@@ -1,0 +1,96 @@
+package builder
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"reflect"
+
+	"github.com/gorelov-m-v/go-test-framework/pkg/config"
+)
+
+var debugEnabled = os.Getenv("GO_TEST_FRAMEWORK_DEBUG") == "1"
+
+func debugLog(format string, args ...any) {
+	if debugEnabled {
+		log.Printf("BuildEnv: "+format, args...)
+	}
+}
+
+func BuildEnv(envPtr any) error {
+	v, err := config.Viper()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	envValue, structName, err := validateAndUnwrapStruct(envPtr)
+	if err != nil {
+		return err
+	}
+
+	debugLog("scanning struct '%s' for configuration tags", structName)
+
+	envType := envValue.Type()
+	for i := 0; i < envType.NumField(); i++ {
+		field := envType.Field(i)
+		fieldValue := envValue.Field(i)
+
+		if configKey := field.Tag.Get("config"); configKey != "" {
+			if err := injectHTTPClient(v, fieldValue, field, configKey, structName); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if dbConfigKey := field.Tag.Get("db_config"); dbConfigKey != "" {
+			if err := injectDBClient(v, fieldValue, field, dbConfigKey, structName); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if asyncConfigKey := field.Tag.Get("async_config"); asyncConfigKey != "" {
+			if err := injectAsyncConfig(v, fieldValue, field, asyncConfigKey, structName); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if kafkaConfigKey := field.Tag.Get("kafka_config"); kafkaConfigKey != "" {
+			if err := injectKafkaClient(v, fieldValue, field, kafkaConfigKey, structName); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if grpcConfigKey := field.Tag.Get("grpc_config"); grpcConfigKey != "" {
+			if err := injectGRPCClient(v, fieldValue, field, grpcConfigKey, structName); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if redisConfigKey := field.Tag.Get("redis_config"); redisConfigKey != "" {
+			if err := injectRedisClient(v, fieldValue, field, redisConfigKey, structName); err != nil {
+				return err
+			}
+			continue
+		}
+	}
+
+	return nil
+}
+
+func validateAndUnwrapStruct(envPtr any) (reflect.Value, string, error) {
+	envValue := reflect.ValueOf(envPtr)
+	if envValue.Kind() != reflect.Ptr {
+		return reflect.Value{}, "", fmt.Errorf("BuildEnv expects a pointer to struct, got %T", envPtr)
+	}
+
+	envValue = envValue.Elem()
+	if envValue.Kind() != reflect.Struct {
+		return reflect.Value{}, "", fmt.Errorf("BuildEnv expects a pointer to struct, got pointer to %s", envValue.Kind())
+	}
+
+	return envValue, envValue.Type().Name(), nil
+}

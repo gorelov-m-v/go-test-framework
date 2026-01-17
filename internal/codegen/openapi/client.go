@@ -42,11 +42,12 @@ func (g *Generator) generateClientMethod(method HTTPMethodInfo) string {
 	reqType := "dsl.EmptyRequest"
 	respType := "dsl.EmptyResponse"
 
+	baseName := strings.TrimSuffix(method.Name, method.APIVersion)
 	if method.RequestSchemaRef != "" {
-		reqType = method.Name + "Request"
+		reqType = baseName + "Request" + method.APIVersion
 	}
 	if method.ResponseSchemaRef != "" {
-		respType = method.Name + "Response"
+		respType = baseName + "Response" + method.APIVersion
 	}
 
 	funcParams := []string{"sCtx provider.StepCtx"}

@@ -25,6 +25,7 @@ type HTTPMethodInfo struct {
 	RequestSchemaRef  string
 	ResponseSchemaRef string
 	PathParams        []string
+	APIVersion        string
 }
 
 type GenerationResult struct {
@@ -146,6 +147,16 @@ func getRefName(ref string) string {
 	return parts[len(parts)-1]
 }
 
+func extractAPIVersion(path string) string {
+	if strings.HasPrefix(path, "/v2/") || strings.Contains(path, "/v2/") {
+		return "V2"
+	}
+	if strings.HasPrefix(path, "/v3/") || strings.Contains(path, "/v3/") {
+		return "V3"
+	}
+	return ""
+}
+
 func (g *Generator) belongsToService(op *openapi3.Operation) bool {
 	if len(op.Tags) == 0 {
 		return false
@@ -191,7 +202,9 @@ func (g *Generator) collectMethods() {
 				continue
 			}
 
+			apiVersion := extractAPIVersion(path)
 			methodName := g.operationToMethodName(op, path, httpMethod, usedNames)
+			methodName = methodName + apiVersion
 			usedNames[methodName] = true
 
 			info := HTTPMethodInfo{
@@ -200,6 +213,7 @@ func (g *Generator) collectMethods() {
 				HTTPMethod: httpMethod,
 				Operation:  op,
 				PathParams: extractPathParams(path),
+				APIVersion: apiVersion,
 			}
 
 			if op.RequestBody != nil && op.RequestBody.Value != nil {

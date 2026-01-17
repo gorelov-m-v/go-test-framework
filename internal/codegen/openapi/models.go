@@ -20,18 +20,20 @@ func (g *Generator) generateModels() (string, int, error) {
 	nestedSchemas := make(map[string]bool)
 
 	for _, method := range g.methods {
+		baseName := strings.TrimSuffix(method.Name, method.APIVersion)
+
 		if method.RequestSchemaRef != "" {
 			schemaName := getRefName(method.RequestSchemaRef)
 			schemaRef := g.spec.Components.Schemas[schemaName]
 			if schemaRef != nil && schemaRef.Value != nil {
-				modelName := method.Name + "Request"
+				modelName := baseName + "Request" + method.APIVersion
 				structCode, err := g.generateStruct(modelName, schemaRef.Value)
 				if err != nil {
 					return "", 0, fmt.Errorf("failed to generate struct %s: %w", modelName, err)
 				}
 				buf.WriteString(structCode)
 				buf.WriteString("\n\n")
-				generatedSchemas[schemaName] = true
+				generatedSchemas[modelName] = true
 
 				g.collectNestedSchemas(schemaRef, nestedSchemas)
 			}
@@ -41,14 +43,14 @@ func (g *Generator) generateModels() (string, int, error) {
 			schemaName := getRefName(method.ResponseSchemaRef)
 			schemaRef := g.spec.Components.Schemas[schemaName]
 			if schemaRef != nil && schemaRef.Value != nil {
-				modelName := method.Name + "Response"
+				modelName := baseName + "Response" + method.APIVersion
 				structCode, err := g.generateStruct(modelName, schemaRef.Value)
 				if err != nil {
 					return "", 0, fmt.Errorf("failed to generate struct %s: %w", modelName, err)
 				}
 				buf.WriteString(structCode)
 				buf.WriteString("\n\n")
-				generatedSchemas[schemaName] = true
+				generatedSchemas[modelName] = true
 
 				g.collectNestedSchemas(schemaRef, nestedSchemas)
 			}

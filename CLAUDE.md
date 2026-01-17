@@ -29,50 +29,58 @@ your-api-tests/
 │   └── config.local.yaml         # Configuration (ENV=local by default)
 │
 ├── internal/
-│   ├── client/                   # HTTP clients (DSL methods)
+│   ├── http_client/              # HTTP clients (DSL methods)
 │   │   └── [service_name]/       # One folder per microservice
-│   │       └── client.go         # Link struct + DSL methods
+│   │       ├── client.go         # Link struct + DSL methods
+│   │       └── models.go         # Request/Response structs
+│   │
+│   ├── grpc_client/              # gRPC clients (DSL methods)
+│   │   └── [service_name]/       # One folder per gRPC service
+│   │       ├── client.go         # Link struct + DSL methods
+│   │       └── models.go         # Request/Response structs
 │   │
 │   ├── db/                       # Database repositories
 │   │   └── [table_name]/         # One folder per table/domain
-│   │       └── repo.go           # Link struct + DSL methods
+│   │       ├── repo.go           # Link struct + DSL methods
+│   │       └── models.go         # Table structs with `db` tags
 │   │
-│   ├── models/
-│   │   ├── http/                 # HTTP models (by service)
-│   │   │   └── [service_name]/
-│   │   │       └── *.go          # Request/Response structs with `json` tags
-│   │   └── db/                   # DB models (by database)
-│   │       └── [database_name]/
-│   │           └── *.go          # Table structs with `db` tags
+│   ├── redis/                    # Redis clients
+│   │   └── [cache_name]/         # One folder per Redis usage
+│   │       └── client.go         # Link struct + DSL methods
 │   │
 │   └── kafka/
 │       └── topics.go             # Topic types + message models
 │
-├── tests/
-│   ├── env.go                    # TestEnv struct with DI tags
-│   └── *_test.go                 # Test suites
+├── proto/                        # Protobuf definitions (.proto files)
+├── openapi.json                  # OpenAPI spec (or openapi/ folder)
 │
-├── allure-results/               # Auto-generated Allure results
-├── go.mod
-└── go.sum
+└── tests/
+    ├── env.go                    # TestEnv struct with DI tags
+    ├── *_test.go                 # Test suites
+    └── allure-results/           # Auto-generated Allure results
 ```
 
 ### Where to Create Files
 | What | Where |
 |------|-------|
-| New HTTP client for service "auth" | `internal/client/auth/client.go` |
+| New HTTP client for service "auth" | `internal/http_client/auth/client.go` |
+| HTTP models for "auth" service | `internal/http_client/auth/models.go` |
+| New gRPC client for service "player" | `internal/grpc_client/player/client.go` |
 | New DB repo for table "orders" | `internal/db/orders/repo.go` |
-| HTTP models for "auth" service | `internal/models/http/auth/*.go` |
-| DB models for "core" database | `internal/models/db/core/*.go` |
+| DB models for "orders" table | `internal/db/orders/models.go` |
+| New Redis client for cache | `internal/redis/cache/client.go` |
 | Kafka topics and messages | `internal/kafka/topics.go` |
 | New test suite | `tests/*_test.go` |
 | Environment/DI setup | `tests/env.go` |
 | Configuration | `configs/config.{ENV}.yaml` |
+| Proto files | `proto/*.proto` |
+| OpenAPI specs | `openapi/*.json` or `openapi/*.yaml` |
 
 ## Coding Rules
 1.  **Strict Generics:** Always specify types: `dsl.NewCall[Req, Resp]` or `dsl.NewQuery[Model]`.
 2.  **No time.Sleep:** Use `s.AsyncStep` for retries. Use `s.Step` for immediate checks.
 3.  **Link Pattern:** All clients/repos must implement `Link` struct and be registered in `TestEnv`.
+4.  **CRITICAL - No Comments:** Never add comments to generated code (client.go, models.go, repo.go, *_test.go). Code must be self-documenting through clear naming.
 
 ---
 
@@ -353,7 +361,7 @@ func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
 ```
 
 ---
-## Best Practices: "Full Context" Pattern**Recommendation:** Store full response/DB object structures instead of extracting individual fields.### ❌ Avoid (old approach):```gofunc (s *Suite) TestFlow(t provider.T) {    var userID string    var userURL string    var email string    s.Step(t, "Register", func(ctx provider.StepCtx) {        resp := auth.Register(ctx).            RequestBody(models.RegisterRequest{...}).            Send()        userID = resp.Body.ID       // Extracting individual fields        userURL = resp.Body.UserURL        email = resp.Body.Email    })    s.Step(t, "Verify", func(ctx provider.StepCtx) {        // Lost context: Where did userURL come from?        auth.Verify(ctx, userURL).Send()    })}```### ✅ Use (Full Context):```gofunc (s *Suite) TestFlow(t provider.T) {    // 1. Define: Declare full structures at the beginning    var (        regResp *client.Response[models.RegisterResp] // Store entire HTTP response        userDB  models.UserDB                          // Store entire DB row    )    // 2. Capture: Fill the variable    s.Step(t, "Register", func(ctx provider.StepCtx) {        regResp = auth.Register(ctx).            RequestBody(models.RegisterRequest{...}).            Send()    })    // 3. Use: Use data with clear context    s.Step(t, "Verify", func(ctx provider.StepCtx) {        // Context is obvious: searching by ID from registration response        auth.Verify(ctx, regResp.Body.UserURL).            RequestBody(models.VerifyRequest{                Email:    regResp.Body.Email,    // <- All fields accessible                Password: "test",            }).            Send()    })    s.AsyncStep(t, "Check DB", func(ctx provider.StepCtx) {        userDB = users.FindByID(ctx, regResp.Body.ID).            ExpectColumnEquals("email", regResp.Body.Email).            Send()    })}```**Benefits:**- **Self-documenting code:** `regResp.Body.ID` is clearer than anonymous `userID`- **Flexibility:** If you need an additional field later - it is already available- **Type safety:** Compiler knows all field types- **Data traceability:** Easy to see where each value comes from**When to simplify:**For simple single-step negative tests, you do not need to overcomplicate:```gofunc (s *Suite) TestEmailEmpty(t provider.T) {    // No need for var if only used here    s.Step(t, "Send", func(ctx provider.StepCtx) {        auth.Register(ctx).            RequestBody(models.RegisterRequest{Email: ""}).            ExpectResponseStatus(422).            Send()    })}```---
+## Best Practices: "Full Context" Pattern**Recommendation:** Store full response/DB object structures instead of extracting individual fields.### ❌ Avoid (old approach):```gofunc (s *Suite) TestFlow(t provider.T) {    var userID string    var userURL string    var email string    s.Step(t, "Register", func(ctx provider.StepCtx) {        resp := auth.Register(ctx).            RequestBody(models.RegisterRequest{...}).            Send()        userID = resp.Body.ID       // Extracting individual fields        userURL = resp.Body.UserURL        email = resp.Body.Email    })    s.Step(t, "Verify", func(ctx provider.StepCtx) {        // Lost context: Where did userURL come from?        auth.Verify(ctx, userURL).Send()    })}```### ✅ Use (Full Context):```gofunc (s *Suite) TestFlow(t provider.T) {    // 1. Define: Declare full structures at the beginning    var (        regResp *client.Response[models.RegisterResp] // Store entire HTTP response        userDB  models.UserRow                          // Store entire DB row    )    // 2. Capture: Fill the variable    s.Step(t, "Register", func(ctx provider.StepCtx) {        regResp = auth.Register(ctx).            RequestBody(models.RegisterRequest{...}).            Send()    })    // 3. Use: Use data with clear context    s.Step(t, "Verify", func(ctx provider.StepCtx) {        // Context is obvious: searching by ID from registration response        auth.Verify(ctx, regResp.Body.UserURL).            RequestBody(models.VerifyRequest{                Email:    regResp.Body.Email,    // <- All fields accessible                Password: "test",            }).            Send()    })    s.AsyncStep(t, "Check DB", func(ctx provider.StepCtx) {        userDB = users.FindByID(ctx, regResp.Body.ID).            ExpectColumnEquals("email", regResp.Body.Email).            Send()    })}```**Benefits:**- **Self-documenting code:** `regResp.Body.ID` is clearer than anonymous `userID`- **Flexibility:** If you need an additional field later - it is already available- **Type safety:** Compiler knows all field types- **Data traceability:** Easy to see where each value comes from**When to simplify:**For simple single-step negative tests, you do not need to overcomplicate:```gofunc (s *Suite) TestEmailEmpty(t provider.T) {    // No need for var if only used here    s.Step(t, "Send", func(ctx provider.StepCtx) {        auth.Register(ctx).            RequestBody(models.RegisterRequest{Email: ""}).            ExpectResponseStatus(422).            Send()    })}```---
 
 ## Parametrized Tests (Table-Driven Tests)
 

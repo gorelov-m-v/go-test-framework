@@ -124,7 +124,7 @@ func handleNullType(val reflect.Value) (bool, any) {
 func getFieldName(field reflect.StructField) string {
 	dbTag := field.Tag.Get("db")
 	if dbTag == "-" {
-		return "" // Игнорируем поле
+		return ""
 	}
 	if dbTag != "" {
 		parts := strings.Split(dbTag, ",")
@@ -135,7 +135,7 @@ func getFieldName(field reflect.StructField) string {
 
 	jsonTag := field.Tag.Get("json")
 	if jsonTag == "-" {
-		return "" // Игнорируем поле
+		return ""
 	}
 	if jsonTag != "" {
 		parts := strings.Split(jsonTag, ",")

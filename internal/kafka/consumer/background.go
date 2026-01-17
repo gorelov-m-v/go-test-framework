@@ -44,7 +44,7 @@ func NewBackgroundConsumer(
 	saramaConfig.Version = version
 
 	saramaConfig.Consumer.Return.Errors = true
-	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest // По умолчанию читаем с начала (для тестов)
+	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
 	saramaConfig.Consumer.Group.Rebalance.Strategy = sarama.NewBalanceStrategyRoundRobin()
 
 	if err := applySaramaConfig(saramaConfig, cfg.SaramaConfig); err != nil {
@@ -72,7 +72,7 @@ func NewBackgroundConsumer(
 		consumerGroup:  consumerGroup,
 		ctx:            ctx,
 		cancel:         cancel,
-		topicPrefix:    "", // Не используется больше
+		topicPrefix:    "",
 		fullTopicNames: fullTopicNames,
 	}
 

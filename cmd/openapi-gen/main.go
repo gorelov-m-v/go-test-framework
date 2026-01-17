@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/gorelov-m-v/go-test-framework/pkg/codegen"
+	"github.com/gorelov-m-v/go-test-framework/internal/codegen/openapi"
 )
 
 const usage = `OpenAPI to go-test-framework DSL Generator
@@ -55,12 +55,12 @@ func main() {
 	specPath := flag.Arg(0)
 
 	fmt.Printf("📖 Loading OpenAPI spec: %s\n", specPath)
-	spec, err := codegen.LoadOpenAPISpec(specPath)
+	spec, err := openapi.LoadOpenAPISpec(specPath)
 	if err != nil {
 		log.Fatalf("Failed to load spec: %v", err)
 	}
 
-	services := codegen.DetectServices(spec)
+	services := openapi.DetectServices(spec)
 
 	if len(services) == 0 {
 		log.Fatalf("No services detected in OpenAPI spec")
@@ -71,7 +71,7 @@ func main() {
 	fmt.Printf("Total schemas: %d\n", len(spec.Components.Schemas))
 	fmt.Println()
 
-	var allResults []codegen.GenerationResult
+	var allResults []openapi.GenerationResult
 
 	for _, svcName := range services {
 		if *serviceName != "" && svcName != *serviceName {
@@ -80,7 +80,7 @@ func main() {
 
 		fmt.Printf("🔨 Generating for service: %s\n", svcName)
 
-		gen := codegen.NewGenerator(spec, svcName, "")
+		gen := openapi.NewGenerator(spec, svcName, "")
 
 		result, err := gen.Generate(*outputDir, *clientPath)
 		if err != nil {

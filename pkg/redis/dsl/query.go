@@ -8,11 +8,10 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
 
-// Query represents a Redis query DSL builder
 type Query struct {
 	sCtx   provider.StepCtx
 	client *client.Client
@@ -27,7 +26,6 @@ type Query struct {
 	expectations []*expect.Expectation[*client.Result]
 }
 
-// NewQuery creates a new Redis query builder
 func NewQuery(sCtx provider.StepCtx, redisClient *client.Client) *Query {
 	return &Query{
 		sCtx:   sCtx,
@@ -36,13 +34,11 @@ func NewQuery(sCtx provider.StepCtx, redisClient *client.Client) *Query {
 	}
 }
 
-// StepName sets a custom step name for Allure reporting
 func (q *Query) StepName(name string) *Query {
 	q.stepName = strings.TrimSpace(name)
 	return q
 }
 
-// Context sets the context for the Redis operation
 func (q *Query) Context(ctx context.Context) *Query {
 	if ctx != nil {
 		q.ctx = ctx
@@ -50,7 +46,6 @@ func (q *Query) Context(ctx context.Context) *Query {
 	return q
 }
 
-// Key sets the Redis key to query
 func (q *Query) Key(key string) *Query {
 	q.key = key
 	return q
@@ -65,7 +60,6 @@ func (q *Query) addExpectation(exp *expect.Expectation[*client.Result]) {
 	q.expectations = append(q.expectations, exp)
 }
 
-// Send executes the Redis query and returns the result
 func (q *Query) Send() *client.Result {
 	q.validate()
 
@@ -77,13 +71,13 @@ func (q *Query) Send() *client.Result {
 	q.sCtx.WithNewStep(name, func(stepCtx provider.StepCtx) {
 		attachRequest(stepCtx, q)
 
-		mode := extension.GetStepMode(stepCtx)
-		useRetry := mode == extension.AsyncMode && len(q.expectations) > 0
+		mode := polling.GetStepMode(stepCtx)
+		useRetry := mode == polling.AsyncMode && len(q.expectations) > 0
 
 		var (
 			result  *client.Result
 			err     error
-			summary extension.PollingSummary
+			summary polling.PollingSummary
 		)
 
 		if useRetry {
@@ -102,17 +96,17 @@ func (q *Query) Send() *client.Result {
 		q.result = result
 		q.sent = true
 
-		if mode == extension.AsyncMode {
-			extension.AttachPollingSummary(stepCtx, summary)
+		if mode == polling.AsyncMode {
+			polling.AttachPollingSummary(stepCtx, summary)
 		}
 
 		attachResult(stepCtx, result)
 
-		assertionMode := extension.GetAssertionModeFromStepMode(mode)
+		assertionMode := polling.GetAssertionModeFromStepMode(mode)
 
 		if len(q.expectations) == 0 {
 			if err != nil {
-				extension.NoError(stepCtx, assertionMode, err, "Redis query failed: %v", err)
+				polling.NoError(stepCtx, assertionMode, err, "Redis query failed: %v", err)
 				return
 			}
 			return

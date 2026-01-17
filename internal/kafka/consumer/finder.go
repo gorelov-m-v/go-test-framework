@@ -109,12 +109,10 @@ func (mf *MessageFinder) FindAndCountWithinWindow(
 			}
 
 			if firstMatch == nil {
-				// Первое совпадение
 				firstMatch = result
 				firstMatchTimestamp = msg.Timestamp
 				matches = append(matches, result)
 			} else {
-				// Проверяем, попадает ли в окно
 				timeDiff := int64(math.Abs(float64(msg.Timestamp - firstMatchTimestamp)))
 				if timeDiff <= windowMs {
 					matches = append(matches, result)

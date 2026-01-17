@@ -51,16 +51,3 @@ func Viper() (*viper.Viper, error) {
 
 	return configInstance, loadErr
 }
-
-func UnmarshalByKey(key string, out any) error {
-	v, err := Viper()
-	if err != nil {
-		return err
-	}
-
-	if !v.IsSet(key) {
-		return fmt.Errorf("config key '%s' not found", key)
-	}
-
-	return v.UnmarshalKey(key, out)
-}

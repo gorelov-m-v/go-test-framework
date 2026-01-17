@@ -12,8 +12,8 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/database/client"
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
 )
 
 var structMapper = reflectx.NewMapper("db")
@@ -65,12 +65,12 @@ func (q *Query[T]) Send() T {
 	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
-		mode := extension.GetStepMode(stepCtx)
+		mode := polling.GetStepMode(stepCtx)
 		var result T
 		var err error
-		var summary extension.PollingSummary
+		var summary polling.PollingSummary
 
-		useRetry := mode == extension.AsyncMode && len(q.expectations) > 0
+		useRetry := mode == polling.AsyncMode && len(q.expectations) > 0
 
 		if useRetry {
 			result, err, summary = q.executeWithRetry(stepCtx, q.expectations)
@@ -78,8 +78,8 @@ func (q *Query[T]) Send() T {
 			result, err, summary = q.executeSingle()
 		}
 
-		if mode == extension.AsyncMode {
-			extension.AttachPollingSummary(stepCtx, summary)
+		if mode == polling.AsyncMode {
+			polling.AttachPollingSummary(stepCtx, summary)
 		}
 
 		q.scannedResult = result
@@ -93,7 +93,7 @@ func (q *Query[T]) Send() T {
 			attachResult(stepCtx, q.client, result, nil)
 		}
 
-		assertMd := extension.GetAssertionModeFromStepMode(mode)
+		assertMd := polling.GetAssertionModeFromStepMode(mode)
 
 		if len(q.expectations) > 0 {
 			expect.ReportAll(stepCtx, assertMd, q.expectations, err, result)
@@ -105,14 +105,14 @@ func (q *Query[T]) Send() T {
 						if useRetry {
 							suffix = " after retry"
 						}
-						extension.NoError(stepCtx, assertMd, err, "Expected row to exist, but got sql.ErrNoRows%s. Use ExpectNotFound() if 'not found' is expected", suffix)
+						polling.NoError(stepCtx, assertMd, err, "Expected row to exist, but got sql.ErrNoRows%s. Use ExpectNotFound() if 'not found' is expected", suffix)
 					}
 				} else {
 					msg := "DB query failed"
-					if mode == extension.AsyncMode {
-						msg = extension.FinalFailureMessage(summary)
+					if mode == polling.AsyncMode {
+						msg = polling.FinalFailureMessage(summary)
 					}
-					extension.NoError(stepCtx, assertMd, err, msg)
+					polling.NoError(stepCtx, assertMd, err, msg)
 				}
 			}
 		}

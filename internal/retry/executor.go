@@ -7,19 +7,13 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/config"
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
 )
-
-type CheckResult struct {
-	Ok        bool
-	Retryable bool
-	Reason    string
-}
 
 type Executor[T any] func(ctx context.Context) (T, error)
 
-type Checker[T any] func(result T, err error) []CheckResult
+type Checker[T any] func(result T, err error) []polling.CheckResult
 
 func ExecuteWithRetry[T any](
 	ctx context.Context,
@@ -27,7 +21,7 @@ func ExecuteWithRetry[T any](
 	cfg config.AsyncConfig,
 	executor Executor[T],
 	checker Checker[T],
-) (T, error, extension.PollingSummary) {
+) (T, error, polling.PollingSummary) {
 	deadline := time.Now().Add(cfg.Timeout)
 	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
 		deadline = ctxDeadline
@@ -36,7 +30,7 @@ func ExecuteWithRetry[T any](
 	ctxWithDeadline, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 
-	retryCtx := &extension.RetryContext{
+	retryCtx := &polling.RetryContext{
 		Attempt:      0,
 		Cfg:          cfg,
 		Deadline:     deadline,
@@ -69,7 +63,7 @@ func ExecuteWithRetry[T any](
 
 		if allOk {
 			elapsed := time.Since(startTime)
-			summary := extension.PollingSummary{
+			summary := polling.PollingSummary{
 				Attempts:    retryCtx.Attempt,
 				ElapsedTime: elapsed.String(),
 				Success:     true,
@@ -79,7 +73,7 @@ func ExecuteWithRetry[T any](
 
 		if !hasRetryable {
 			elapsed := time.Since(startTime)
-			summary := extension.PollingSummary{
+			summary := polling.PollingSummary{
 				Attempts:      retryCtx.Attempt,
 				ElapsedTime:   elapsed.String(),
 				Success:       false,
@@ -94,7 +88,7 @@ func ExecuteWithRetry[T any](
 
 		if time.Now().After(deadline) || ctxWithDeadline.Err() != nil {
 			elapsed := time.Since(startTime)
-			summary := extension.PollingSummary{
+			summary := polling.PollingSummary{
 				Attempts:      retryCtx.Attempt,
 				ElapsedTime:   elapsed.String(),
 				Success:       false,
@@ -126,7 +120,7 @@ func ExecuteWithRetry[T any](
 		case <-time.After(delay):
 		case <-ctxWithDeadline.Done():
 			elapsed := time.Since(startTime)
-			summary := extension.PollingSummary{
+			summary := polling.PollingSummary{
 				Attempts:      retryCtx.Attempt,
 				ElapsedTime:   elapsed.String(),
 				Success:       false,
@@ -145,13 +139,13 @@ func ExecuteWithRetry[T any](
 func ExecuteSingle[T any](
 	ctx context.Context,
 	executor Executor[T],
-) (T, error, extension.PollingSummary) {
+) (T, error, polling.PollingSummary) {
 	startTime := time.Now()
 
 	result, err := executor(ctx)
 
 	elapsed := time.Since(startTime)
-	summary := extension.PollingSummary{
+	summary := polling.PollingSummary{
 		Attempts:    1,
 		ElapsedTime: elapsed.String(),
 		Success:     err == nil,

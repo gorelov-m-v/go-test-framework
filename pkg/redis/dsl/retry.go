@@ -7,17 +7,15 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/internal/retry"
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
 	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
 
-func (q *Query) executeSingle() (*client.Result, error, extension.PollingSummary) {
+func (q *Query) executeSingle() (*client.Result, error, polling.PollingSummary) {
 	executor := func(ctx context.Context) (*client.Result, error) {
-		// Get value and TTL in one go
 		result := q.client.Get(ctx, q.key)
 		if result.Exists {
-			// Also get TTL
 			ttlResult := q.client.TTL(ctx, q.key)
 			result.TTL = ttlResult.TTL
 		}
@@ -42,7 +40,7 @@ func (q *Query) executeSingle() (*client.Result, error, extension.PollingSummary
 func (q *Query) executeWithRetry(
 	stepCtx provider.StepCtx,
 	expectations []*expect.Expectation[*client.Result],
-) (*client.Result, error, extension.PollingSummary) {
+) (*client.Result, error, polling.PollingSummary) {
 	asyncCfg := q.client.AsyncConfig
 
 	if !asyncCfg.Enabled {
@@ -50,10 +48,8 @@ func (q *Query) executeWithRetry(
 	}
 
 	executor := func(ctx context.Context) (*client.Result, error) {
-		// Get value and TTL in one go
 		result := q.client.Get(ctx, q.key)
 		if result.Exists {
-			// Also get TTL
 			ttlResult := q.client.TTL(ctx, q.key)
 			result.TTL = ttlResult.TTL
 		}
@@ -65,11 +61,11 @@ func (q *Query) executeWithRetry(
 		return result, result.Error
 	}
 
-	checker := func(result *client.Result, err error) []retry.CheckResult {
-		results := make([]retry.CheckResult, 0, len(expectations))
+	checker := func(result *client.Result, err error) []polling.CheckResult {
+		results := make([]polling.CheckResult, 0, len(expectations))
 		for _, exp := range expectations {
 			checkRes := exp.Check(err, result)
-			results = append(results, retry.CheckResult{
+			results = append(results, polling.CheckResult{
 				Ok:        checkRes.Ok,
 				Retryable: checkRes.Retryable,
 				Reason:    checkRes.Reason,

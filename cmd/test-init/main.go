@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gorelov-m-v/go-test-framework/pkg/scaffold"
+	"github.com/gorelov-m-v/go-test-framework/internal/codegen/scaffold"
 )
 
 const usage = `Go Test Framework Project Generator
@@ -70,7 +70,6 @@ func main() {
 		log.Fatalf("Directory '%s' already exists", projectName)
 	}
 
-	// If -all flag is set, enable all DSLs
 	if *withAll {
 		*withGRPC = true
 		*withDB = true

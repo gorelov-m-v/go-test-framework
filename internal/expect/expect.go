@@ -3,25 +3,19 @@ package expect
 import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 )
-
-type CheckResult struct {
-	Ok        bool
-	Retryable bool
-	Reason    string
-}
 
 type Expectation[T any] struct {
 	Name   string
-	Check  func(err error, value T) CheckResult
-	Report func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, value T, res CheckResult)
+	Check  func(err error, value T) polling.CheckResult
+	Report func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, value T, res polling.CheckResult)
 }
 
 func New[T any](
 	name string,
-	check func(err error, value T) CheckResult,
-	report func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, value T, res CheckResult),
+	check func(err error, value T) polling.CheckResult,
+	report func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, value T, res polling.CheckResult),
 ) *Expectation[T] {
 	return &Expectation[T]{
 		Name:   name,
@@ -32,7 +26,7 @@ func New[T any](
 
 func ReportAll[T any](
 	stepCtx provider.StepCtx,
-	mode extension.AssertionMode,
+	mode polling.AssertionMode,
 	exps []*Expectation[T],
 	err error,
 	value T,

@@ -9,10 +9,9 @@ type Config struct {
 
 	GroupID string `mapstructure:"groupId"`
 
-	// Topics - список топиков для подписки (полные имена)
 	Topics []string `mapstructure:"topics"`
 
-	TopicPrefix string `mapstructure:"topicPrefix"` // Deprecated: используйте Topics
+	TopicPrefix string `mapstructure:"topicPrefix"`
 
 	BufferSize int `mapstructure:"bufferSize"`
 

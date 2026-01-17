@@ -9,11 +9,10 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/grpc/client"
 )
 
-// Call represents a gRPC call DSL builder
 type Call[TReq any, TResp any] struct {
 	sCtx   provider.StepCtx
 	client *client.Client
@@ -33,7 +32,6 @@ type Call[TReq any, TResp any] struct {
 	expectations []*expect.Expectation[*client.Response[any]]
 }
 
-// NewCall creates a new gRPC call builder
 func NewCall[TReq any, TResp any](sCtx provider.StepCtx, grpcClient *client.Client) *Call[TReq, TResp] {
 	return &Call[TReq, TResp]{
 		sCtx:     sCtx,
@@ -43,13 +41,11 @@ func NewCall[TReq any, TResp any](sCtx provider.StepCtx, grpcClient *client.Clie
 	}
 }
 
-// StepName sets a custom step name for Allure reporting
 func (c *Call[TReq, TResp]) StepName(name string) *Call[TReq, TResp] {
 	c.stepName = strings.TrimSpace(name)
 	return c
 }
 
-// Context sets the context for the gRPC call
 func (c *Call[TReq, TResp]) Context(ctx context.Context) *Call[TReq, TResp] {
 	if ctx != nil {
 		c.ctx = ctx
@@ -57,8 +53,6 @@ func (c *Call[TReq, TResp]) Context(ctx context.Context) *Call[TReq, TResp] {
 	return c
 }
 
-// Method sets the gRPC method to call
-// fullMethod format: "/package.Service/Method"
 func (c *Call[TReq, TResp]) Method(fullMethod string) *Call[TReq, TResp] {
 	c.fullMethod = fullMethod
 	parts := strings.Split(fullMethod, "/")
@@ -69,16 +63,12 @@ func (c *Call[TReq, TResp]) Method(fullMethod string) *Call[TReq, TResp] {
 	return c
 }
 
-// Service sets the gRPC service name
-// Use with MethodName() for better readability
 func (c *Call[TReq, TResp]) Service(service string) *Call[TReq, TResp] {
 	c.service = service
 	c.updateFullMethod()
 	return c
 }
 
-// MethodName sets the gRPC method name
-// Use with Service() for better readability
 func (c *Call[TReq, TResp]) MethodName(method string) *Call[TReq, TResp] {
 	c.method = method
 	c.updateFullMethod()
@@ -91,19 +81,16 @@ func (c *Call[TReq, TResp]) updateFullMethod() {
 	}
 }
 
-// RequestBody sets the request message body
 func (c *Call[TReq, TResp]) RequestBody(body TReq) *Call[TReq, TResp] {
 	c.body = &body
 	return c
 }
 
-// Metadata sets a metadata key-value pair
 func (c *Call[TReq, TResp]) Metadata(key, value string) *Call[TReq, TResp] {
 	c.metadata.Append(key, value)
 	return c
 }
 
-// MetadataMap sets multiple metadata key-value pairs
 func (c *Call[TReq, TResp]) MetadataMap(md map[string]string) *Call[TReq, TResp] {
 	for k, v := range md {
 		c.metadata.Append(k, v)
@@ -120,7 +107,6 @@ func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Respo
 	c.expectations = append(c.expectations, exp)
 }
 
-// Send executes the gRPC call and returns the response
 func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validate()
 
@@ -132,13 +118,13 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.sCtx.WithNewStep(name, func(stepCtx provider.StepCtx) {
 		attachRequest(stepCtx, c)
 
-		mode := extension.GetStepMode(stepCtx)
-		useRetry := mode == extension.AsyncMode && len(c.expectations) > 0
+		mode := polling.GetStepMode(stepCtx)
+		useRetry := mode == polling.AsyncMode && len(c.expectations) > 0
 
 		var (
 			resp    *client.Response[TResp]
 			err     error
-			summary extension.PollingSummary
+			summary polling.PollingSummary
 		)
 
 		if useRetry {
@@ -157,8 +143,8 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 		c.resp = resp
 		c.sent = true
 
-		if mode == extension.AsyncMode {
-			extension.AttachPollingSummary(stepCtx, summary)
+		if mode == polling.AsyncMode {
+			polling.AttachPollingSummary(stepCtx, summary)
 		}
 
 		attachResponse(stepCtx, resp)
@@ -175,11 +161,11 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 			RawBody:  resp.RawBody,
 		}
 
-		assertionMode := extension.GetAssertionModeFromStepMode(mode)
+		assertionMode := polling.GetAssertionModeFromStepMode(mode)
 
 		if len(c.expectations) == 0 {
 			if err != nil {
-				extension.NoError(stepCtx, assertionMode, err, "gRPC call failed: %v", err)
+				polling.NoError(stepCtx, assertionMode, err, "gRPC call failed: %v", err)
 				return
 			}
 			return

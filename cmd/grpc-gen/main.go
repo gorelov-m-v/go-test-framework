@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/gorelov-m-v/go-test-framework/pkg/codegen"
+	"github.com/gorelov-m-v/go-test-framework/internal/codegen/grpc"
 )
 
 const usage = `Proto to go-test-framework gRPC DSL Generator
@@ -68,25 +68,25 @@ func main() {
 	}
 
 	fmt.Printf("Loading proto file: %s\n", protoPath)
-	proto, err := codegen.LoadProtoFile(protoPath)
+	proto, err := grpc.LoadProtoFile(protoPath)
 	if err != nil {
 		log.Fatalf("Failed to load proto file: %v", err)
 	}
 
-	services := codegen.DetectGRPCServices(proto)
+	services := grpc.DetectServices(proto)
 	if len(services) == 0 {
 		log.Fatalf("No services found in proto file")
 	}
 
-	packageName := codegen.GetPackageName(proto)
-	goPackageName := codegen.GetGoPackageName(proto)
+	packageName := grpc.GetPackageName(proto)
+	goPackageName := grpc.GetGoPackageName(proto)
 
 	fmt.Printf("Proto package: %s\n", packageName)
 	fmt.Printf("Go package: %s\n", goPackageName)
 	fmt.Printf("Detected services: %v\n", services)
 	fmt.Println()
 
-	var allResults []codegen.GRPCGenerationResult
+	var allResults []grpc.GenerationResult
 
 	for _, svcName := range services {
 		if *serviceName != "" && svcName != *serviceName {
@@ -95,7 +95,7 @@ func main() {
 
 		fmt.Printf("Generating for service: %s\n", svcName)
 
-		gen := codegen.NewGRPCGenerator(proto, svcName, *moduleName, *pbImport)
+		gen := grpc.NewGenerator(proto, svcName, *moduleName, *pbImport)
 
 		result, err := gen.Generate(*outputDir, *clientPath)
 		if err != nil {

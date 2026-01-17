@@ -14,14 +14,12 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/pkg/config"
 )
 
-// Client is the gRPC client wrapper
 type Client struct {
 	conn        *grpc.ClientConn
 	target      string
 	AsyncConfig config.AsyncConfig
 }
 
-// Config holds the gRPC client configuration
 type Config struct {
 	Target      string             `mapstructure:"target" yaml:"target" json:"target"`
 	Timeout     time.Duration      `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
@@ -29,7 +27,6 @@ type Config struct {
 	AsyncConfig config.AsyncConfig `mapstructure:"asyncConfig" yaml:"asyncConfig" json:"asyncConfig"`
 }
 
-// New creates a new gRPC client
 func New(cfg Config) (*Client, error) {
 	if cfg.Target == "" {
 		return nil, fmt.Errorf("gRPC target address is required")
@@ -72,17 +69,14 @@ func defaultAsyncConfig() config.AsyncConfig {
 	}
 }
 
-// Conn returns the underlying gRPC connection
 func (c *Client) Conn() *grpc.ClientConn {
 	return c.conn
 }
 
-// Target returns the target address
 func (c *Client) Target() string {
 	return c.target
 }
 
-// Close closes the gRPC connection
 func (c *Client) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
@@ -90,7 +84,6 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// Invoke calls a gRPC method using the generic invoker
 func Invoke[TReq any, TResp any](
 	ctx context.Context,
 	c *Client,
@@ -128,11 +121,9 @@ func Invoke[TReq any, TResp any](
 		Error:    err,
 	}
 
-	// Merge header and trailer metadata
 	responseMD := metadata.Join(headerMD, trailerMD)
 	response.Metadata = responseMD
 
-	// Serialize response body to raw bytes for inspection
 	if resp != nil {
 		if protoMsg, ok := any(resp).(proto.Message); ok {
 			response.RawBody, _ = proto.Marshal(protoMsg)

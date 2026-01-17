@@ -11,8 +11,8 @@ import (
 	"github.com/tidwall/gjson"
 
 	kafkaErrors "github.com/gorelov-m-v/go-test-framework/internal/kafka/errors"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/internal/retry"
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
 	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/client"
 	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
@@ -22,15 +22,12 @@ type Expectation struct {
 	kafkaClient *client.Client
 	topicName   string
 
-	// Параметры поиска
 	filters         map[string]string
 	unique          bool
 	duplicateWindow time.Duration
 
-	// Ожидания (expectations)
 	expectations []fieldExpectation
 
-	// Результат
 	messageBytes []byte
 	found        bool
 }
@@ -51,7 +48,6 @@ func NewExpectation(sCtx provider.StepCtx, kafkaClient *client.Client, topicName
 	}
 }
 
-// With добавляет фильтр для поиска сообщения
 func (e *Expectation) With(key string, value interface{}) *Expectation {
 	if value != nil {
 		e.filters[key] = fmt.Sprintf("%v", value)
@@ -59,21 +55,18 @@ func (e *Expectation) With(key string, value interface{}) *Expectation {
 	return e
 }
 
-// Unique проверяет уникальность сообщения в окне
 func (e *Expectation) Unique() *Expectation {
 	e.unique = true
 	e.duplicateWindow = e.kafkaClient.GetUniqueWindow()
 	return e
 }
 
-// UniqueWithWindow проверяет уникальность с кастомным окном
 func (e *Expectation) UniqueWithWindow(window time.Duration) *Expectation {
 	e.unique = true
 	e.duplicateWindow = window
 	return e
 }
 
-// ExpectField проверяет значение поля
 func (e *Expectation) ExpectField(field string, expectedValue interface{}) *Expectation {
 	e.expectations = append(e.expectations, fieldExpectation{
 		field:     field,
@@ -83,7 +76,6 @@ func (e *Expectation) ExpectField(field string, expectedValue interface{}) *Expe
 	return e
 }
 
-// ExpectFieldNotEmpty проверяет что поле не пустое
 func (e *Expectation) ExpectFieldNotEmpty(field string) *Expectation {
 	e.expectations = append(e.expectations, fieldExpectation{
 		field:     field,
@@ -92,7 +84,6 @@ func (e *Expectation) ExpectFieldNotEmpty(field string) *Expectation {
 	return e
 }
 
-// ExpectFieldIsNull проверяет что поле null
 func (e *Expectation) ExpectFieldIsNull(field string) *Expectation {
 	e.expectations = append(e.expectations, fieldExpectation{
 		field:     field,
@@ -101,7 +92,6 @@ func (e *Expectation) ExpectFieldIsNull(field string) *Expectation {
 	return e
 }
 
-// ExpectFieldIsNotNull проверяет что поле не null
 func (e *Expectation) ExpectFieldIsNotNull(field string) *Expectation {
 	e.expectations = append(e.expectations, fieldExpectation{
 		field:     field,
@@ -110,7 +100,6 @@ func (e *Expectation) ExpectFieldIsNotNull(field string) *Expectation {
 	return e
 }
 
-// ExpectFieldTrue проверяет что поле = true
 func (e *Expectation) ExpectFieldTrue(field string) *Expectation {
 	e.expectations = append(e.expectations, fieldExpectation{
 		field:     field,
@@ -119,7 +108,6 @@ func (e *Expectation) ExpectFieldTrue(field string) *Expectation {
 	return e
 }
 
-// ExpectFieldFalse проверяет что поле = false
 func (e *Expectation) ExpectFieldFalse(field string) *Expectation {
 	e.expectations = append(e.expectations, fieldExpectation{
 		field:     field,
@@ -128,25 +116,24 @@ func (e *Expectation) ExpectFieldFalse(field string) *Expectation {
 	return e
 }
 
-// Send выполняет поиск и проверки (ничего не возвращает)
 func (e *Expectation) Send() {
 	effectiveTimeout := e.kafkaClient.GetDefaultTimeout()
 
 	stepName := fmt.Sprintf("Kafka: Expect from topic '%s'", e.topicName)
 
 	e.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
-		mode := extension.GetStepMode(stepCtx)
+		mode := polling.GetStepMode(stepCtx)
 
-		var summary extension.PollingSummary
+		var summary polling.PollingSummary
 
-		if mode == extension.AsyncMode {
+		if mode == polling.AsyncMode {
 			e.messageBytes, e.found, summary = e.fetchWithRetry(stepCtx)
 		} else {
 			e.messageBytes, e.found, summary = e.fetchOnce()
 		}
 
-		if mode == extension.AsyncMode {
-			extension.AttachPollingSummary(stepCtx, summary)
+		if mode == polling.AsyncMode {
+			polling.AttachPollingSummary(stepCtx, summary)
 		}
 
 		attachSearchInfoByTopic(stepCtx, e.topicName, e.filters, effectiveTimeout, e.unique)
@@ -160,17 +147,17 @@ func (e *Expectation) Send() {
 			attachNotFoundMessageByTopic(stepCtx, e.topicName, e.filters)
 		}
 
-		assertionMode := extension.GetAssertionModeFromStepMode(mode)
+		assertionMode := polling.GetAssertionModeFromStepMode(mode)
 
 		if !e.found {
 			msg := fmt.Sprintf("Kafka message in topic '%s' not found within %s. Filters: %v",
 				e.topicName, effectiveTimeout, e.filters)
 
-			if mode == extension.AsyncMode {
-				msg = extension.FinalFailureMessage(summary)
+			if mode == polling.AsyncMode {
+				msg = polling.FinalFailureMessage(summary)
 			}
 
-			extension.NoError(stepCtx, assertionMode, fmt.Errorf("%s", msg), msg)
+			polling.NoError(stepCtx, assertionMode, fmt.Errorf("%s", msg), msg)
 			return
 		}
 
@@ -183,7 +170,7 @@ func (e *Expectation) Send() {
 	})
 }
 
-func (e *Expectation) fetchOnce() ([]byte, bool, extension.PollingSummary) {
+func (e *Expectation) fetchOnce() ([]byte, bool, polling.PollingSummary) {
 	executor := func(ctx context.Context) ([]byte, error) {
 		return e.doSearch()
 	}
@@ -200,23 +187,23 @@ func (e *Expectation) fetchOnce() ([]byte, bool, extension.PollingSummary) {
 	return result, true, summary
 }
 
-func (e *Expectation) fetchWithRetry(stepCtx provider.StepCtx) ([]byte, bool, extension.PollingSummary) {
+func (e *Expectation) fetchWithRetry(stepCtx provider.StepCtx) ([]byte, bool, polling.PollingSummary) {
 	asyncCfg := e.kafkaClient.GetAsyncConfig()
 
 	executor := func(ctx context.Context) ([]byte, error) {
 		return e.doSearch()
 	}
 
-	checker := func(result []byte, err error) []retry.CheckResult {
+	checker := func(result []byte, err error) []polling.CheckResult {
 		if err != nil {
-			return []retry.CheckResult{{
+			return []polling.CheckResult{{
 				Ok:        false,
 				Retryable: true,
 				Reason:    err.Error(),
 			}}
 		}
 
-		return []retry.CheckResult{{
+		return []polling.CheckResult{{
 			Ok:        true,
 			Retryable: false,
 		}}
@@ -317,18 +304,18 @@ func (e *Expectation) findAndCountWithinWindow(messages []*types.KafkaMessage) (
 	return firstMatchBytes, nil
 }
 
-func (e *Expectation) checkUniqueness(stepCtx provider.StepCtx, mode extension.AssertionMode) {
+func (e *Expectation) checkUniqueness(stepCtx provider.StepCtx, mode polling.AssertionMode) {
 	messages := e.kafkaClient.GetBuffer().GetMessages(e.topicName)
 	_, err := e.findAndCountWithinWindow(messages)
 
 	if err != nil {
 		if notUniqueErr, ok := err.(*kafkaErrors.KafkaMessageNotUniqueError); ok {
-			extension.NoError(stepCtx, mode, notUniqueErr, notUniqueErr.Error())
+			polling.NoError(stepCtx, mode, notUniqueErr, notUniqueErr.Error())
 		}
 	}
 }
 
-func (e *Expectation) runExpectations(stepCtx provider.StepCtx, mode extension.AssertionMode) {
+func (e *Expectation) runExpectations(stepCtx provider.StepCtx, mode polling.AssertionMode) {
 	if len(e.expectations) == 0 {
 		return
 	}
@@ -338,47 +325,47 @@ func (e *Expectation) runExpectations(stepCtx provider.StepCtx, mode extension.A
 	}
 }
 
-func (e *Expectation) checkExpectation(stepCtx provider.StepCtx, mode extension.AssertionMode, exp fieldExpectation) {
+func (e *Expectation) checkExpectation(stepCtx provider.StepCtx, mode polling.AssertionMode, exp fieldExpectation) {
 	result := gjson.GetBytes(e.messageBytes, exp.field)
 
 	switch exp.checkType {
 	case "equals":
 		if !result.Exists() {
-			extension.NoError(stepCtx, mode, fmt.Errorf("field '%s' not found", exp.field), "Field '%s' not found", exp.field)
+			polling.NoError(stepCtx, mode, fmt.Errorf("field '%s' not found", exp.field), "Field '%s' not found", exp.field)
 			return
 		}
 		actualStr := result.String()
 		expectedStr := fmt.Sprintf("%v", exp.value)
 		if actualStr != expectedStr {
-			extension.NoError(stepCtx, mode, fmt.Errorf("field '%s' expected '%v', got '%s'", exp.field, exp.value, actualStr),
+			polling.NoError(stepCtx, mode, fmt.Errorf("field '%s' expected '%v', got '%s'", exp.field, exp.value, actualStr),
 				"Field '%s' expected '%v', got '%s'", exp.field, exp.value, actualStr)
 		}
 
 	case "notEmpty":
 		if !result.Exists() || result.String() == "" {
-			extension.NoError(stepCtx, mode, fmt.Errorf("field '%s' is empty", exp.field), "Field '%s' is empty", exp.field)
+			polling.NoError(stepCtx, mode, fmt.Errorf("field '%s' is empty", exp.field), "Field '%s' is empty", exp.field)
 		}
 
 	case "isNull":
 		if result.Exists() && result.Type != gjson.Null {
-			extension.NoError(stepCtx, mode, fmt.Errorf("field '%s' expected null, got '%s'", exp.field, result.String()),
+			polling.NoError(stepCtx, mode, fmt.Errorf("field '%s' expected null, got '%s'", exp.field, result.String()),
 				"Field '%s' expected null, got '%s'", exp.field, result.String())
 		}
 
 	case "isNotNull":
 		if !result.Exists() || result.Type == gjson.Null {
-			extension.NoError(stepCtx, mode, fmt.Errorf("field '%s' is null", exp.field), "Field '%s' is null", exp.field)
+			polling.NoError(stepCtx, mode, fmt.Errorf("field '%s' is null", exp.field), "Field '%s' is null", exp.field)
 		}
 
 	case "true":
 		if !result.Exists() || !result.Bool() {
-			extension.NoError(stepCtx, mode, fmt.Errorf("field '%s' expected true, got '%s'", exp.field, result.String()),
+			polling.NoError(stepCtx, mode, fmt.Errorf("field '%s' expected true, got '%s'", exp.field, result.String()),
 				"Field '%s' expected true, got '%s'", exp.field, result.String())
 		}
 
 	case "false":
 		if !result.Exists() || result.Bool() {
-			extension.NoError(stepCtx, mode, fmt.Errorf("field '%s' expected false, got '%s'", exp.field, result.String()),
+			polling.NoError(stepCtx, mode, fmt.Errorf("field '%s' expected false, got '%s'", exp.field, result.String()),
 				"Field '%s' expected false, got '%s'", exp.field, result.String())
 		}
 	}

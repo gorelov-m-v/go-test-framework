@@ -12,48 +12,40 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/grpc/client"
 )
 
-// ExpectNoError expects the gRPC call to succeed without error
 func (c *Call[TReq, TResp]) ExpectNoError() *Call[TReq, TResp] {
 	c.addExpectation(makeNoErrorExpectation())
 	return c
 }
 
-// ExpectError expects the gRPC call to return an error
 func (c *Call[TReq, TResp]) ExpectError() *Call[TReq, TResp] {
 	c.addExpectation(makeErrorExpectation())
 	return c
 }
 
-// ExpectStatusCode expects the gRPC call to return a specific status code
 func (c *Call[TReq, TResp]) ExpectStatusCode(code codes.Code) *Call[TReq, TResp] {
 	c.addExpectation(makeStatusCodeExpectation(code))
 	return c
 }
 
-// ExpectFieldValue expects a response field to have a specific value
-// Uses GJSON path syntax for nested fields
 func (c *Call[TReq, TResp]) ExpectFieldValue(path string, expected any) *Call[TReq, TResp] {
 	c.addExpectation(makeFieldValueExpectation(path, expected))
 	return c
 }
 
-// ExpectFieldNotEmpty expects a response field to be non-empty
 func (c *Call[TReq, TResp]) ExpectFieldNotEmpty(path string) *Call[TReq, TResp] {
 	c.addExpectation(makeFieldNotEmptyExpectation(path))
 	return c
 }
 
-// ExpectFieldExists expects a response field to exist
 func (c *Call[TReq, TResp]) ExpectFieldExists(path string) *Call[TReq, TResp] {
 	c.addExpectation(makeFieldExistsExpectation(path))
 	return c
 }
 
-// ExpectMetadata expects a specific metadata key-value pair in the response
 func (c *Call[TReq, TResp]) ExpectMetadata(key, value string) *Call[TReq, TResp] {
 	c.addExpectation(makeMetadataExpectation(key, value))
 	return c
@@ -62,25 +54,25 @@ func (c *Call[TReq, TResp]) ExpectMetadata(key, value string) *Call[TReq, TResp]
 func makeNoErrorExpectation() *expect.Expectation[*client.Response[any]] {
 	return expect.New(
 		"Expect: No error",
-		func(err error, resp *client.Response[any]) expect.CheckResult {
+		func(err error, resp *client.Response[any]) polling.CheckResult {
 			if err != nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Expected no error, got: %v", err),
 				}
 			}
 			if resp != nil && resp.Error != nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Expected no error, got: %v", resp.Error),
 				}
 			}
-			return expect.CheckResult{Ok: true}
+			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
-			a := extension.PickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
 				a.True(false, "[Expect: No error] %s", checkRes.Reason)
 			} else {
@@ -93,19 +85,19 @@ func makeNoErrorExpectation() *expect.Expectation[*client.Response[any]] {
 func makeErrorExpectation() *expect.Expectation[*client.Response[any]] {
 	return expect.New(
 		"Expect: Error",
-		func(err error, resp *client.Response[any]) expect.CheckResult {
+		func(err error, resp *client.Response[any]) polling.CheckResult {
 			hasError := err != nil || (resp != nil && resp.Error != nil)
 			if !hasError {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    "Expected an error, but call succeeded",
 				}
 			}
-			return expect.CheckResult{Ok: true}
+			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
-			a := extension.PickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
 				a.True(false, "[Expect: Error] %s", checkRes.Reason)
 			} else {
@@ -118,7 +110,7 @@ func makeErrorExpectation() *expect.Expectation[*client.Response[any]] {
 func makeStatusCodeExpectation(code codes.Code) *expect.Expectation[*client.Response[any]] {
 	return expect.New(
 		fmt.Sprintf("Expect: Status code %s (%d)", code.String(), code),
-		func(err error, resp *client.Response[any]) expect.CheckResult {
+		func(err error, resp *client.Response[any]) polling.CheckResult {
 			var actualCode codes.Code
 			if err != nil {
 				st, ok := status.FromError(err)
@@ -139,16 +131,16 @@ func makeStatusCodeExpectation(code codes.Code) *expect.Expectation[*client.Resp
 			}
 
 			if actualCode != code {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Expected status %s (%d), got %s (%d)", code.String(), code, actualCode.String(), actualCode),
 				}
 			}
-			return expect.CheckResult{Ok: true}
+			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
-			a := extension.PickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
 				a.True(false, "[Expect: Status code %s (%d)] %s", code.String(), code, checkRes.Reason)
 			} else {
@@ -182,16 +174,16 @@ func getResponseJSON(resp *client.Response[any]) ([]byte, error) {
 func makeFieldValueExpectation(path string, expected any) *expect.Expectation[*client.Response[any]] {
 	return expect.New(
 		fmt.Sprintf("Expect: Field '%s' = %v", path, expected),
-		func(err error, resp *client.Response[any]) expect.CheckResult {
+		func(err error, resp *client.Response[any]) polling.CheckResult {
 			if err != nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    "Call failed with error",
 				}
 			}
 			if resp == nil || resp.Body == nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    "Response body is nil",
@@ -200,7 +192,7 @@ func makeFieldValueExpectation(path string, expected any) *expect.Expectation[*c
 
 			jsonBytes, jsonErr := getResponseJSON(resp)
 			if jsonErr != nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
 					Reason:    fmt.Sprintf("Cannot parse response: %v", jsonErr),
@@ -209,7 +201,7 @@ func makeFieldValueExpectation(path string, expected any) *expect.Expectation[*c
 
 			result := gjson.GetBytes(jsonBytes, path)
 			if !result.Exists() {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Field '%s' does not exist", path),
@@ -218,17 +210,17 @@ func makeFieldValueExpectation(path string, expected any) *expect.Expectation[*c
 
 			ok, msg := compareValues(result, expected)
 			if !ok {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    msg,
 				}
 			}
 
-			return expect.CheckResult{Ok: true}
+			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
-			a := extension.PickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
 				a.True(false, "[Expect: Field '%s' = %v] %s", path, expected, checkRes.Reason)
 			} else {
@@ -241,16 +233,16 @@ func makeFieldValueExpectation(path string, expected any) *expect.Expectation[*c
 func makeFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Response[any]] {
 	return expect.New(
 		fmt.Sprintf("Expect: Field '%s' not empty", path),
-		func(err error, resp *client.Response[any]) expect.CheckResult {
+		func(err error, resp *client.Response[any]) polling.CheckResult {
 			if err != nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    "Call failed with error",
 				}
 			}
 			if resp == nil || resp.Body == nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    "Response body is nil",
@@ -259,7 +251,7 @@ func makeFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Respo
 
 			jsonBytes, jsonErr := getResponseJSON(resp)
 			if jsonErr != nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
 					Reason:    fmt.Sprintf("Cannot parse response: %v", jsonErr),
@@ -268,7 +260,7 @@ func makeFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Respo
 
 			result := gjson.GetBytes(jsonBytes, path)
 			if !result.Exists() {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Field '%s' does not exist", path),
@@ -276,17 +268,17 @@ func makeFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Respo
 			}
 
 			if isEmptyValue(result) {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Field '%s' is empty", path),
 				}
 			}
 
-			return expect.CheckResult{Ok: true}
+			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
-			a := extension.PickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
 				a.True(false, "[Expect: Field '%s' not empty] %s", path, checkRes.Reason)
 			} else {
@@ -299,16 +291,16 @@ func makeFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Respo
 func makeFieldExistsExpectation(path string) *expect.Expectation[*client.Response[any]] {
 	return expect.New(
 		fmt.Sprintf("Expect: Field '%s' exists", path),
-		func(err error, resp *client.Response[any]) expect.CheckResult {
+		func(err error, resp *client.Response[any]) polling.CheckResult {
 			if err != nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    "Call failed with error",
 				}
 			}
 			if resp == nil || resp.Body == nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    "Response body is nil",
@@ -317,7 +309,7 @@ func makeFieldExistsExpectation(path string) *expect.Expectation[*client.Respons
 
 			jsonBytes, jsonErr := getResponseJSON(resp)
 			if jsonErr != nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
 					Reason:    fmt.Sprintf("Cannot parse response: %v", jsonErr),
@@ -326,17 +318,17 @@ func makeFieldExistsExpectation(path string) *expect.Expectation[*client.Respons
 
 			result := gjson.GetBytes(jsonBytes, path)
 			if !result.Exists() {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Field '%s' does not exist", path),
 				}
 			}
 
-			return expect.CheckResult{Ok: true}
+			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
-			a := extension.PickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
 				a.True(false, "[Expect: Field '%s' exists] %s", path, checkRes.Reason)
 			} else {
@@ -349,16 +341,16 @@ func makeFieldExistsExpectation(path string) *expect.Expectation[*client.Respons
 func makeMetadataExpectation(key, expectedValue string) *expect.Expectation[*client.Response[any]] {
 	return expect.New(
 		fmt.Sprintf("Expect: Metadata '%s' = '%s'", key, expectedValue),
-		func(err error, resp *client.Response[any]) expect.CheckResult {
+		func(err error, resp *client.Response[any]) polling.CheckResult {
 			if err != nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    "Call failed with error",
 				}
 			}
 			if resp == nil {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    "Response is nil",
@@ -367,7 +359,7 @@ func makeMetadataExpectation(key, expectedValue string) *expect.Expectation[*cli
 
 			values := resp.Metadata.Get(key)
 			if len(values) == 0 {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Metadata key '%s' not found", key),
@@ -383,17 +375,17 @@ func makeMetadataExpectation(key, expectedValue string) *expect.Expectation[*cli
 			}
 
 			if !found {
-				return expect.CheckResult{
+				return polling.CheckResult{
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Metadata '%s' = %v, expected '%s'", key, values, expectedValue),
 				}
 			}
 
-			return expect.CheckResult{Ok: true}
+			return polling.CheckResult{Ok: true}
 		},
-		func(stepCtx provider.StepCtx, mode extension.AssertionMode, err error, resp *client.Response[any], checkRes expect.CheckResult) {
-			a := extension.PickAsserter(stepCtx, mode)
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
 			if !checkRes.Ok {
 				a.True(false, "[Expect: Metadata '%s' = '%s'] %s", key, expectedValue, checkRes.Reason)
 			} else {

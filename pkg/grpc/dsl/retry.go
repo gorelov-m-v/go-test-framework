@@ -7,12 +7,12 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/internal/retry"
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
 	"github.com/gorelov-m-v/go-test-framework/pkg/grpc/client"
 )
 
-func (c *Call[TReq, TResp]) executeSingle() (*client.Response[TResp], error, extension.PollingSummary) {
+func (c *Call[TReq, TResp]) executeSingle() (*client.Response[TResp], error, polling.PollingSummary) {
 	executor := func(ctx context.Context) (*client.Response[TResp], error) {
 		resp, err := client.Invoke[TReq, TResp](ctx, c.client, c.fullMethod, c.body, c.metadata)
 		if err != nil && resp == nil {
@@ -42,7 +42,7 @@ func (c *Call[TReq, TResp]) executeSingle() (*client.Response[TResp], error, ext
 func (c *Call[TReq, TResp]) executeWithRetry(
 	stepCtx provider.StepCtx,
 	expectations []*expect.Expectation[*client.Response[any]],
-) (*client.Response[TResp], error, extension.PollingSummary) {
+) (*client.Response[TResp], error, polling.PollingSummary) {
 	asyncCfg := c.client.AsyncConfig
 
 	if !asyncCfg.Enabled {
@@ -65,7 +65,7 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 		return resp, err
 	}
 
-	checker := func(resp *client.Response[TResp], err error) []retry.CheckResult {
+	checker := func(resp *client.Response[TResp], err error) []polling.CheckResult {
 		var bodyAny any
 		respAny := &client.Response[any]{
 			Body:     nil,
@@ -85,10 +85,10 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 			respAny.RawBody = resp.RawBody
 		}
 
-		results := make([]retry.CheckResult, 0, len(expectations))
+		results := make([]polling.CheckResult, 0, len(expectations))
 		for _, exp := range expectations {
 			checkRes := exp.Check(err, respAny)
-			results = append(results, retry.CheckResult{
+			results = append(results, polling.CheckResult{
 				Ok:        checkRes.Ok,
 				Retryable: checkRes.Retryable,
 				Reason:    checkRes.Reason,

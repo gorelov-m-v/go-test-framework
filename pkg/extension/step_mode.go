@@ -2,24 +2,19 @@ package extension
 
 import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
+
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 )
 
-type StepMode int
+type StepMode = polling.StepMode
 
 const (
-	SyncMode StepMode = iota
-	AsyncMode
+	SyncMode  = polling.SyncMode
+	AsyncMode = polling.AsyncMode
 )
 
-type StepModeProvider interface {
-	provider.StepCtx
-	StepMode() StepMode
-}
+type StepModeProvider = polling.StepModeProvider
 
 func GetStepMode(sCtx provider.StepCtx) StepMode {
-	if smp, ok := sCtx.(StepModeProvider); ok {
-		return smp.StepMode()
-	}
-
-	return SyncMode
+	return polling.GetStepMode(sCtx)
 }

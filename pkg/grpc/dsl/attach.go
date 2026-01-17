@@ -12,10 +12,10 @@ import (
 )
 
 type grpcRequestDTO struct {
-	Target     string            `json:"target"`
-	Method     string            `json:"method"`
-	Metadata   map[string]string `json:"metadata,omitempty"`
-	Body       any               `json:"body,omitempty"`
+	Target   string            `json:"target"`
+	Method   string            `json:"method"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+	Body     any               `json:"body,omitempty"`
 }
 
 type grpcResponseDTO struct {
@@ -64,7 +64,6 @@ func attachResponse[TResp any](stepCtx provider.StepCtx, resp *client.Response[T
 		Duration: resp.Duration.String(),
 	}
 
-	// Extract status from error
 	if resp.Error != nil {
 		st, ok := status.FromError(resp.Error)
 		if ok {
@@ -100,7 +99,6 @@ func attachResponse[TResp any](stepCtx provider.StepCtx, resp *client.Response[T
 		return
 	}
 
-	// Determine attachment name based on status
 	attachmentName := fmt.Sprintf("gRPC Response [%s]", dto.Status)
 	stepCtx.WithAttachments(allure.NewAttachment(attachmentName, allure.JSON, jsonBytes))
 }

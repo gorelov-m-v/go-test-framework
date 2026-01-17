@@ -9,7 +9,7 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
-	"github.com/gorelov-m-v/go-test-framework/pkg/extension"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 )
 
@@ -122,16 +122,13 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.sCtx.WithNewStep(name, func(stepCtx provider.StepCtx) {
 		attachRequest(stepCtx, c.client, c.req)
 
-		mode := extension.GetStepMode(stepCtx)
-		// IMPORTANT: Retries are only enabled in AsyncMode when expectations are present.
-		// Without expectations, requests execute once even in AsyncMode (no automatic retry on network errors).
-		// To enable retries: add at least one expectation (ExpectResponseStatus, ExpectResponseBodyNotEmpty, etc.)
-		useRetry := mode == extension.AsyncMode && len(c.expectations) > 0
+		mode := polling.GetStepMode(stepCtx)
+		useRetry := mode == polling.AsyncMode && len(c.expectations) > 0
 
 		var (
 			resp    *client.Response[TResp]
 			err     error
-			summary extension.PollingSummary
+			summary polling.PollingSummary
 		)
 
 		if useRetry {
@@ -150,8 +147,8 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 		c.resp = resp
 		c.sent = true
 
-		if mode == extension.AsyncMode {
-			extension.AttachPollingSummary(stepCtx, summary)
+		if mode == polling.AsyncMode {
+			polling.AttachPollingSummary(stepCtx, summary)
 		}
 
 		attachResponse(stepCtx, c.client, c.resp)
@@ -165,15 +162,15 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 			NetworkError: resp.NetworkError,
 		}
 
-		assertionMode := extension.GetAssertionModeFromStepMode(mode)
+		assertionMode := polling.GetAssertionModeFromStepMode(mode)
 
 		if len(c.expectations) == 0 {
 			if err != nil {
-				extension.NoError(stepCtx, assertionMode, err, "HTTP request failed: %v", err)
+				polling.NoError(stepCtx, assertionMode, err, "HTTP request failed: %v", err)
 				return
 			}
 			if c.resp.NetworkError != "" {
-				extension.Equal(stepCtx, assertionMode, "", c.resp.NetworkError, "HTTP network error")
+				polling.Equal(stepCtx, assertionMode, "", c.resp.NetworkError, "HTTP network error")
 				return
 			}
 			return

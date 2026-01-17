@@ -87,7 +87,7 @@ func (g *Generator) generateClientMethod(method HTTPMethodInfo) string {
 	return buf.String()
 }
 
-func (g *Generator) operationToMethodName(op *openapi3.Operation, path string, httpMethod string, usedNames map[string]bool) string {
+func (g *Generator) operationToMethodName(op *openapi3.Operation, path string, httpMethod string, apiVersion string, usedNames map[string]bool) string {
 	pathName := g.extractNameFromPath(path, httpMethod)
 
 	if op.OperationID != "" {
@@ -95,38 +95,39 @@ func (g *Generator) operationToMethodName(op *openapi3.Operation, path string, h
 
 		if isGenericName(operationName) || len(operationName) < 3 {
 			if pathName != "" && !isGenericName(pathName) {
-				return g.ensureUniqueName(pathName, httpMethod, usedNames)
+				return g.ensureUniqueName(pathName, httpMethod, apiVersion, usedNames)
 			}
 		}
 
 		if strings.Contains(path, "{") && strings.Count(path, "/") <= 2 {
 			if pathName != "" && !isGenericName(pathName) {
-				return g.ensureUniqueName(pathName, httpMethod, usedNames)
+				return g.ensureUniqueName(pathName, httpMethod, apiVersion, usedNames)
 			}
 		}
 
 		if pathName != "" && !isGenericName(pathName) {
 			if isCRUDPath(path) || len(pathName) < len(operationName) {
-				return g.ensureUniqueName(pathName, httpMethod, usedNames)
+				return g.ensureUniqueName(pathName, httpMethod, apiVersion, usedNames)
 			}
 		}
 
-		return g.ensureUniqueName(operationName, httpMethod, usedNames)
+		return g.ensureUniqueName(operationName, httpMethod, apiVersion, usedNames)
 	}
 
 	if pathName != "" {
-		return g.ensureUniqueName(pathName, httpMethod, usedNames)
+		return g.ensureUniqueName(pathName, httpMethod, apiVersion, usedNames)
 	}
 
-	return g.ensureUniqueName("Request", httpMethod, usedNames)
+	return g.ensureUniqueName("Request", httpMethod, apiVersion, usedNames)
 }
 
-func (g *Generator) ensureUniqueName(name string, httpMethod string, usedNames map[string]bool) string {
-	if !usedNames[name] {
-		return name
+func (g *Generator) ensureUniqueName(name string, httpMethod string, apiVersion string, usedNames map[string]bool) string {
+	fullName := name + apiVersion
+	if !usedNames[fullName] {
+		return fullName
 	}
 	httpPrefix := getHTTPPrefix(httpMethod)
-	return httpPrefix + name
+	return httpPrefix + name + apiVersion
 }
 
 func (g *Generator) extractNameFromPath(path string, httpMethod string) string {

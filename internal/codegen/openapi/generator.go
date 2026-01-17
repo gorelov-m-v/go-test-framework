@@ -203,8 +203,7 @@ func (g *Generator) collectMethods() {
 			}
 
 			apiVersion := extractAPIVersion(path)
-			methodName := g.operationToMethodName(op, path, httpMethod, usedNames)
-			methodName = methodName + apiVersion
+			methodName := g.operationToMethodName(op, path, httpMethod, apiVersion, usedNames)
 			usedNames[methodName] = true
 
 			info := HTTPMethodInfo{

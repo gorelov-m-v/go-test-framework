@@ -854,6 +854,32 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 
 **Как работает:** Если найдено >1 сообщение в окне → тест падает
 
+### Количество сообщений
+
+| Метод | Описание |
+|:---|:---|
+| `.ExpectCount(n)` | Ожидает ровно N сообщений по фильтрам |
+
+**Как работает:**
+1. Ищет все сообщения по фильтрам `.With()`
+2. В async режиме → retry пока не найдёт минимум N сообщений
+3. Проверяет что найдено **ровно N** (не больше, не меньше)
+4. Аттачит **все найденные сообщения** как JSON массив в Allure
+5. Применяет `ExpectField*` проверки к **первому** (самому свежему) сообщению
+
+**Пример использования:**
+```go
+// Ожидаем 2 сообщения: первое от Create, второе от Delete
+s.AsyncStep(t, "Verify Kafka Messages", func(sCtx provider.StepCtx) {
+    kafkaDSL.Expect[kafka.GameTopic](sCtx, kafka.Client()).
+        With("category.uuid", categoryId).
+        With("category.status", "disabled").
+        ExpectCount(2).
+        ExpectField("message.eventType", "category").
+        Send()
+})
+```
+
 ### Проверки полей (Expectations)
 
 | Метод | Описание |

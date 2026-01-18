@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -74,6 +75,16 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 	return q
 }
 
+func (q *Query[T]) ExpectColumnEmpty(columnName string) *Query[T] {
+	if q.expectsNotFound {
+		q.sCtx.Break("DB DSL Error: ExpectColumnEmpty() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
+	}
+	q.expectations = append(q.expectations, makeColumnEmptyExpectation[T](columnName))
+	return q
+}
+
 func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 	if q.expectsNotFound {
 		q.sCtx.Break("DB DSL Error: ExpectColumnIsNotNull() cannot be used with ExpectNotFound()")
@@ -101,6 +112,16 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnFalseExpectation[T](columnName))
+	return q
+}
+
+func (q *Query[T]) ExpectColumnJsonEquals(columnName string, expected map[string]interface{}) *Query[T] {
+	if q.expectsNotFound {
+		q.sCtx.Break("DB DSL Error: ExpectColumnJsonEquals() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
+	}
+	q.expectations = append(q.expectations, makeColumnJsonEqualsExpectation[T](columnName, expected))
 	return q
 }
 
@@ -288,6 +309,58 @@ func makeColumnIsNullExpectation[T any](columnName string) *expect.Expectation[T
 			actualValue, _ := getFieldValueByColumnName(result, columnName)
 			isNull := typeconv.IsNull(actualValue)
 			a.Equal(true, isNull, "[Expect: Column '%s' IS NULL]", columnName)
+		},
+	)
+}
+
+func makeColumnEmptyExpectation[T any](columnName string) *expect.Expectation[T] {
+	return expect.New(
+		fmt.Sprintf("Expect: Column '%s' IS EMPTY", columnName),
+		func(err error, result T) polling.CheckResult {
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
+					}
+				}
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
+				}
+			}
+
+			actualValue, getErr := getFieldValueByColumnName(result, columnName)
+			if getErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				}
+			}
+
+			isEmpty := typeconv.IsEmpty(actualValue)
+			if !isEmpty {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Expected column '%s' to be empty, but got: %v", columnName, actualValue),
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result T, checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
+			if !checkRes.Ok {
+				a.True(false, "[Expect: Column '%s' IS EMPTY] %s", columnName, checkRes.Reason)
+				return
+			}
+
+			actualValue, _ := getFieldValueByColumnName(result, columnName)
+			isEmpty := typeconv.IsEmpty(actualValue)
+			a.Equal(true, isEmpty, "[Expect: Column '%s' IS EMPTY]", columnName)
 		},
 	)
 }
@@ -518,6 +591,93 @@ func makeColumnNotEqualsExpectation[T any](columnName string, notExpectedValue a
 					Ok:        false,
 					Retryable: true,
 					Reason:    fmt.Sprintf("Column '%s' equals %v, but expected NOT to equal", columnName, actualValue),
+				}
+			}
+
+			return polling.CheckResult{Ok: true}
+		},
+		expect.StandardReport[T](name),
+	)
+}
+
+func makeColumnJsonEqualsExpectation[T any](columnName string, expected map[string]interface{}) *expect.Expectation[T] {
+	name := fmt.Sprintf("Expect: Column '%s' JSON = %v", columnName, expected)
+	return expect.New(
+		name,
+		func(err error, result T) polling.CheckResult {
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
+					}
+				}
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
+				}
+			}
+
+			actualValue, getErr := getFieldValueByColumnName(result, columnName)
+			if getErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
+				}
+			}
+
+			var actualMap map[string]interface{}
+			switch v := actualValue.(type) {
+			case json.RawMessage:
+				if err := json.Unmarshal(v, &actualMap); err != nil {
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: false,
+						Reason:    fmt.Sprintf("Failed to unmarshal JSON: %v", err),
+					}
+				}
+			case []byte:
+				if err := json.Unmarshal(v, &actualMap); err != nil {
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: false,
+						Reason:    fmt.Sprintf("Failed to unmarshal JSON: %v", err),
+					}
+				}
+			case string:
+				if err := json.Unmarshal([]byte(v), &actualMap); err != nil {
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: false,
+						Reason:    fmt.Sprintf("Failed to unmarshal JSON string: %v", err),
+					}
+				}
+			default:
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Column '%s' is not a JSON type, got %T", columnName, actualValue),
+				}
+			}
+
+			for key, expectedVal := range expected {
+				actualVal, exists := actualMap[key]
+				if !exists {
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Key '%s' not found in JSON", key),
+					}
+				}
+				if fmt.Sprintf("%v", expectedVal) != fmt.Sprintf("%v", actualVal) {
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Key '%s': expected '%v', got '%v'", key, expectedVal, actualVal),
+					}
 				}
 			}
 

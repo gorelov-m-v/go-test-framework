@@ -12,10 +12,16 @@ type BaseSuite struct {
 	suite.Suite
 	tExt    *TExtension
 	asyncWg sync.WaitGroup
+	cleanup func(t provider.T)
 }
 
 func (s *BaseSuite) BeforeEach(t provider.T) {
 	s.tExt = nil
+	s.cleanup = nil
+}
+
+func (s *BaseSuite) Cleanup(fn func(t provider.T)) {
+	s.cleanup = fn
 }
 
 func (s *BaseSuite) T(t provider.T) *TExtension {
@@ -40,4 +46,7 @@ func (s *BaseSuite) AsyncStep(t provider.T, name string, fn func(sCtx provider.S
 
 func (s *BaseSuite) AfterEach(t provider.T) {
 	s.asyncWg.Wait()
+	if s.cleanup != nil {
+		s.cleanup(t)
+	}
 }

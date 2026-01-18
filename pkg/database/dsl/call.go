@@ -144,6 +144,12 @@ func getFieldValueByColumnName(target any, columnName string) (any, error) {
 		return nil, fmt.Errorf("target is not a struct, got %s", v.Kind())
 	}
 
+	if !v.CanAddr() {
+		ptr := reflect.New(v.Type())
+		ptr.Elem().Set(v)
+		v = ptr.Elem()
+	}
+
 	fieldMap := structMapper.FieldMap(v)
 
 	fieldValue, found := fieldMap[columnName]

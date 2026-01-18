@@ -165,6 +165,12 @@ help:
 
 func (g *Generator) configTemplate() string {
 	config := `#===============================================================================
+# ALLURE
+#===============================================================================
+allure:
+  outputPath: "allure-results"
+
+#===============================================================================
 # HTTP SERVICES
 #===============================================================================
 http:
@@ -325,7 +331,7 @@ import (
 var env *TestEnv
 
 type TestEnv struct {
-	JSONPlaceholder jsonplaceholder.Link `+"`config:\"jsonplaceholder\"`"+`
+	JSONPlaceholder jsonplaceholder.Link `+"`config:\"http.jsonplaceholder\"`"+`
 }
 
 func init() {

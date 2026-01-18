@@ -164,6 +164,8 @@ func IsEmpty(v any) bool {
 	switch x := v.(type) {
 	case string:
 		return strings.TrimSpace(x) == ""
+	case *string:
+		return x == nil || strings.TrimSpace(*x) == ""
 
 	case sql.NullString:
 		return !x.Valid || strings.TrimSpace(x.String) == ""

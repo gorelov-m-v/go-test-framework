@@ -36,7 +36,7 @@ func equalsLoose(expected, actual any) (bool, bool, string) {
 	actNum, actIsNum := toComparableNumber(actual)
 	if expIsNum && actIsNum {
 		equal := expNum == actNum
-		return equal, true, fmt.Sprintf("expected %v, got %v", expected, actual)
+		return equal, true, fmt.Sprintf("expected %v, got %v", expNum, actNum)
 	}
 
 	if expIsNum != actIsNum {
@@ -47,7 +47,7 @@ func equalsLoose(expected, actual any) (bool, bool, string) {
 	actStr, actIsStr := toComparableString(actual)
 	if expIsStr && actIsStr {
 		equal := expStr == actStr
-		return equal, true, fmt.Sprintf("expected %v, got %v", expected, actual)
+		return equal, true, fmt.Sprintf("expected %v, got %v", expStr, actStr)
 	}
 
 	if expIsStr != actIsStr {
@@ -144,6 +144,10 @@ func toComparableString(v any) (string, bool) {
 	switch x := v.(type) {
 	case string:
 		return x, true
+	case *string:
+		if x != nil {
+			return *x, true
+		}
 	case []byte:
 		return string(x), true
 	case sql.NullString:
@@ -153,6 +157,14 @@ func toComparableString(v any) (string, bool) {
 	case *sql.NullString:
 		if x != nil && x.Valid {
 			return x.String, true
+		}
+	default:
+		rv := reflect.ValueOf(v)
+		if rv.Kind() == reflect.Ptr && !rv.IsNil() {
+			elem := rv.Elem()
+			if elem.Kind() == reflect.String {
+				return elem.String(), true
+			}
 		}
 	}
 	return "", false

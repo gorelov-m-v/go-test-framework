@@ -81,6 +81,11 @@ func (s *PlayerSuite) TestCreatePlayer(t provider.T) {
         - [Email](#emaillength-int-string)
         - [Password](#passwordlength-int-charsets-string-string)
         - [String](#stringlength-int-charsets-string-string)
+    - [BaseSuite и Cleanup](#basesuite-и-cleanup)
+        - [Структура BaseSuite](#структура-basesuite)
+        - [Методы Step и AsyncStep](#методы-step-и-asyncstep)
+        - [Автоматический Cleanup](#автоматический-cleanup)
+    - [Настройка Allure](#настройка-allure)
 - [Быстрый старт](#быстрый-старт)
 - [Рекомендуемая структура проекта](#рекомендуемая-структура-проекта)
 
@@ -646,9 +651,11 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 *   `.ExpectNotFound()` — Ожидает, что запрос вернет `sql.ErrNoRows`.
 
 **Проверки значений колонок:**
-*   `.ExpectColumnEquals("col", val)` — Сравнивает значение.
+*   `.ExpectColumnEquals("col", val)` — Сравнивает значение (поддерживает `*string`, `sql.Null*` типы).
 *   `.ExpectColumnTrue("col")` / `.ExpectColumnFalse("col")` — Для boolean полей.
 *   `.ExpectColumnIsNull("col")` / `.ExpectColumnIsNotNull("col")` — Для `sql.Null*` типов.
+*   `.ExpectColumnEmpty("col")` — Проверяет, что колонка NULL или пустая строка.
+*   `.ExpectColumnJsonEquals("col", map[string]interface{})` — Сравнивает JSON-поле с ожидаемым map.
 
 **Примечание:** Имена колонок (`"col"`) должны совпадать с тегом `db` в вашей модели.
 
@@ -2900,6 +2907,123 @@ func (s *RegisterNegativeSuite) BeforeAll(t provider.T) {
 
 ---
 
+### BaseSuite и Cleanup
+
+`BaseSuite` — базовая структура для тестовых suite, которая предоставляет удобные методы для организации тестов и автоматическое управление ресурсами.
+
+#### Структура BaseSuite
+
+```go
+import "github.com/gorelov-m-v/go-test-framework/pkg/extension"
+
+type MySuite struct {
+    extension.BaseSuite
+}
+
+func TestMySuite(t *testing.T) {
+    suite.RunSuite(t, new(MySuite))
+}
+```
+
+`BaseSuite` предоставляет:
+- `Step` — синхронный шаг теста
+- `AsyncStep` — асинхронный шаг с автоматическими retry
+- `Cleanup` — регистрация функции очистки
+
+#### Методы Step и AsyncStep
+
+```go
+func (s *MySuite) TestExample(t provider.T) {
+    // Синхронный шаг — выполняется последовательно
+    s.Step(t, "Create resource", func(sCtx provider.StepCtx) {
+        // ...
+    })
+
+    // Асинхронные шаги — выполняются параллельно друг с другом
+    s.AsyncStep(t, "Verify in DB", func(sCtx provider.StepCtx) {
+        // автоматические retry до успеха или таймаута
+    })
+
+    s.AsyncStep(t, "Verify in Kafka", func(sCtx provider.StepCtx) {
+        // выполняется параллельно с предыдущим AsyncStep
+    })
+
+    // Синхронный шаг ЖДЁТ завершения всех предыдущих AsyncStep
+    s.Step(t, "Final check", func(sCtx provider.StepCtx) {
+        // все async шаги уже завершены
+    })
+}
+```
+
+#### Автоматический Cleanup
+
+Метод `Cleanup` регистрирует функцию очистки, которая **гарантированно выполнится** в `AfterEach`, даже если тест упадёт.
+
+```go
+func (s *MySuite) TestCreateAndDelete(t provider.T) {
+    var resourceID string
+
+    s.Step(t, "Create resource", func(sCtx provider.StepCtx) {
+        resp := api.CreateResource(sCtx).Send()
+        resourceID = resp.Body.ID
+    })
+
+    // Регистрируем cleanup — выполнится в AfterEach
+    s.Cleanup(func(t provider.T) {
+        s.Step(t, "Delete resource", func(sCtx provider.StepCtx) {
+            api.DeleteResource(sCtx, resourceID).Send()
+        })
+    })
+
+    // Проверки — если упадут, cleanup всё равно выполнится
+    s.Step(t, "Verify resource", func(sCtx provider.StepCtx) {
+        // ...
+    })
+}
+```
+
+**Преимущества:**
+- Не нужно переопределять `AfterEach`
+- Не нужно вызывать родительский метод
+- Cleanup выполняется автоматически после всех async шагов
+- Ресурсы удаляются даже при падении теста
+
+---
+
+### Настройка Allure
+
+По умолчанию allure-go создаёт папку `allure-results` в директории каждого тестового пакета. Чтобы собирать все результаты в одном месте, укажите путь в конфиге или переменной окружения.
+
+#### Вариант 1: В конфиге (рекомендуется)
+
+```yaml
+# configs/config.local.yaml
+allure:
+  outputPath: "allure-results"
+```
+
+Фреймворк автоматически настроит `ALLURE_OUTPUT_PATH` относительно корня проекта. Результаты будут в `<project_root>/allure-results/`.
+
+#### Вариант 2: При запуске тестов
+
+```bash
+ALLURE_OUTPUT_PATH=. go test ./...
+```
+
+> **Примечание:** allure-go автоматически создаёт папку `allure-results` внутри указанного пути. Поэтому `ALLURE_OUTPUT_PATH=.` создаст `./allure-results/`.
+
+#### Генерация отчёта
+
+```bash
+# Запустить локальный сервер с отчётом
+allure serve ./allure-results
+
+# Или сгенерировать статический отчёт
+allure generate ./allure-results -o ./allure-report
+```
+
+---
+
 ## Быстрый старт
 
 ### Вариант 1: Новый проект (рекомендуется)
@@ -3021,7 +3145,7 @@ cd ../game-service && docker-compose down
 
 | Test Suite | Что демонстрирует |
 |------------|-------------------|
-| **DatabaseFeaturesSuite** | `ExpectFound`, `ExpectNotFound`, `ExpectColumnEquals`, `ExpectColumnNotEquals`, `ExpectColumnTrue/False`, `ExpectColumnIsNull/IsNotNull` |
+| **DatabaseFeaturesSuite** | `ExpectFound`, `ExpectNotFound`, `ExpectColumnEquals`, `ExpectColumnNotEquals`, `ExpectColumnTrue/False`, `ExpectColumnIsNull/IsNotNull`, `ExpectColumnEmpty`, `ExpectColumnJsonEquals` |
 
 #### Kafka DSL
 

@@ -66,6 +66,14 @@ func (e *Expectation) ExpectField(field string, expectedValue interface{}) *Expe
 	return e
 }
 
+func (e *Expectation) ExpectJsonField(field string, expected map[string]interface{}) *Expectation {
+	for key, value := range expected {
+		path := field + "." + key
+		e.expectations = append(e.expectations, makeFieldValueExpectation(path, value))
+	}
+	return e
+}
+
 func (e *Expectation) ExpectFieldNotEmpty(field string) *Expectation {
 	e.expectations = append(e.expectations, makeFieldNotEmptyExpectation(field))
 	return e

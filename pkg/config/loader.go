@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -22,6 +23,10 @@ type ServiceConfig struct {
 	DefaultHeaders map[string]string `mapstructure:"defaultHeaders"`
 }
 
+type AllureConfig struct {
+	OutputPath string `mapstructure:"outputPath"`
+}
+
 func Viper() (*viper.Viper, error) {
 	once.Do(func() {
 		v := viper.New()
@@ -37,6 +42,9 @@ func Viper() (*viper.Viper, error) {
 		v.SetConfigType("yaml")
 		v.AddConfigPath("./configs")
 		v.AddConfigPath("../configs")
+		v.AddConfigPath("../../configs")
+		v.AddConfigPath("../../../configs")
+		v.AddConfigPath("../../../../configs")
 		v.AddConfigPath(".")
 
 		log.Printf("[Config] Loading configuration for env: '%s' (file: %s.yaml)", env, configName)
@@ -47,7 +55,32 @@ func Viper() (*viper.Viper, error) {
 		}
 
 		configInstance = v
+
+		configureAllure(v)
 	})
 
 	return configInstance, loadErr
+}
+
+func configureAllure(v *viper.Viper) {
+	if os.Getenv("ALLURE_OUTPUT_PATH") != "" {
+		return
+	}
+
+	outputPath := v.GetString("allure.outputPath")
+	if outputPath == "" {
+		return
+	}
+
+	if !filepath.IsAbs(outputPath) {
+		configDir := filepath.Dir(v.ConfigFileUsed())
+		outputPath = filepath.Join(configDir, "..", outputPath)
+	}
+
+	outputPath = filepath.Clean(outputPath)
+	if filepath.Base(outputPath) == "allure-results" {
+		outputPath = filepath.Dir(outputPath)
+	}
+
+	os.Setenv("ALLURE_OUTPUT_PATH", outputPath)
 }

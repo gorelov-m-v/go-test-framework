@@ -382,7 +382,7 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 
 **Поддерживаемые типы сравнения:**
 *   `string`: `"active"`
-*   `int`, `float`: `100`, `99.99`
+*   `int`, `float`: `100`, `99.99` (авто-конвертация между `int`, `int16`, `int32`, `int64`, `float32`, `float64`)
 *   `bool`: `true`, `false`
 *   `nil`: Проверяет, что поле в JSON равно `null` или отсутствует.
 
@@ -659,6 +659,17 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 
 **Примечание:** Имена колонок (`"col"`) должны совпадать с тегом `db` в вашей модели.
 
+**Авто-конвертация числовых типов:** DSL автоматически сравнивает числа разных типов (`int`, `int16`, `int32`, `int64`, `float64` и т.д.). Используйте простые числа в константах:
+
+```go
+// ✅ Правильно
+const StatusEnabled = 1
+ExpectColumnEquals("status_id", StatusEnabled)
+
+// ❌ Избыточно
+const StatusEnabled = int16(1)
+```
+
 ### 3. Выполнение
 
 *   `.Send()` — **Финализирующий метод.**
@@ -890,6 +901,8 @@ s.AsyncStep(t, "Verify Kafka Messages", func(sCtx provider.StepCtx) {
 | `.ExpectFieldIsNotNull(field)` | Поле ≠ null |
 | `.ExpectFieldTrue(field)` | Поле = true |
 | `.ExpectFieldFalse(field)` | Поле = false |
+
+**Авто-конвертация числовых типов:** При сравнении чисел DSL автоматически конвертирует типы (`int`, `int16`, `int64`, `float64` и т.д.).
 
 **Синтаксис путей (GJSON):**
 - Простое поле: `"playerName"`

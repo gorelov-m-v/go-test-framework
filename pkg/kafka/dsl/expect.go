@@ -26,8 +26,8 @@ type Expectation struct {
 	unique          bool
 	duplicateWindow time.Duration
 
-	expectedCount    int
-	allMatchingMsgs  [][]byte
+	expectedCount   int
+	allMatchingMsgs [][]byte
 
 	expectations []*expect.Expectation[[]byte]
 
@@ -84,6 +84,11 @@ func (e *Expectation) ExpectJsonField(field string, expected map[string]interfac
 
 func (e *Expectation) ExpectFieldNotEmpty(field string) *Expectation {
 	e.expectations = append(e.expectations, makeFieldNotEmptyExpectation(field))
+	return e
+}
+
+func (e *Expectation) ExpectFieldEmpty(field string) *Expectation {
+	e.expectations = append(e.expectations, makeFieldEmptyExpectation(field))
 	return e
 }
 
@@ -415,6 +420,35 @@ func makeFieldNotEmptyExpectation(field string) *expect.Expectation[[]byte] {
 					Ok:        false,
 					Retryable: false,
 					Reason:    fmt.Sprintf("Field '%s' is empty", field),
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		expect.StandardReport[[]byte](name),
+	)
+}
+
+func makeFieldEmptyExpectation(field string) *expect.Expectation[[]byte] {
+	name := fmt.Sprintf("Expect: Field '%s' is empty", field)
+	return expect.New(
+		name,
+		func(err error, msgBytes []byte) polling.CheckResult {
+			if len(msgBytes) == 0 {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "Message bytes are empty",
+				}
+			}
+			result := gjson.GetBytes(msgBytes, field)
+			if !result.Exists() {
+				return polling.CheckResult{Ok: true}
+			}
+			if !jsonutil.IsEmpty(result) {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Field '%s' is not empty, got: %s", field, result.String()),
 				}
 			}
 			return polling.CheckResult{Ok: true}

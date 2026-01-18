@@ -27,6 +27,40 @@ func attachFoundMessage(stepCtx provider.StepCtx, message interface{}) {
 	)
 }
 
+func attachAllFoundMessages(stepCtx provider.StepCtx, messages [][]byte) {
+	if len(messages) == 0 {
+		return
+	}
+
+	var allMessages []map[string]interface{}
+	for _, msgBytes := range messages {
+		var msgMap map[string]interface{}
+		if err := json.Unmarshal(msgBytes, &msgMap); err == nil {
+			allMessages = append(allMessages, msgMap)
+		}
+	}
+
+	jsonData, err := json.MarshalIndent(allMessages, "", "  ")
+	if err != nil {
+		stepCtx.WithAttachments(
+			allure.NewAttachment(
+				fmt.Sprintf("Kafka Messages Found (%d)", len(messages)),
+				allure.Text,
+				[]byte(fmt.Sprintf("%+v", allMessages)),
+			),
+		)
+		return
+	}
+
+	stepCtx.WithAttachments(
+		allure.NewAttachment(
+			fmt.Sprintf("Kafka Messages Found (%d)", len(messages)),
+			allure.JSON,
+			jsonData,
+		),
+	)
+}
+
 func attachSearchInfoByTopic(
 	stepCtx provider.StepCtx,
 	topicName string,

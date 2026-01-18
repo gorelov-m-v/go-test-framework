@@ -26,6 +26,9 @@ type Expectation struct {
 	unique          bool
 	duplicateWindow time.Duration
 
+	expectedCount    int
+	allMatchingMsgs  [][]byte
+
 	expectations []*expect.Expectation[[]byte]
 
 	messageBytes []byte
@@ -58,6 +61,11 @@ func (e *Expectation) Unique() *Expectation {
 func (e *Expectation) UniqueWithWindow(window time.Duration) *Expectation {
 	e.unique = true
 	e.duplicateWindow = window
+	return e
+}
+
+func (e *Expectation) ExpectCount(count int) *Expectation {
+	e.expectedCount = count
 	return e
 }
 
@@ -122,10 +130,13 @@ func (e *Expectation) Send() {
 		attachSearchInfoByTopic(stepCtx, e.topicName, e.filters, effectiveTimeout, e.unique)
 
 		if e.found {
-			// Десериализуем для attach
-			var msgMap map[string]interface{}
-			json.Unmarshal(e.messageBytes, &msgMap)
-			attachFoundMessage(stepCtx, msgMap)
+			if e.expectedCount > 0 && len(e.allMatchingMsgs) > 0 {
+				attachAllFoundMessages(stepCtx, e.allMatchingMsgs)
+			} else {
+				var msgMap map[string]interface{}
+				json.Unmarshal(e.messageBytes, &msgMap)
+				attachFoundMessage(stepCtx, msgMap)
+			}
 		} else {
 			attachNotFoundMessageByTopic(stepCtx, e.topicName, e.filters)
 		}
@@ -142,6 +153,10 @@ func (e *Expectation) Send() {
 
 			polling.NoError(stepCtx, assertionMode, fmt.Errorf("%s", msg), msg)
 			return
+		}
+
+		if e.expectedCount > 0 && e.found {
+			e.checkExpectedCount(stepCtx, assertionMode)
 		}
 
 		if e.unique && e.found {
@@ -164,6 +179,18 @@ func (e *Expectation) doSearch() ([]byte, error) {
 	}
 
 	messages := e.kafkaClient.GetBuffer().GetMessages(e.topicName)
+
+	if e.expectedCount > 0 {
+		allMatching, err := e.findAllMatching(messages)
+		if err != nil {
+			return nil, err
+		}
+		e.allMatchingMsgs = allMatching
+		if len(allMatching) < e.expectedCount {
+			return nil, fmt.Errorf("expected %d messages, found %d", e.expectedCount, len(allMatching))
+		}
+		return allMatching[0], nil
+	}
 
 	if e.unique {
 		msgBytes, err := e.findAndCountWithinWindow(messages)
@@ -189,6 +216,26 @@ func (e *Expectation) searchMessage(messages []*types.KafkaMessage) ([]byte, err
 	}
 
 	return nil, fmt.Errorf("message not found")
+}
+
+func (e *Expectation) findAllMatching(messages []*types.KafkaMessage) ([][]byte, error) {
+	if len(messages) == 0 {
+		return nil, fmt.Errorf("no messages in buffer")
+	}
+
+	var result [][]byte
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		if e.matchesFilter(msg.Value) {
+			result = append(result, msg.Value)
+		}
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf("message not found")
+	}
+
+	return result, nil
 }
 
 func (e *Expectation) findAndCountWithinWindow(messages []*types.KafkaMessage) ([]byte, error) {
@@ -241,6 +288,15 @@ func (e *Expectation) checkUniqueness(stepCtx provider.StepCtx, mode polling.Ass
 		if notUniqueErr, ok := err.(*kafkaErrors.KafkaMessageNotUniqueError); ok {
 			polling.NoError(stepCtx, mode, notUniqueErr, notUniqueErr.Error())
 		}
+	}
+}
+
+func (e *Expectation) checkExpectedCount(stepCtx provider.StepCtx, mode polling.AssertionMode) {
+	actualCount := len(e.allMatchingMsgs)
+	if actualCount != e.expectedCount {
+		msg := fmt.Sprintf("Expected %d Kafka messages, but found %d. Topic: %s, Filters: %v",
+			e.expectedCount, actualCount, e.topicName, e.filters)
+		polling.NoError(stepCtx, mode, fmt.Errorf("%s", msg), msg)
 	}
 }
 

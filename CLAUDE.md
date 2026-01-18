@@ -81,6 +81,7 @@ your-api-tests/
 2.  **No time.Sleep:** Use `s.AsyncStep` for retries. Use `s.Step` for immediate checks.
 3.  **Link Pattern:** All clients/repos must implement `Link` struct and be registered in `TestEnv`.
 4.  **CRITICAL - No Comments:** Never add comments to generated code (client.go, models.go, repo.go, *_test.go). Code must be self-documenting through clear naming.
+5.  **Numeric Constants:** Use simple numbers (`1`, `2`) instead of typed numbers (`int16(1)`). All DSLs automatically convert numeric types for comparison.
 
 ---
 
@@ -200,6 +201,46 @@ s.Step(t, "Verify", func(sCtx provider.StepCtx) { ... })
 - Array element: `"items.0"`, `"items.1"`
 - Array count: `"items.#"`
 - Nested in array: `"users.0.name"`
+
+---
+
+## Numeric Type Comparison (Auto-Conversion)
+
+All DSLs automatically convert numeric types when comparing values. You can use simple numbers without explicit type casting.
+
+### ✅ Use simple numbers:
+```go
+const (
+    StatusEnabled  = 1   // Simple int, works everywhere
+    StatusDisabled = 2
+)
+
+// DB DSL - compares int with int16 from DB
+ExpectColumnEquals("status_id", StatusEnabled)  // ✅ Works
+
+// Kafka DSL - compares int with JSON number
+ExpectField("status", 1)  // ✅ Works
+
+// HTTP DSL - compares int with JSON number
+ExpectResponseBodyFieldValue("status", 1)  // ✅ Works
+```
+
+### ❌ Avoid explicit type casting:
+```go
+const (
+    StatusEnabled  = int16(1)   // Unnecessary
+    StatusDisabled = int16(2)
+)
+```
+
+### How it works:
+| DSL | Conversion Function | Target Type |
+|-----|---------------------|-------------|
+| DB DSL | `toComparableNumber()` | `float64` |
+| Kafka DSL | `jsonutil.Compare()` | `int64` / `float64` |
+| HTTP DSL | `jsonutil.Compare()` | `int64` / `float64` |
+
+**Supported types:** `int`, `int8`, `int16`, `int32`, `int64`, `uint`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`
 
 ---
 

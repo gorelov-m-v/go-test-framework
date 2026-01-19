@@ -76,6 +76,10 @@ func (s *PlayerSuite) TestCreatePlayer(t provider.T) {
         - [Зачем это нужно](#зачем-это-нужно-2)
         - [HTTP: Маскировка заголовков](#http-маскировка-заголовков)
         - [Database: Маскировка колонок](#database-маскировка-колонок)
+    - [Контрактное тестирование (Contract Testing)](#контрактное-тестирование-contract-testing)
+        - [Зачем это нужно](#зачем-это-нужно-contract)
+        - [Конфигурация](#конфигурация-contract)
+        - [Использование](#использование-contract)
     - [Генерация тестовых данных](#генерация-тестовых-данных)
         - [Зачем это нужно](#зачем-это-нужно-3)
         - [Email](#emaillength-int-string)
@@ -2657,6 +2661,89 @@ http:
 - Ограничивайте доступ к Allure серверу
 
 ---
+
+### Контрактное тестирование (Contract Testing)
+
+Модуль `pkg/contract` позволяет валидировать HTTP-ответы против OpenAPI спецификации. Это гарантирует, что API соответствует задокументированному контракту.
+
+---
+
+#### Зачем это нужно {#зачем-это-нужно-contract}
+
+**Проблема:** API возвращает ответы, не соответствующие спецификации:
+- Отсутствуют обязательные поля
+- Неверные типы данных (string вместо integer)
+- Лишние поля, не описанные в контракте
+
+**Решение:** Автоматическая валидация каждого ответа против OpenAPI схемы.
+
+---
+
+#### Конфигурация {#конфигурация-contract}
+
+```yaml
+http:
+  gameService:
+    baseURL: "https://api.example.com"
+    timeout: 30s
+    contractSpec: "openapi/openapi.json"      # Путь к OpenAPI спецификации
+    contractBasePath: "/api"                   # Опционально: префикс пути в спецификации
+```
+
+| Параметр | Описание |
+|----------|----------|
+| `contractSpec` | Путь к файлу OpenAPI спецификации (JSON или YAML) |
+| `contractBasePath` | Префикс пути, если DSL-пути не совпадают с путями в спецификации |
+
+---
+
+#### Использование {#использование-contract}
+
+##### Валидация по операции (метод + путь)
+
+```go
+s.Step(t, "Create player with contract validation", func(sCtx provider.StepCtx) {
+    resp := players.Create(sCtx).
+        RequestBody(models.CreateRequest{Username: "test"}).
+        ExpectResponseStatus(http.StatusCreated).
+        ExpectMatchesContract().  // Валидация против OpenAPI
+        Send()
+})
+```
+
+Метод `ExpectMatchesContract()` автоматически:
+1. Находит операцию в спецификации по HTTP методу и пути
+2. Извлекает схему ответа для полученного статус-кода
+3. Валидирует JSON-ответ против схемы
+
+##### Валидация по имени схемы
+
+```go
+s.Step(t, "Get player with schema validation", func(sCtx provider.StepCtx) {
+    resp := players.GetByID(sCtx, playerID).
+        ExpectResponseStatus(http.StatusOK).
+        ExpectMatchesSchema("PlayerResponse").  // Валидация против конкретной схемы
+        Send()
+})
+```
+
+Используйте `ExpectMatchesSchema(name)` когда:
+- Нужно проверить против конкретной схемы из `components/schemas`
+- Путь не описан в спецификации, но схема есть
+
+##### Ошибки валидации
+
+При несоответствии контракту тест падает с детальным сообщением:
+
+```
+Contract validation failed for POST /api/v1/players (status 201):
+- /username: expected string, got integer
+- /status: missing required field
+- /extra_field: additional property not allowed
+```
+
+---
+
 ### Генерация тестовых данных
 
 Тесты часто требуют уникальных данных для каждого запуска: email адреса, пароли, случайные строки. Модуль `pkg/datagen` предоставляет простой API для генерации тестовых данных с гарантией соответствия требованиям валидации.

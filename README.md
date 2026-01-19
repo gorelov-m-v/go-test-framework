@@ -37,7 +37,6 @@ func (s *PlayerSuite) TestCreatePlayer(t provider.T) {
             Send()
     })
 }
-```
 
 ## Оглавление
 
@@ -512,7 +511,25 @@ database:
     dsn: "postgres://user:password@localhost:5432/game_db?sslmode=disable"
     maxOpenConns: 10
     maxIdleConns: 5
+    schemas:                    # Маппинг алиасов схем
+      core: "production_core"   # alias -> реальное имя схемы
 ```
+
+#### Schemas (маппинг схем БД)
+
+Параметр `schemas` позволяет использовать в коде алиасы вместо реальных имён схем. Это полезно когда:
+- На разных стендах схемы называются по-разному (`beta-10_core`, `prod_core`)
+- Вы хотите чтобы имена в коде соответствовали MCP/документации
+
+**Использование в репозитории:**
+```go
+func FindByID(sCtx provider.StepCtx, id string) *dsl.Query[PlayerRow] {
+    return dsl.NewQuery[PlayerRow](sCtx, dbClient).
+        SQL(fmt.Sprintf("SELECT * FROM `%s`.players WHERE id = ?", dbClient.Schema("core")), id)
+}
+```
+
+При конфиге `schemas.core: "beta-10_core"` запрос будет: `SELECT * FROM beta-10_core.players WHERE id = ?`
 
 **Ожидаемое состояние таблицы `players`:**
 
@@ -718,11 +735,24 @@ kafka:
   bootstrapServers:
     - "kafka.example.com:9092"
   groupId: "qa-test-group"
+  topicPrefix: "beta-10_"        # Префикс для всех топиков
   topics:
-    - "game-player-events"
+    - "core.player-events"       # Без префикса - он добавится автоматически
   bufferSize: 1000
   uniqueDuplicateWindowMs: 5000
 ```
+
+#### TopicPrefix (префикс топиков)
+
+Параметр `topicPrefix` автоматически добавляется ко всем топикам. Это полезно когда:
+- На разных стендах топики имеют разные префиксы (`beta-10_`, `prod_`)
+- Вы хотите чтобы имена топиков в коде соответствовали MCP/документации
+
+С конфигом выше:
+- В `topics` указан `core.player-events`
+- Реальный топик в Kafka будет `beta-10_core.player-events`
+- В коде `TopicName()` возвращает `core.player-events` (без префикса)
+- Фреймворк автоматически добавит prefix при поиске сообщений
 
 ### 1. Описание Моделей
 
@@ -753,11 +783,10 @@ func Client() *kafkaClient.Client {
 // Определите тип топика (используется как generic параметр)
 type PlayerEventsTopic string
 
-const PlayerEventsTopicName PlayerEventsTopic = "game-player-events"
-
 // TopicName реализует интерфейс topic.TopicName
+// Возвращает имя БЕЗ префикса - он добавится автоматически из конфига
 func (PlayerEventsTopic) TopicName() string {
-    return string(PlayerEventsTopicName)
+    return "core.player-events"
 }
 
 // Модель сообщения

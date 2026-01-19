@@ -9,5 +9,6 @@ import (
 
 func Expect[TTopic topic.TopicName](sCtx provider.StepCtx, kafkaClient *client.Client) *Expectation {
 	var topicName TTopic
-	return NewExpectation(sCtx, kafkaClient, topicName.TopicName())
+	fullTopicName := kafkaClient.GetTopicPrefix() + topicName.TopicName()
+	return NewExpectation(sCtx, kafkaClient, fullTopicName)
 }

@@ -25,6 +25,13 @@ func New(cfg types.Config, asyncConfig config.AsyncConfig) (*Client, error) {
 		return nil, fmt.Errorf("no topics configured. Please specify 'topics' list in kafka config")
 	}
 
+	// Apply topic prefix to all topics
+	fullTopics := make([]string, len(cfg.Topics))
+	for i, topic := range cfg.Topics {
+		fullTopics[i] = cfg.TopicPrefix + topic
+	}
+	cfg.Topics = fullTopics
+
 	buffer := consumer.NewMessageBuffer(cfg.Topics, cfg.BufferSize)
 
 	backgroundConsumer, err := consumer.NewBackgroundConsumer(&cfg, buffer)
@@ -73,4 +80,8 @@ func (c *Client) GetBackgroundConsumer() BackgroundConsumerInterface {
 
 func (c *Client) GetBuffer() MessageBufferInterface {
 	return c.buffer
+}
+
+func (c *Client) GetTopicPrefix() string {
+	return c.config.TopicPrefix
 }

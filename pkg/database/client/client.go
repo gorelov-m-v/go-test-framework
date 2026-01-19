@@ -20,6 +20,7 @@ type Config struct {
 	MaxIdleConns    int                `mapstructure:"maxIdleConns"`
 	ConnMaxLifetime time.Duration      `mapstructure:"connMaxLifetime"`
 	MaskColumns     string             `mapstructure:"maskColumns"`
+	Schemas         map[string]string  `mapstructure:"schemas"`
 	AsyncConfig     config.AsyncConfig `mapstructure:"asyncConfig"`
 }
 
@@ -27,6 +28,7 @@ type Client struct {
 	DB          *sqlx.DB
 	AsyncConfig config.AsyncConfig
 	maskColumns []string
+	schemas     map[string]string
 }
 
 func New(cfg Config) (*Client, error) {
@@ -75,7 +77,7 @@ func New(cfg Config) (*Client, error) {
 		asyncCfg = config.DefaultAsyncConfig()
 	}
 
-	return &Client{DB: db, AsyncConfig: asyncCfg, maskColumns: maskColumns}, nil
+	return &Client{DB: db, AsyncConfig: asyncCfg, maskColumns: maskColumns, schemas: cfg.Schemas}, nil
 }
 
 func (c *Client) ShouldMaskColumn(name string) bool {
@@ -93,4 +95,16 @@ func (c *Client) ShouldMaskColumn(name string) bool {
 
 func (c *Client) Close() error {
 	return c.DB.Close()
+}
+
+// Schema returns the actual schema name for the given alias.
+// If no mapping is found, returns the alias as-is.
+func (c *Client) Schema(alias string) string {
+	if c.schemas == nil {
+		return alias
+	}
+	if schema, ok := c.schemas[alias]; ok {
+		return schema
+	}
+	return alias
 }

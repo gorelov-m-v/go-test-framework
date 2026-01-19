@@ -45,7 +45,7 @@ func New(cfg Config) (*Client, error) {
 
 	asyncCfg := cfg.AsyncConfig
 	if asyncCfg.Timeout == 0 {
-		asyncCfg = defaultAsyncConfig()
+		asyncCfg = config.DefaultAsyncConfig()
 	}
 
 	return &Client{
@@ -53,20 +53,6 @@ func New(cfg Config) (*Client, error) {
 		target:      cfg.Target,
 		AsyncConfig: asyncCfg,
 	}, nil
-}
-
-func defaultAsyncConfig() config.AsyncConfig {
-	return config.AsyncConfig{
-		Enabled:  true,
-		Timeout:  10 * time.Second,
-		Interval: 200 * time.Millisecond,
-		Backoff: config.BackoffConfig{
-			Enabled:     true,
-			Factor:      1.5,
-			MaxInterval: 1 * time.Second,
-		},
-		Jitter: 0.2,
-	}
 }
 
 func (c *Client) Conn() *grpc.ClientConn {

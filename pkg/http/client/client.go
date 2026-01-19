@@ -45,7 +45,7 @@ func New(cfg Config) *Client {
 
 	asyncCfg := cfg.AsyncConfig
 	if asyncCfg.Timeout == 0 {
-		asyncCfg = defaultAsyncConfig()
+		asyncCfg = config.DefaultAsyncConfig()
 	}
 
 	return &Client{
@@ -56,20 +56,6 @@ func New(cfg Config) *Client {
 		DefaultHeaders: cfg.DefaultHeaders,
 		AsyncConfig:    asyncCfg,
 		maskHeaders:    maskHeaders,
-	}
-}
-
-func defaultAsyncConfig() config.AsyncConfig {
-	return config.AsyncConfig{
-		Enabled:  true,
-		Timeout:  10 * time.Second,
-		Interval: 200 * time.Millisecond,
-		Backoff: config.BackoffConfig{
-			Enabled:     true,
-			Factor:      1.5,
-			MaxInterval: 1 * time.Second,
-		},
-		Jitter: 0.2,
 	}
 }
 

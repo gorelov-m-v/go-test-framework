@@ -740,9 +740,6 @@ type Link struct{}
 
 func (l *Link) SetKafka(c *kafkaClient.Client) {
     client = c
-
-    // Регистрируем связь топика с моделью
-    dsl.Register[PlayerEventMessage](c, "player-events")
 }
 
 func Client() *kafkaClient.Client {

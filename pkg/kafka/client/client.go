@@ -11,7 +11,6 @@ import (
 
 type Client struct {
 	config             *types.Config
-	registry           *types.TopicRegistry
 	buffer             MessageBufferInterface
 	backgroundConsumer BackgroundConsumerInterface
 	defaultTimeout     time.Duration
@@ -28,9 +27,7 @@ func New(cfg types.Config, asyncConfig config.AsyncConfig) (*Client, error) {
 
 	buffer := consumer.NewMessageBuffer(cfg.Topics, cfg.BufferSize)
 
-	finder := consumer.NewMessageFinder()
-
-	backgroundConsumer, err := consumer.NewBackgroundConsumer(&cfg, nil, buffer, finder)
+	backgroundConsumer, err := consumer.NewBackgroundConsumer(&cfg, buffer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create background consumer: %w", err)
 	}
@@ -41,7 +38,6 @@ func New(cfg types.Config, asyncConfig config.AsyncConfig) (*Client, error) {
 
 	client := &Client{
 		config:             &cfg,
-		registry:           nil,
 		buffer:             buffer,
 		backgroundConsumer: backgroundConsumer,
 		defaultTimeout:     cfg.FindMessageTimeout,
@@ -73,10 +69,6 @@ func (c *Client) GetAsyncConfig() config.AsyncConfig {
 
 func (c *Client) GetBackgroundConsumer() BackgroundConsumerInterface {
 	return c.backgroundConsumer
-}
-
-func (c *Client) GetRegistry() *types.TopicRegistry {
-	return c.registry
 }
 
 func (c *Client) GetBuffer() MessageBufferInterface {

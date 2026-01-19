@@ -10,15 +10,12 @@ import (
 
 	"github.com/IBM/sarama"
 
-	kafkaErrors "github.com/gorelov-m-v/go-test-framework/internal/kafka/errors"
 	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
 type BackgroundConsumer struct {
 	config         *types.Config
-	registry       *types.TopicRegistry
 	buffer         types.MessageBufferInterface
-	finder         *MessageFinder
 	consumerGroup  sarama.ConsumerGroup
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -31,9 +28,7 @@ type BackgroundConsumer struct {
 
 func NewBackgroundConsumer(
 	cfg *types.Config,
-	registry *types.TopicRegistry,
 	buffer types.MessageBufferInterface,
-	finder *MessageFinder,
 ) (*BackgroundConsumer, error) {
 	saramaConfig := sarama.NewConfig()
 
@@ -66,9 +61,7 @@ func NewBackgroundConsumer(
 
 	bc := &BackgroundConsumer{
 		config:         cfg,
-		registry:       registry,
 		buffer:         buffer,
-		finder:         finder,
 		consumerGroup:  consumerGroup,
 		ctx:            ctx,
 		cancel:         cancel,
@@ -189,83 +182,6 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 			return nil
 		}
 	}
-}
-
-func (bc *BackgroundConsumer) FindMessage(
-	filters map[string]string,
-	messageType reflect.Type,
-) (interface{}, error) {
-	suffix, ok := bc.registry.GetTopicSuffix(messageType)
-	if !ok {
-		return nil, &kafkaErrors.KafkaTopicNotMappedError{
-			MessageType: messageType.Name(),
-		}
-	}
-
-	fullTopicName := bc.topicPrefix + suffix
-
-	if !bc.buffer.IsTopicConfigured(fullTopicName) {
-		return nil, &kafkaErrors.KafkaTopicNotListenedError{
-			TopicName:        fullTopicName,
-			MessageType:      messageType.Name(),
-			ConfiguredTopics: bc.buffer.GetConfiguredTopics(),
-		}
-	}
-
-	messages := bc.buffer.GetMessages(fullTopicName)
-
-	return bc.finder.SearchAndDeserialize(messages, filters, messageType)
-}
-
-func (bc *BackgroundConsumer) FindAndCount(
-	filters map[string]string,
-	messageType reflect.Type,
-) (*types.FindResult[interface{}], error) {
-	suffix, ok := bc.registry.GetTopicSuffix(messageType)
-	if !ok {
-		return nil, &kafkaErrors.KafkaTopicNotMappedError{
-			MessageType: messageType.Name(),
-		}
-	}
-
-	fullTopicName := bc.topicPrefix + suffix
-
-	if !bc.buffer.IsTopicConfigured(fullTopicName) {
-		return nil, &kafkaErrors.KafkaTopicNotListenedError{
-			TopicName:        fullTopicName,
-			MessageType:      messageType.Name(),
-			ConfiguredTopics: bc.buffer.GetConfiguredTopics(),
-		}
-	}
-
-	messages := bc.buffer.GetMessages(fullTopicName)
-	return bc.finder.FindAndCount(messages, filters, messageType)
-}
-
-func (bc *BackgroundConsumer) FindAndCountWithinWindow(
-	filters map[string]string,
-	messageType reflect.Type,
-	windowMs int64,
-) (*types.FindResult[interface{}], error) {
-	suffix, ok := bc.registry.GetTopicSuffix(messageType)
-	if !ok {
-		return nil, &kafkaErrors.KafkaTopicNotMappedError{
-			MessageType: messageType.Name(),
-		}
-	}
-
-	fullTopicName := bc.topicPrefix + suffix
-
-	if !bc.buffer.IsTopicConfigured(fullTopicName) {
-		return nil, &kafkaErrors.KafkaTopicNotListenedError{
-			TopicName:        fullTopicName,
-			MessageType:      messageType.Name(),
-			ConfiguredTopics: bc.buffer.GetConfiguredTopics(),
-		}
-	}
-
-	messages := bc.buffer.GetMessages(fullTopicName)
-	return bc.finder.FindAndCountWithinWindow(messages, filters, messageType, windowMs)
 }
 
 func applySaramaConfig(saramaConfig *sarama.Config, userConfig map[string]interface{}) error {

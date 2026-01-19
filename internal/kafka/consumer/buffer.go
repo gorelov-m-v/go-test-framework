@@ -125,11 +125,6 @@ func (mb *MessageBuffer) ClearAll() {
 
 	for _, buf := range mb.buffers {
 		buf.mu.Lock()
-		buf.ring.Do(func(v interface{}) {
-			if v != nil {
-				v = nil
-			}
-		})
 		buf.size = 0
 		buf.mu.Unlock()
 	}
@@ -147,10 +142,5 @@ func (mb *MessageBuffer) ClearTopic(topicName string) {
 	buf.mu.Lock()
 	defer buf.mu.Unlock()
 
-	buf.ring.Do(func(v interface{}) {
-		if v != nil {
-			v = nil
-		}
-	})
 	buf.size = 0
 }

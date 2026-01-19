@@ -40,10 +40,10 @@ func Viper() (*viper.Viper, error) {
 
 		v.SetConfigName(configName)
 		v.SetConfigType("yaml")
-		v.AddConfigPath("./configs")
-		v.AddConfigPath("../configs")
-		v.AddConfigPath("../../configs")
-		v.AddConfigPath("../../../configs")
+
+		for _, path := range findConfigPaths() {
+			v.AddConfigPath(path)
+		}
 
 		log.Printf("[Config] Loading configuration for env: '%s' (file: %s.yaml)", env, configName)
 
@@ -58,6 +58,35 @@ func Viper() (*viper.Viper, error) {
 	})
 
 	return configInstance, loadErr
+}
+
+func findConfigPaths() []string {
+	var paths []string
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return []string{"./configs", "../configs"}
+	}
+
+	dir := cwd
+	for i := 0; i < 10; i++ {
+		configDir := filepath.Join(dir, "configs")
+		if info, err := os.Stat(configDir); err == nil && info.IsDir() {
+			paths = append(paths, configDir)
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	if len(paths) == 0 {
+		paths = []string{"./configs", "../configs"}
+	}
+
+	return paths
 }
 
 func configureAllure(v *viper.Viper) {

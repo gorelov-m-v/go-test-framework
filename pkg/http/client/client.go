@@ -8,22 +8,27 @@ import (
 	"time"
 
 	"github.com/gorelov-m-v/go-test-framework/pkg/config"
+	"github.com/gorelov-m-v/go-test-framework/pkg/contract"
 )
 
 type Client struct {
-	BaseURL        string
-	HTTPClient     *http.Client
-	DefaultHeaders map[string]string
-	AsyncConfig    config.AsyncConfig
-	maskHeaders    map[string]bool
+	BaseURL           string
+	HTTPClient        *http.Client
+	DefaultHeaders    map[string]string
+	AsyncConfig       config.AsyncConfig
+	ContractValidator *contract.Validator
+	ContractBasePath  string
+	maskHeaders       map[string]bool
 }
 
 type Config struct {
-	BaseURL        string
-	Timeout        time.Duration
-	DefaultHeaders map[string]string
-	MaskHeaders    string             `mapstructure:"maskHeaders"`
-	AsyncConfig    config.AsyncConfig `mapstructure:"asyncConfig"`
+	BaseURL          string
+	Timeout          time.Duration
+	DefaultHeaders   map[string]string
+	MaskHeaders      string             `mapstructure:"maskHeaders"`
+	ContractSpec     string             `mapstructure:"contractSpec"`
+	ContractBasePath string             `mapstructure:"contractBasePath"`
+	AsyncConfig      config.AsyncConfig `mapstructure:"asyncConfig"`
 }
 
 func New(cfg Config) *Client {
@@ -48,14 +53,25 @@ func New(cfg Config) *Client {
 		asyncCfg = config.DefaultAsyncConfig()
 	}
 
+	var contractValidator *contract.Validator
+	if cfg.ContractSpec != "" {
+		var err error
+		contractValidator, err = contract.NewValidator(cfg.ContractSpec)
+		if err != nil {
+			panic(fmt.Sprintf("failed to load contract spec '%s': %v", cfg.ContractSpec, err))
+		}
+	}
+
 	return &Client{
 		BaseURL: cfg.BaseURL,
 		HTTPClient: &http.Client{
 			Timeout: cfg.Timeout,
 		},
-		DefaultHeaders: cfg.DefaultHeaders,
-		AsyncConfig:    asyncCfg,
-		maskHeaders:    maskHeaders,
+		DefaultHeaders:    cfg.DefaultHeaders,
+		AsyncConfig:       asyncCfg,
+		ContractValidator: contractValidator,
+		ContractBasePath:  cfg.ContractBasePath,
+		maskHeaders:       maskHeaders,
 	}
 }
 

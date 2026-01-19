@@ -29,9 +29,12 @@ func injectHTTPClient(v *viper.Viper, fieldValue reflect.Value, field reflect.St
 	debugLog("injecting config '%s' into field '%s'", configKey, field.Name)
 
 	httpClient := client.New(client.Config{
-		BaseURL:        svcCfg.BaseURL,
-		Timeout:        svcCfg.Timeout,
-		DefaultHeaders: svcCfg.DefaultHeaders,
+		BaseURL:          svcCfg.BaseURL,
+		Timeout:          svcCfg.Timeout,
+		DefaultHeaders:   svcCfg.DefaultHeaders,
+		MaskHeaders:      svcCfg.MaskHeaders,
+		ContractSpec:     svcCfg.ContractSpec,
+		ContractBasePath: svcCfg.ContractBasePath,
 	})
 
 	target := fieldValue.Addr().Interface()

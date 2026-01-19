@@ -101,6 +101,10 @@ your-api-tests/
 - `.ExpectResponseBodyFieldIsNull("json.path")`
 - `.ExpectResponseHeader("Key", "Val")`
 
+**Contract Validation (Chain before .Send):**
+- `.ExpectMatchesContract()` - Validates response against OpenAPI spec (auto-detects operation by method + path)
+- `.ExpectMatchesSchema("SchemaName")` - Validates response against specific schema from spec
+
 **Execute:**
 - `.Send()` -> Returns `*client.Response[Resp]`
 
@@ -204,6 +208,65 @@ s.Step(t, "Verify", func(sCtx provider.StepCtx) { ... })
 
 ---
 
+## Contract Validation (OpenAPI)
+
+Validate HTTP responses against OpenAPI specification to ensure API contract compliance.
+
+### Setup
+1. Place OpenAPI spec in `openapi/` folder:
+```
+your-api-tests/
+├── openapi/
+│   └── game-service.yaml
+├── configs/
+│   └── config.local.yaml
+└── tests/
+```
+
+2. Configure in `config.local.yaml`:
+```yaml
+http:
+  gameService:
+    baseURL: "https://api.game.com"
+    contractSpec: "openapi/game-service.yaml"  # Path to OpenAPI spec
+    contractBasePath: "/api"                    # Optional: prefix for path matching (if spec paths differ from DSL paths)
+```
+
+### Usage
+
+**Option 1: Auto-detect operation** (recommended)
+```go
+game.CreatePlayer(sCtx).
+    POST("/api/v1/players").
+    RequestBody(req).
+    ExpectResponseStatus(201).
+    ExpectMatchesContract().  // Auto-detects POST /api/v1/players → 201 response schema
+    Send()
+```
+
+**Option 2: Explicit schema name**
+```go
+game.CreatePlayer(sCtx).
+    POST("/api/v1/players").
+    RequestBody(req).
+    ExpectMatchesSchema("CreatePlayerResponse").  // Validates against specific schema
+    Send()
+```
+
+### What Gets Validated
+- Required fields present
+- No unexpected fields (if `additionalProperties: false` in spec)
+- Field types match (string, integer, number, boolean, array, object)
+- Nested objects validated recursively
+- Nullable fields (only null if `nullable: true`)
+
+### Error Handling
+- If `contractSpec` not configured but validation requested → test breaks immediately
+- If spec file not found → panic at client initialization
+- If response doesn't match schema → test fails with detailed error
+
+---
+
 ## Numeric Type Comparison (Auto-Conversion)
 
 All DSLs automatically convert numeric types when comparing values. You can use simple numbers without explicit type casting.
@@ -252,6 +315,8 @@ http:
     baseURL: "https://api.example.com"
     timeout: 30s
     maskHeaders: "Authorization,Cookie"  # Masked in Allure reports
+    contractSpec: "openapi/service.yaml"  # Optional: OpenAPI spec for contract validation
+    contractBasePath: "/api"              # Optional: path prefix for spec matching
 
 database:
   dbName:

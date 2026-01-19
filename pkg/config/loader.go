@@ -18,9 +18,12 @@ var (
 )
 
 type ServiceConfig struct {
-	BaseURL        string            `mapstructure:"baseURL"`
-	Timeout        time.Duration     `mapstructure:"timeout"`
-	DefaultHeaders map[string]string `mapstructure:"defaultHeaders"`
+	BaseURL          string            `mapstructure:"baseURL"`
+	Timeout          time.Duration     `mapstructure:"timeout"`
+	DefaultHeaders   map[string]string `mapstructure:"defaultHeaders"`
+	MaskHeaders      string            `mapstructure:"maskHeaders"`
+	ContractSpec     string            `mapstructure:"contractSpec"`
+	ContractBasePath string            `mapstructure:"contractBasePath"`
 }
 
 type AllureConfig struct {

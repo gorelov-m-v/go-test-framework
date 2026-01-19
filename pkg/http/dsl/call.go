@@ -23,8 +23,10 @@ type Call[TReq any, TResp any] struct {
 	req  *client.Request[TReq]
 	resp *client.Response[TResp]
 
-	sent         bool
-	expectations []*expect.Expectation[*client.Response[any]]
+	sent             bool
+	expectations     []*expect.Expectation[*client.Response[any]]
+	validateContract bool
+	contractSchema   string
 }
 
 func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Client) *Call[TReq, TResp] {
@@ -113,6 +115,7 @@ func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Respo
 
 func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validate()
+	c.validateContractConfig()
 
 	name := c.stepName
 	if name == "" {
@@ -173,10 +176,11 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 				polling.Equal(stepCtx, assertionMode, "", c.resp.NetworkError, "HTTP network error")
 				return
 			}
-			return
+		} else {
+			expect.ReportAll(stepCtx, assertionMode, c.expectations, err, respAny)
 		}
 
-		expect.ReportAll(stepCtx, assertionMode, c.expectations, err, respAny)
+		c.performContractValidation(stepCtx, resp)
 	})
 
 	return c.resp
@@ -202,5 +206,51 @@ func (c *Call[TReq, TResp]) validate() {
 		c.sCtx.Break("HTTP DSL Error: HTTP path is not set. Provide path in method call like .GET(\"/api/users\").")
 		c.sCtx.BrokenNow()
 		return
+	}
+}
+
+func (c *Call[TReq, TResp]) validateContractConfig() {
+	if !c.validateContract && c.contractSchema == "" {
+		return
+	}
+
+	if c.client.ContractValidator == nil {
+		c.sCtx.Break("HTTP DSL Error: Contract validation requested but no contractSpec configured for this client. Add 'contractSpec' to your HTTP client config.")
+		c.sCtx.BrokenNow()
+		return
+	}
+}
+
+func (c *Call[TReq, TResp]) performContractValidation(stepCtx provider.StepCtx, resp *client.Response[TResp]) {
+	if !c.validateContract && c.contractSchema == "" {
+		return
+	}
+
+	if c.client.ContractValidator == nil || resp == nil {
+		return
+	}
+
+	if resp.NetworkError != "" {
+		return
+	}
+
+	var validationErr error
+
+	if c.contractSchema != "" {
+		validationErr = c.client.ContractValidator.ValidateResponseBySchema(c.contractSchema, resp.RawBody)
+	} else if c.validateContract {
+		path := c.req.Path
+		for key, value := range c.req.PathParams {
+			path = strings.ReplaceAll(path, "{"+key+"}", value)
+			path = strings.ReplaceAll(path, ":"+key, value)
+		}
+		if c.client.ContractBasePath != "" {
+			path = c.client.ContractBasePath + path
+		}
+		validationErr = c.client.ContractValidator.ValidateResponse(c.req.Method, path, resp.StatusCode, resp.RawBody)
+	}
+
+	if validationErr != nil {
+		stepCtx.Require().NoError(validationErr, "Contract validation failed")
 	}
 }

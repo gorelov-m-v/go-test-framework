@@ -424,3 +424,23 @@ func makeResponseBodyFieldFalseExpectation(path string) *expect.Expectation[*cli
 		expect.StandardReport[*client.Response[any]](name),
 	)
 }
+
+func (c *Call[TReq, TResp]) ExpectMatchesContract() *Call[TReq, TResp] {
+	if c.sent {
+		c.sCtx.Break("HTTP DSL Error: ExpectMatchesContract must be called before Send()")
+		c.sCtx.BrokenNow()
+		return c
+	}
+	c.validateContract = true
+	return c
+}
+
+func (c *Call[TReq, TResp]) ExpectMatchesSchema(schemaName string) *Call[TReq, TResp] {
+	if c.sent {
+		c.sCtx.Break("HTTP DSL Error: ExpectMatchesSchema must be called before Send()")
+		c.sCtx.BrokenNow()
+		return c
+	}
+	c.contractSchema = schemaName
+	return c
+}

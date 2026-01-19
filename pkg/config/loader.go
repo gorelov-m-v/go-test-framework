@@ -42,6 +42,8 @@ func Viper() (*viper.Viper, error) {
 		v.SetConfigType("yaml")
 		v.AddConfigPath("./configs")
 		v.AddConfigPath("../configs")
+		v.AddConfigPath("../../configs")
+		v.AddConfigPath("../../../configs")
 
 		log.Printf("[Config] Loading configuration for env: '%s' (file: %s.yaml)", env, configName)
 

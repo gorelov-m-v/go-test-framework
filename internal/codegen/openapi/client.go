@@ -290,24 +290,9 @@ func (g *Generator) cleanOperationID(operationID string) string {
 }
 
 func (g *Generator) cleanPath(path string) string {
-	prefixes := []string{
-		"/api/v1",
-		"/api",
-		"/v1",
-		"/" + g.getSanitizedName(),
-	}
-
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(path, prefix) {
-			path = strings.TrimPrefix(path, prefix)
-			break
-		}
-	}
-
 	if path == "" {
-		path = "/"
+		return "/"
 	}
-
 	return path
 }
 

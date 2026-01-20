@@ -360,3 +360,46 @@ func TestCompareObjectExact_NestedStruct(t *testing.T) {
 	assert.False(t, ok, "Should not match wrong city")
 	assert.Contains(t, msg, "address")
 }
+
+func TestCompareObjectExact_MapStringInterface(t *testing.T) {
+	jsonData := `{"id": "123", "names": {"ru": "Test", "en": "Test"}, "passToCms": false}`
+	jsonObj := gjson.Parse(jsonData)
+
+	type Category struct {
+		Id        string                 `json:"id"`
+		Names     map[string]interface{} `json:"names"`
+		PassToCms interface{}            `json:"passToCms"`
+	}
+
+	expected := Category{
+		Id:        "123",
+		Names:     map[string]interface{}{"ru": "Test", "en": "Test"},
+		PassToCms: false,
+	}
+
+	ok, msg := CompareObjectExact(jsonObj, expected)
+	assert.True(t, ok, "Should match map[string]interface{} and interface{}: %s", msg)
+}
+
+func TestCompareObjectExact_PointerString(t *testing.T) {
+	jsonData := `{"id": "123", "name": "TestName", "names": {"ru": "Test"}, "passToCms": false}`
+	jsonObj := gjson.Parse(jsonData)
+
+	type Category struct {
+		Id        string                 `json:"id"`
+		Name      *string                `json:"name"`
+		Names     map[string]interface{} `json:"names"`
+		PassToCms interface{}            `json:"passToCms"`
+	}
+
+	name := "TestName"
+	expected := Category{
+		Id:        "123",
+		Name:      &name,
+		Names:     map[string]interface{}{"ru": "Test"},
+		PassToCms: false,
+	}
+
+	ok, msg := CompareObjectExact(jsonObj, expected)
+	assert.True(t, ok, "Should match *string fields: %s", msg)
+}

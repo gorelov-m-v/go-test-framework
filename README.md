@@ -436,6 +436,30 @@ resp.ExpectArrayContainsExact("items", Category{
 **Обработка несоответствий контракта:**
 Если поле есть в Go-структуре, но отсутствует в JSON — оно пропускается (не вызывает ошибку).
 
+#### Проверка всего тела ответа (struct matching)
+
+Для проверки всего JSON-ответа против Go-структуры:
+
+*   `.ExpectResponseBody(expected any)` — **Exact match**: проверяет ВСЕ поля включая zero values.
+*   `.ExpectResponseBodyPartial(expected any)` — **Partial match**: проверяет только non-zero поля.
+
+```go
+// Exact match — проверяет все поля
+resp.ExpectResponseBody(Category{
+    Id:         "123",
+    Name:       "Sports",
+    GamesCount: 0,      // zero value проверяется!
+    IsDefault:  false,  // zero value проверяется!
+})
+
+// Partial match — проверяет только заполненные поля
+resp.ExpectResponseBodyPartial(Category{
+    Id:   "123",
+    Name: "Sports",
+    // GamesCount, IsDefault пропускаются
+})
+```
+
 ### 3. Выполнение и Результат
 
 *   `.Send()` — **Финализирующий метод.**
@@ -725,6 +749,33 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 *   `.ExpectColumnEmpty("col")` — Проверяет, что колонка NULL или пустая строка.
 *   `.ExpectColumnJsonEquals("col", map[string]interface{})` — Сравнивает JSON-поле с ожидаемым map.
 
+**Struct matching:**
+*   `.ExpectRow(expected T)` — **Exact match**: проверяет ВСЕ поля структуры включая zero values.
+*   `.ExpectRowPartial(expected T)` — **Partial match**: проверяет только non-zero поля структуры.
+
+```go
+// Exact match — проверяет все поля
+db.Query[Category]().
+    SQL("SELECT * FROM categories WHERE id = $1", id).
+    ExpectRow(Category{
+        Id:        id,
+        Name:      name,
+        Status:    0,      // zero value проверяется!
+        IsDefault: false,  // zero value проверяется!
+    }).
+    Send()
+
+// Partial match — проверяет только заполненные поля
+db.Query[Category]().
+    SQL("SELECT * FROM categories WHERE id = $1", id).
+    ExpectRowPartial(Category{
+        Id:   id,
+        Name: name,
+        // Status, IsDefault пропускаются
+    }).
+    Send()
+```
+
 **Примечание:** Имена колонок (`"col"`) должны совпадать с тегом `db` в вашей модели.
 
 **Авто-конвертация числовых типов:** DSL автоматически сравнивает числа разных типов (`int`, `int16`, `int32`, `int64`, `float64` и т.д.). Используйте простые числа в константах:
@@ -978,8 +1029,28 @@ s.AsyncStep(t, "Verify Kafka Messages", func(sCtx provider.StepCtx) {
 | `.ExpectFieldIsNotNull(field)` | Поле ≠ null |
 | `.ExpectFieldTrue(field)` | Поле = true |
 | `.ExpectFieldFalse(field)` | Поле = false |
+| `.ExpectMessage(struct)` | Exact match: проверяет ВСЕ поля включая zero values |
+| `.ExpectMessagePartial(struct)` | Partial match: проверяет только non-zero поля |
 
 **Авто-конвертация числовых типов:** При сравнении чисел DSL автоматически конвертирует типы (`int`, `int16`, `int64`, `float64` и т.д.).
+
+**Struct matching:**
+```go
+// Exact match — проверяет все поля
+kafka.ExpectMessage(CategoryEvent{
+    Id:        categoryId,
+    EventType: "DELETE",
+    Status:    0,      // zero value проверяется!
+    IsDefault: false,  // zero value проверяется!
+})
+
+// Partial match — проверяет только заполненные поля
+kafka.ExpectMessagePartial(CategoryEvent{
+    Id:        categoryId,
+    EventType: "DELETE",
+    // Status, IsDefault пропускаются
+})
+```
 
 **Синтаксис путей (GJSON):**
 - Простое поле: `"playerName"`

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
@@ -122,6 +123,53 @@ func (q *Query[T]) ExpectColumnJsonEquals(columnName string, expected map[string
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnJsonEqualsExpectation[T](columnName, expected))
+	return q
+}
+
+// ExpectRow checks that the query result matches the expected struct
+// using exact matching (ALL fields are compared, including zero values).
+//
+// Example:
+//
+//	db.Query[Category]().
+//	    SQL("SELECT * FROM game_category WHERE id = $1", id).
+//	    ExpectRow(Category{
+//	        Id:        id,
+//	        Name:      expectedName,
+//	        Status:    0,           // zero value IS checked
+//	        IsDefault: false,       // false IS checked
+//	    }).
+//	    Send()
+func (q *Query[T]) ExpectRow(expected T) *Query[T] {
+	if q.expectsNotFound {
+		q.sCtx.Break("DB DSL Error: ExpectRow() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
+	}
+	q.expectations = append(q.expectations, makeRowExpectation[T](expected))
+	return q
+}
+
+// ExpectRowPartial checks that the query result matches the expected struct
+// using partial matching (only non-zero fields are compared).
+//
+// Example:
+//
+//	db.Query[Category]().
+//	    SQL("SELECT * FROM game_category WHERE id = $1", id).
+//	    ExpectRowPartial(Category{
+//	        Id:   id,
+//	        Name: expectedName,
+//	        // Status, IsDefault are skipped as zero values
+//	    }).
+//	    Send()
+func (q *Query[T]) ExpectRowPartial(expected T) *Query[T] {
+	if q.expectsNotFound {
+		q.sCtx.Break("DB DSL Error: ExpectRowPartial() cannot be used with ExpectNotFound()")
+		q.sCtx.BrokenNow()
+		return q
+	}
+	q.expectations = append(q.expectations, makeRowPartialExpectation[T](expected))
 	return q
 }
 
@@ -685,4 +733,171 @@ func makeColumnJsonEqualsExpectation[T any](columnName string, expected map[stri
 		},
 		expect.StandardReport[T](name),
 	)
+}
+
+func makeRowExpectation[T any](expected T) *expect.Expectation[T] {
+	name := "Expect: Row matches (exact)"
+	return expect.New(
+		name,
+		func(err error, result T) polling.CheckResult {
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    "Query returned no rows",
+					}
+				}
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Query failed: %v", err),
+				}
+			}
+
+			ok, msg := compareStructsExact(expected, result)
+			if !ok {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    msg,
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		expect.StandardReport[T](name),
+	)
+}
+
+func makeRowPartialExpectation[T any](expected T) *expect.Expectation[T] {
+	name := "Expect: Row matches (partial)"
+	return expect.New(
+		name,
+		func(err error, result T) polling.CheckResult {
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    "Query returned no rows",
+					}
+				}
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Query failed: %v", err),
+				}
+			}
+
+			ok, msg := compareStructsPartial(expected, result)
+			if !ok {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    msg,
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		expect.StandardReport[T](name),
+	)
+}
+
+// compareStructsExact compares two structs field by field (ALL fields, including zero values)
+func compareStructsExact[T any](expected, actual T) (bool, string) {
+	expVal := reflect.ValueOf(expected)
+	actVal := reflect.ValueOf(actual)
+
+	if expVal.Kind() == reflect.Ptr {
+		if expVal.IsNil() {
+			return actVal.Kind() == reflect.Ptr && actVal.IsNil(), "expected nil, got non-nil"
+		}
+		expVal = expVal.Elem()
+	}
+	if actVal.Kind() == reflect.Ptr {
+		if actVal.IsNil() {
+			return false, "expected value, got nil"
+		}
+		actVal = actVal.Elem()
+	}
+
+	if expVal.Kind() != reflect.Struct || actVal.Kind() != reflect.Struct {
+		return false, fmt.Sprintf("expected struct types, got %s and %s", expVal.Kind(), actVal.Kind())
+	}
+
+	expType := expVal.Type()
+	for i := 0; i < expVal.NumField(); i++ {
+		field := expType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+
+		expFieldVal := expVal.Field(i)
+		actFieldVal := actVal.Field(i)
+
+		fieldName := getDBColumnName(field)
+
+		equal, _, reason := equalsLoose(expFieldVal.Interface(), actFieldVal.Interface())
+		if !equal {
+			return false, fmt.Sprintf("field '%s': %s", fieldName, reason)
+		}
+	}
+
+	return true, ""
+}
+
+// compareStructsPartial compares two structs field by field (only non-zero expected fields)
+func compareStructsPartial[T any](expected, actual T) (bool, string) {
+	expVal := reflect.ValueOf(expected)
+	actVal := reflect.ValueOf(actual)
+
+	if expVal.Kind() == reflect.Ptr {
+		if expVal.IsNil() {
+			return true, "" // nil expected means no checks
+		}
+		expVal = expVal.Elem()
+	}
+	if actVal.Kind() == reflect.Ptr {
+		if actVal.IsNil() {
+			return false, "expected value, got nil"
+		}
+		actVal = actVal.Elem()
+	}
+
+	if expVal.Kind() != reflect.Struct || actVal.Kind() != reflect.Struct {
+		return false, fmt.Sprintf("expected struct types, got %s and %s", expVal.Kind(), actVal.Kind())
+	}
+
+	expType := expVal.Type()
+	for i := 0; i < expVal.NumField(); i++ {
+		field := expType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+
+		expFieldVal := expVal.Field(i)
+
+		// Skip zero values in partial mode
+		if expFieldVal.IsZero() {
+			continue
+		}
+
+		actFieldVal := actVal.Field(i)
+		fieldName := getDBColumnName(field)
+
+		equal, _, reason := equalsLoose(expFieldVal.Interface(), actFieldVal.Interface())
+		if !equal {
+			return false, fmt.Sprintf("field '%s': %s", fieldName, reason)
+		}
+	}
+
+	return true, ""
+}
+
+// getDBColumnName extracts the column name from the db tag or falls back to field name
+func getDBColumnName(field reflect.StructField) string {
+	if tag := field.Tag.Get("db"); tag != "" && tag != "-" {
+		return tag
+	}
+	return field.Name
 }

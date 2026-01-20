@@ -112,6 +112,37 @@ func (e *Expectation) ExpectFieldFalse(field string) *Expectation {
 	return e
 }
 
+// ExpectMessage checks that the Kafka message matches the expected struct
+// using exact matching (ALL fields are compared, including zero values).
+//
+// Example:
+//
+//	kafka.ExpectMessage(CategoryEvent{
+//	    Id:        categoryId,
+//	    EventType: "DELETE",
+//	    Status:    0,           // zero value IS checked
+//	    IsDefault: false,       // false IS checked
+//	})
+func (e *Expectation) ExpectMessage(expected any) *Expectation {
+	e.expectations = append(e.expectations, makeMessageExpectation(expected))
+	return e
+}
+
+// ExpectMessagePartial checks that the Kafka message matches the expected struct
+// using partial matching (only non-zero fields are compared).
+//
+// Example:
+//
+//	kafka.ExpectMessagePartial(CategoryEvent{
+//	    Id:        categoryId,
+//	    EventType: "DELETE",
+//	    // Status, IsDefault are skipped as zero values
+//	})
+func (e *Expectation) ExpectMessagePartial(expected any) *Expectation {
+	e.expectations = append(e.expectations, makeMessagePartialExpectation(expected))
+	return e
+}
+
 func (e *Expectation) Send() {
 	effectiveTimeout := e.kafkaClient.GetDefaultTimeout()
 
@@ -567,6 +598,74 @@ func makeFieldFalseExpectation(field string) *expect.Expectation[[]byte] {
 					Ok:        false,
 					Retryable: false,
 					Reason:    fmt.Sprintf("Expected false, got %s: %s", jsonutil.TypeToString(result.Type), jsonutil.DebugValue(result)),
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		expect.StandardReport[[]byte](name),
+	)
+}
+
+func makeMessageExpectation(expected any) *expect.Expectation[[]byte] {
+	name := "Expect: Message matches (exact)"
+	return expect.New(
+		name,
+		func(err error, msgBytes []byte) polling.CheckResult {
+			if len(msgBytes) == 0 {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "Message bytes are empty",
+				}
+			}
+			if !gjson.ValidBytes(msgBytes) {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "Invalid JSON message",
+				}
+			}
+			jsonRes := gjson.ParseBytes(msgBytes)
+			ok, msg := jsonutil.CompareObjectExact(jsonRes, expected)
+			if !ok {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    msg,
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		expect.StandardReport[[]byte](name),
+	)
+}
+
+func makeMessagePartialExpectation(expected any) *expect.Expectation[[]byte] {
+	name := "Expect: Message matches (partial)"
+	return expect.New(
+		name,
+		func(err error, msgBytes []byte) polling.CheckResult {
+			if len(msgBytes) == 0 {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "Message bytes are empty",
+				}
+			}
+			if !gjson.ValidBytes(msgBytes) {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "Invalid JSON message",
+				}
+			}
+			jsonRes := gjson.ParseBytes(msgBytes)
+			ok, msg := jsonutil.CompareObjectPartial(jsonRes, expected)
+			if !ok {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    msg,
 				}
 			}
 			return polling.CheckResult{Ok: true}

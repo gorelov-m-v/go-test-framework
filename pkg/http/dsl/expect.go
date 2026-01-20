@@ -634,3 +634,106 @@ func makeArrayContainsExactExpectation(path string, expected any) *expect.Expect
 		},
 	)
 }
+
+// ExpectResponseBody checks that the entire response body matches the expected struct
+// using exact matching (ALL fields are compared, including zero values).
+//
+// Example:
+//
+//	resp.ExpectResponseBody(Category{
+//	    Id:         createdId,
+//	    Name:       expectedName,
+//	    GamesCount: 0,          // zero value IS checked
+//	    IsDefault:  false,      // false IS checked
+//	})
+func (c *Call[TReq, TResp]) ExpectResponseBody(expected any) *Call[TReq, TResp] {
+	c.addExpectation(makeResponseBodyExpectation(expected))
+	return c
+}
+
+// ExpectResponseBodyPartial checks that the entire response body matches the expected struct
+// using partial matching (only non-zero fields are compared).
+//
+// Example:
+//
+//	resp.ExpectResponseBodyPartial(Category{
+//	    Id:   createdId,
+//	    Name: expectedName,
+//	    // GamesCount, IsDefault are skipped as zero values
+//	})
+func (c *Call[TReq, TResp]) ExpectResponseBodyPartial(expected any) *Call[TReq, TResp] {
+	c.addExpectation(makeResponseBodyPartialExpectation(expected))
+	return c
+}
+
+func makeResponseBodyExpectation(expected any) *expect.Expectation[*client.Response[any]] {
+	return expect.New(
+		"Expect response body matches (exact)",
+		func(err error, resp *client.Response[any]) polling.CheckResult {
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
+			}
+			if !gjson.ValidBytes(resp.RawBody) {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "Invalid JSON response body",
+				}
+			}
+			jsonRes := gjson.ParseBytes(resp.RawBody)
+			ok, msg := jsonutil.CompareObjectExact(jsonRes, expected)
+			if !ok {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    msg,
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
+			if !checkRes.Ok {
+				a.True(false, "[Expect response body matches (exact)] %s", checkRes.Reason)
+				return
+			}
+			a.True(true, "[Expect response body matches (exact)]")
+		},
+	)
+}
+
+func makeResponseBodyPartialExpectation(expected any) *expect.Expectation[*client.Response[any]] {
+	return expect.New(
+		"Expect response body matches (partial)",
+		func(err error, resp *client.Response[any]) polling.CheckResult {
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
+			}
+			if !gjson.ValidBytes(resp.RawBody) {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    "Invalid JSON response body",
+				}
+			}
+			jsonRes := gjson.ParseBytes(resp.RawBody)
+			ok, msg := jsonutil.CompareObjectPartial(jsonRes, expected)
+			if !ok {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    msg,
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
+			if !checkRes.Ok {
+				a.True(false, "[Expect response body matches (partial)] %s", checkRes.Reason)
+				return
+			}
+			a.True(true, "[Expect response body matches (partial)]")
+		},
+	)
+}

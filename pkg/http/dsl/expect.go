@@ -444,3 +444,193 @@ func (c *Call[TReq, TResp]) ExpectMatchesSchema(schemaName string) *Call[TReq, T
 	c.contractSchema = schemaName
 	return c
 }
+
+// ExpectArrayContains checks that the JSON array at the given path contains an object
+// matching the expected struct using partial matching (only non-zero fields are compared).
+//
+// Example:
+//
+//	resp.ExpectArrayContains("items", Category{
+//	    Id:   createdId,
+//	    Name: expectedName,
+//	    Type: "category",
+//	})
+//
+// This will find an object in "items" array where id, name, and type match the expected values.
+// Zero-value fields (empty strings, 0, false, nil) are ignored in the comparison.
+func (c *Call[TReq, TResp]) ExpectArrayContains(path string, expected any) *Call[TReq, TResp] {
+	c.addExpectation(makeArrayContainsExpectation(path, expected))
+	return c
+}
+
+func makeArrayContainsExpectation(path string, expected any) *expect.Expectation[*client.Response[any]] {
+	return expect.New(
+		fmt.Sprintf("Expect array '%s' contains matching object", path),
+		func(err error, resp *client.Response[any]) polling.CheckResult {
+			if pathErr := validateJSONPath(path); pathErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
+				}
+			}
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
+			}
+			jsonRes, parseErr := getJSONResult(resp.RawBody, path)
+			if parseErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Invalid JSON response body",
+				}
+			}
+			if !jsonRes.Exists() {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Path '%s' does not exist in response", path),
+				}
+			}
+			if !jsonRes.IsArray() {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Expected array at '%s', got %s", path, jsonutil.TypeToString(jsonRes.Type)),
+				}
+			}
+
+			idx, _ := jsonutil.FindInArray(jsonRes, expected)
+			if idx == -1 {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("No matching object found in array '%s'", path),
+				}
+			}
+
+			return polling.CheckResult{Ok: true}
+		},
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
+			if !checkRes.Ok {
+				a.True(false, "[Expect array '%s' contains matching object] %s", path, checkRes.Reason)
+				return
+			}
+
+			if resp != nil && len(resp.RawBody) > 0 {
+				jsonRes, parseErr := getJSONResult(resp.RawBody, path)
+				if parseErr == nil && jsonRes.Exists() {
+					idx, matchedItem := jsonutil.FindInArray(jsonRes, expected)
+					if idx >= 0 {
+						a.True(true, "[Expect array '%s' contains matching object] Found at index %d: %s", path, idx, jsonutil.DebugValue(matchedItem))
+						return
+					}
+				}
+			}
+			a.True(true, "[Expect array '%s' contains matching object]", path)
+		},
+	)
+}
+
+// ExpectArrayContainsExact checks that the JSON array at the given path contains an object
+// matching the expected struct using exact matching (ALL fields are compared, including zero values).
+//
+// Example:
+//
+//	resp.ExpectArrayContainsExact("items", Category{
+//	    Id:                 createdId,
+//	    Name:               expectedName,
+//	    Type:               "category",
+//	    GamesCount:         0,          // zero value IS checked
+//	    ParentCategoryId:   "",         // empty string IS checked
+//	    IsDefault:          false,      // false IS checked
+//	})
+//
+// This will find an object in "items" array where ALL fields match the expected values.
+// Unlike ExpectArrayContains, zero-value fields ARE included in the comparison.
+func (c *Call[TReq, TResp]) ExpectArrayContainsExact(path string, expected any) *Call[TReq, TResp] {
+	c.addExpectation(makeArrayContainsExactExpectation(path, expected))
+	return c
+}
+
+func makeArrayContainsExactExpectation(path string, expected any) *expect.Expectation[*client.Response[any]] {
+	return expect.New(
+		fmt.Sprintf("Expect array '%s' contains exact matching object", path),
+		func(err error, resp *client.Response[any]) polling.CheckResult {
+			if pathErr := validateJSONPath(path); pathErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
+				}
+			}
+			if res, ok := preCheckWithBody(err, resp); !ok {
+				return res
+			}
+			jsonRes, parseErr := getJSONResult(resp.RawBody, path)
+			if parseErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Invalid JSON response body",
+				}
+			}
+			if !jsonRes.Exists() {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Path '%s' does not exist in response", path),
+				}
+			}
+			if !jsonRes.IsArray() {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Expected array at '%s', got %s", path, jsonutil.TypeToString(jsonRes.Type)),
+				}
+			}
+
+			idx, _ := jsonutil.FindInArrayExact(jsonRes, expected)
+			if idx == -1 {
+				// Try to find partial match to give better error message
+				partialIdx, partialItem := jsonutil.FindInArray(jsonRes, expected)
+				if partialIdx >= 0 {
+					// Found partial match, show what's different
+					_, diff := jsonutil.CompareObjectExact(partialItem, expected)
+					return polling.CheckResult{
+						Ok:        false,
+						Retryable: true,
+						Reason:    fmt.Sprintf("Found similar object at index %d but exact match failed: %s", partialIdx, diff),
+					}
+				}
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("No matching object found in array '%s'", path),
+				}
+			}
+
+			return polling.CheckResult{Ok: true}
+		},
+		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, resp *client.Response[any], checkRes polling.CheckResult) {
+			a := polling.PickAsserter(stepCtx, mode)
+			if !checkRes.Ok {
+				a.True(false, "[Expect array '%s' contains exact matching object] %s", path, checkRes.Reason)
+				return
+			}
+
+			if resp != nil && len(resp.RawBody) > 0 {
+				jsonRes, parseErr := getJSONResult(resp.RawBody, path)
+				if parseErr == nil && jsonRes.Exists() {
+					idx, matchedItem := jsonutil.FindInArrayExact(jsonRes, expected)
+					if idx >= 0 {
+						a.True(true, "[Expect array '%s' contains exact matching object] Found at index %d: %s", path, idx, jsonutil.DebugValue(matchedItem))
+						return
+					}
+				}
+			}
+			a.True(true, "[Expect array '%s' contains exact matching object]", path)
+		},
+	)
+}

@@ -3,7 +3,9 @@ package jsonutil
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
+	"unicode"
 
 	"github.com/tidwall/gjson"
 )
@@ -102,6 +104,23 @@ func ToFloat64(v any) (float64, bool) {
 }
 
 func Compare(res gjson.Result, expected any) (bool, string) {
+	// Handle pointers - dereference if not nil
+	val := reflect.ValueOf(expected)
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			// nil pointer means we expect null in JSON
+			if !res.Exists() {
+				return false, "field does not exist (expected null)"
+			}
+			if res.Type != gjson.Null {
+				return false, fmt.Sprintf("expected null, got %s: %s", TypeToString(res.Type), DebugValue(res))
+			}
+			return true, ""
+		}
+		// Dereference the pointer and compare with the actual value
+		return Compare(res, val.Elem().Interface())
+	}
+
 	if expected == nil {
 		if !res.Exists() {
 			return false, "field does not exist (expected null)"
@@ -177,4 +196,302 @@ func Compare(res gjson.Result, expected any) (bool, string) {
 
 		return false, fmt.Sprintf("unsupported expected type %T; supported: string/bool/int*/uint*/float*/nil", expected)
 	}
+}
+
+// toJSONFieldName converts Go struct field name to JSON field name (camelCase).
+// It uses the `json` tag if present, otherwise converts PascalCase to camelCase.
+func toJSONFieldName(field reflect.StructField) string {
+	jsonTag := field.Tag.Get("json")
+	if jsonTag != "" && jsonTag != "-" {
+		parts := strings.Split(jsonTag, ",")
+		if parts[0] != "" {
+			return parts[0]
+		}
+	}
+	// Convert PascalCase to camelCase
+	name := field.Name
+	if len(name) == 0 {
+		return name
+	}
+	runes := []rune(name)
+	runes[0] = unicode.ToLower(runes[0])
+	return string(runes)
+}
+
+// isZeroValue checks if a reflect.Value is the zero value for its type.
+func isZeroValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Array, reflect.Map, reflect.Slice:
+		return v.IsNil() || v.Len() == 0
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.String:
+		return v.String() == ""
+	case reflect.Interface, reflect.Ptr:
+		return v.IsNil()
+	case reflect.Struct:
+		return false // Structs are never considered zero for partial match
+	default:
+		return false
+	}
+}
+
+// CompareObjectPartial compares a JSON object with an expected struct using partial matching.
+// Only non-zero fields in the expected struct are compared.
+// Returns (true, "") if all non-zero fields match, or (false, reason) if not.
+func CompareObjectPartial(jsonObj gjson.Result, expected any) (bool, string) {
+	if expected == nil {
+		return true, ""
+	}
+
+	val := reflect.ValueOf(expected)
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return true, ""
+		}
+		val = val.Elem()
+	}
+
+	if val.Kind() != reflect.Struct {
+		return false, fmt.Sprintf("expected struct, got %T", expected)
+	}
+
+	if !jsonObj.IsObject() {
+		return false, fmt.Sprintf("expected JSON object, got %s", TypeToString(jsonObj.Type))
+	}
+
+	typ := val.Type()
+	for i := 0; i < val.NumField(); i++ {
+		field := typ.Field(i)
+		fieldVal := val.Field(i)
+
+		// Skip unexported fields
+		if !field.IsExported() {
+			continue
+		}
+
+		// Skip zero values (partial match)
+		if isZeroValue(fieldVal) {
+			continue
+		}
+
+		jsonFieldName := toJSONFieldName(field)
+		jsonField := jsonObj.Get(jsonFieldName)
+
+		if !jsonField.Exists() {
+			return false, fmt.Sprintf("field '%s' not found in JSON", jsonFieldName)
+		}
+
+		// Handle nested structs
+		if fieldVal.Kind() == reflect.Struct {
+			ok, msg := CompareObjectPartial(jsonField, fieldVal.Interface())
+			if !ok {
+				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+			}
+			continue
+		}
+
+		// Handle maps (e.g., map[string]string for localized names)
+		if fieldVal.Kind() == reflect.Map {
+			ok, msg := compareMap(jsonField, fieldVal)
+			if !ok {
+				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+			}
+			continue
+		}
+
+		// Handle slices
+		if fieldVal.Kind() == reflect.Slice {
+			ok, msg := compareSlice(jsonField, fieldVal)
+			if !ok {
+				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+			}
+			continue
+		}
+
+		// Handle primitive types
+		ok, msg := Compare(jsonField, fieldVal.Interface())
+		if !ok {
+			return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+		}
+	}
+
+	return true, ""
+}
+
+// compareMap compares a JSON object with an expected map.
+func compareMap(jsonObj gjson.Result, mapVal reflect.Value) (bool, string) {
+	if !jsonObj.IsObject() {
+		return false, fmt.Sprintf("expected JSON object for map, got %s", TypeToString(jsonObj.Type))
+	}
+
+	for _, key := range mapVal.MapKeys() {
+		keyStr := fmt.Sprintf("%v", key.Interface())
+		jsonField := jsonObj.Get(keyStr)
+
+		if !jsonField.Exists() {
+			return false, fmt.Sprintf("key '%s' not found", keyStr)
+		}
+
+		expectedVal := mapVal.MapIndex(key).Interface()
+		ok, msg := Compare(jsonField, expectedVal)
+		if !ok {
+			return false, fmt.Sprintf("key '%s': %s", keyStr, msg)
+		}
+	}
+
+	return true, ""
+}
+
+// compareSlice compares a JSON array with an expected slice.
+func compareSlice(jsonArr gjson.Result, sliceVal reflect.Value) (bool, string) {
+	if !jsonArr.IsArray() {
+		return false, fmt.Sprintf("expected JSON array, got %s", TypeToString(jsonArr.Type))
+	}
+
+	jsonItems := jsonArr.Array()
+	if len(jsonItems) != sliceVal.Len() {
+		return false, fmt.Sprintf("array length mismatch: expected %d, got %d", sliceVal.Len(), len(jsonItems))
+	}
+
+	for i := 0; i < sliceVal.Len(); i++ {
+		expectedItem := sliceVal.Index(i).Interface()
+		jsonItem := jsonItems[i]
+
+		// Check if it's a struct for partial matching
+		itemVal := reflect.ValueOf(expectedItem)
+		if itemVal.Kind() == reflect.Struct {
+			ok, msg := CompareObjectPartial(jsonItem, expectedItem)
+			if !ok {
+				return false, fmt.Sprintf("index %d: %s", i, msg)
+			}
+		} else {
+			ok, msg := Compare(jsonItem, expectedItem)
+			if !ok {
+				return false, fmt.Sprintf("index %d: %s", i, msg)
+			}
+		}
+	}
+
+	return true, ""
+}
+
+// FindInArray searches for an object in a JSON array that matches the expected struct (partial match).
+// Returns the index of the first matching element, or -1 if not found.
+func FindInArray(jsonArr gjson.Result, expected any) (int, gjson.Result) {
+	if !jsonArr.IsArray() {
+		return -1, gjson.Result{}
+	}
+
+	for i, item := range jsonArr.Array() {
+		ok, _ := CompareObjectPartial(item, expected)
+		if ok {
+			return i, item
+		}
+	}
+
+	return -1, gjson.Result{}
+}
+
+// CompareObjectExact compares a JSON object with an expected struct using exact matching.
+// ALL fields in the expected struct are compared, including zero values.
+// Fields that don't exist in JSON are skipped (handles contract mismatches).
+// Returns (true, "") if all fields match, or (false, reason) if not.
+func CompareObjectExact(jsonObj gjson.Result, expected any) (bool, string) {
+	if expected == nil {
+		return true, ""
+	}
+
+	val := reflect.ValueOf(expected)
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return true, ""
+		}
+		val = val.Elem()
+	}
+
+	if val.Kind() != reflect.Struct {
+		return false, fmt.Sprintf("expected struct, got %T", expected)
+	}
+
+	if !jsonObj.IsObject() {
+		return false, fmt.Sprintf("expected JSON object, got %s", TypeToString(jsonObj.Type))
+	}
+
+	typ := val.Type()
+	for i := 0; i < val.NumField(); i++ {
+		field := typ.Field(i)
+		fieldVal := val.Field(i)
+
+		// Skip unexported fields
+		if !field.IsExported() {
+			continue
+		}
+
+		jsonFieldName := toJSONFieldName(field)
+		jsonField := jsonObj.Get(jsonFieldName)
+
+		// Skip fields that don't exist in JSON (contract mismatch)
+		if !jsonField.Exists() {
+			continue
+		}
+
+		// Handle nested structs
+		if fieldVal.Kind() == reflect.Struct {
+			ok, msg := CompareObjectExact(jsonField, fieldVal.Interface())
+			if !ok {
+				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+			}
+			continue
+		}
+
+		// Handle maps (e.g., map[string]string for localized names)
+		if fieldVal.Kind() == reflect.Map {
+			ok, msg := compareMap(jsonField, fieldVal)
+			if !ok {
+				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+			}
+			continue
+		}
+
+		// Handle slices
+		if fieldVal.Kind() == reflect.Slice {
+			ok, msg := compareSlice(jsonField, fieldVal)
+			if !ok {
+				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+			}
+			continue
+		}
+
+		// Handle primitive types
+		ok, msg := Compare(jsonField, fieldVal.Interface())
+		if !ok {
+			return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+		}
+	}
+
+	return true, ""
+}
+
+// FindInArrayExact searches for an object in a JSON array that matches the expected struct (exact match).
+// Returns the index of the first matching element, or -1 if not found.
+func FindInArrayExact(jsonArr gjson.Result, expected any) (int, gjson.Result) {
+	if !jsonArr.IsArray() {
+		return -1, gjson.Result{}
+	}
+
+	for i, item := range jsonArr.Array() {
+		ok, _ := CompareObjectExact(item, expected)
+		if ok {
+			return i, item
+		}
+	}
+
+	return -1, gjson.Result{}
 }

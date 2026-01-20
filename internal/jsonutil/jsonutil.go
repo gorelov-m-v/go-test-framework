@@ -288,6 +288,25 @@ func CompareObjectPartial(jsonObj gjson.Result, expected any) (bool, string) {
 			return false, fmt.Sprintf("field '%s' not found in JSON", jsonFieldName)
 		}
 
+		// Handle pointers to structs
+		if fieldVal.Kind() == reflect.Ptr {
+			if fieldVal.IsNil() {
+				// nil pointer - already skipped by isZeroValue, but check just in case
+				continue
+			}
+			// Dereference and handle as struct
+			derefVal := fieldVal.Elem()
+			if derefVal.Kind() == reflect.Struct {
+				ok, msg := CompareObjectPartial(jsonField, derefVal.Interface())
+				if !ok {
+					return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+				}
+				continue
+			}
+			// For non-struct pointers, use the dereferenced value
+			fieldVal = derefVal
+		}
+
 		// Handle nested structs
 		if fieldVal.Kind() == reflect.Struct {
 			ok, msg := CompareObjectPartial(jsonField, fieldVal.Interface())
@@ -440,6 +459,28 @@ func CompareObjectExact(jsonObj gjson.Result, expected any) (bool, string) {
 		// Skip fields that don't exist in JSON (contract mismatch)
 		if !jsonField.Exists() {
 			continue
+		}
+
+		// Handle pointers to structs
+		if fieldVal.Kind() == reflect.Ptr {
+			if fieldVal.IsNil() {
+				// nil pointer - check if JSON field is null or doesn't exist
+				if jsonField.Exists() && jsonField.Type != gjson.Null {
+					return false, fmt.Sprintf("field '%s': expected null, got %s: %s", jsonFieldName, TypeToString(jsonField.Type), DebugValue(jsonField))
+				}
+				continue
+			}
+			// Dereference and handle as struct
+			derefVal := fieldVal.Elem()
+			if derefVal.Kind() == reflect.Struct {
+				ok, msg := CompareObjectExact(jsonField, derefVal.Interface())
+				if !ok {
+					return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
+				}
+				continue
+			}
+			// For non-struct pointers, use the dereferenced value
+			fieldVal = derefVal
 		}
 
 		// Handle nested structs

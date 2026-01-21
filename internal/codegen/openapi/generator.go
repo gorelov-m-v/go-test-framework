@@ -14,6 +14,7 @@ type Generator struct {
 	spec        *openapi3.T
 	serviceName string
 	moduleName  string
+	packageName string
 	methods     []HTTPMethodInfo
 }
 
@@ -45,6 +46,13 @@ func NewGenerator(spec *openapi3.T, serviceName, moduleName string) *Generator {
 
 func (g *Generator) getSanitizedName() string {
 	return SanitizeServiceName(g.serviceName)
+}
+
+func (g *Generator) getPackageName() string {
+	if g.packageName != "" {
+		return g.packageName
+	}
+	return g.getSanitizedName()
 }
 
 func LoadOpenAPISpec(path string) (*openapi3.T, error) {
@@ -108,6 +116,9 @@ func (g *Generator) Generate(outputDir, clientPath string) (*GenerationResult, e
 
 	if clientPath == "" {
 		clientPath = filepath.Join(outputDir, "internal", "http_client", sanitizedName)
+		g.packageName = sanitizedName
+	} else {
+		g.packageName = filepath.Base(clientPath)
 	}
 
 	if err := os.MkdirAll(clientPath, 0755); err != nil {

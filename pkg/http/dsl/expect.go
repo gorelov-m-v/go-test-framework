@@ -445,19 +445,6 @@ func (c *Call[TReq, TResp]) ExpectMatchesSchema(schemaName string) *Call[TReq, T
 	return c
 }
 
-// ExpectArrayContains checks that the JSON array at the given path contains an object
-// matching the expected struct using partial matching (only non-zero fields are compared).
-//
-// Example:
-//
-//	resp.ExpectArrayContains("items", Category{
-//	    Id:   createdId,
-//	    Name: expectedName,
-//	    Type: "category",
-//	})
-//
-// This will find an object in "items" array where id, name, and type match the expected values.
-// Zero-value fields (empty strings, 0, false, nil) are ignored in the comparison.
 func (c *Call[TReq, TResp]) ExpectArrayContains(path string, expected any) *Call[TReq, TResp] {
 	c.addExpectation(makeArrayContainsExpectation(path, expected))
 	return c
@@ -533,22 +520,6 @@ func makeArrayContainsExpectation(path string, expected any) *expect.Expectation
 	)
 }
 
-// ExpectArrayContainsExact checks that the JSON array at the given path contains an object
-// matching the expected struct using exact matching (ALL fields are compared, including zero values).
-//
-// Example:
-//
-//	resp.ExpectArrayContainsExact("items", Category{
-//	    Id:                 createdId,
-//	    Name:               expectedName,
-//	    Type:               "category",
-//	    GamesCount:         0,          // zero value IS checked
-//	    ParentCategoryId:   "",         // empty string IS checked
-//	    IsDefault:          false,      // false IS checked
-//	})
-//
-// This will find an object in "items" array where ALL fields match the expected values.
-// Unlike ExpectArrayContains, zero-value fields ARE included in the comparison.
 func (c *Call[TReq, TResp]) ExpectArrayContainsExact(path string, expected any) *Call[TReq, TResp] {
 	c.addExpectation(makeArrayContainsExactExpectation(path, expected))
 	return c
@@ -593,10 +564,8 @@ func makeArrayContainsExactExpectation(path string, expected any) *expect.Expect
 
 			idx, _ := jsonutil.FindInArrayExact(jsonRes, expected)
 			if idx == -1 {
-				// Try to find partial match to give better error message
 				partialIdx, partialItem := jsonutil.FindInArray(jsonRes, expected)
 				if partialIdx >= 0 {
-					// Found partial match, show what's different
 					_, diff := jsonutil.CompareObjectExact(partialItem, expected)
 					return polling.CheckResult{
 						Ok:        false,
@@ -635,32 +604,11 @@ func makeArrayContainsExactExpectation(path string, expected any) *expect.Expect
 	)
 }
 
-// ExpectResponseBody checks that the entire response body matches the expected struct
-// using exact matching (ALL fields are compared, including zero values).
-//
-// Example:
-//
-//	resp.ExpectResponseBody(Category{
-//	    Id:         createdId,
-//	    Name:       expectedName,
-//	    GamesCount: 0,          // zero value IS checked
-//	    IsDefault:  false,      // false IS checked
-//	})
 func (c *Call[TReq, TResp]) ExpectResponseBody(expected any) *Call[TReq, TResp] {
 	c.addExpectation(makeResponseBodyExpectation(expected))
 	return c
 }
 
-// ExpectResponseBodyPartial checks that the entire response body matches the expected struct
-// using partial matching (only non-zero fields are compared).
-//
-// Example:
-//
-//	resp.ExpectResponseBodyPartial(Category{
-//	    Id:   createdId,
-//	    Name: expectedName,
-//	    // GamesCount, IsDefault are skipped as zero values
-//	})
 func (c *Call[TReq, TResp]) ExpectResponseBodyPartial(expected any) *Call[TReq, TResp] {
 	c.addExpectation(makeResponseBodyPartialExpectation(expected))
 	return c

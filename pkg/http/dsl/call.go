@@ -18,8 +18,6 @@ type Call[TReq any, TResp any] struct {
 	client *client.Client
 	ctx    context.Context
 
-	stepName string
-
 	req  *client.Request[TReq]
 	resp *client.Response[TResp]
 
@@ -40,18 +38,6 @@ func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Clie
 			QueryParams: make(map[string]string),
 		},
 	}
-}
-
-func (c *Call[TReq, TResp]) StepName(name string) *Call[TReq, TResp] {
-	c.stepName = strings.TrimSpace(name)
-	return c
-}
-
-func (c *Call[TReq, TResp]) Context(ctx context.Context) *Call[TReq, TResp] {
-	if ctx != nil {
-		c.ctx = ctx
-	}
-	return c
 }
 
 func (c *Call[TReq, TResp]) GET(path string) *Call[TReq, TResp] {
@@ -117,12 +103,9 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validate()
 	c.validateContractConfig()
 
-	name := c.stepName
-	if name == "" {
-		name = fmt.Sprintf("%s %s", c.req.Method, c.req.Path)
-	}
+	stepName := fmt.Sprintf("%s %s", c.req.Method, c.req.Path)
 
-	c.sCtx.WithNewStep(name, func(stepCtx provider.StepCtx) {
+	c.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		attachRequest(stepCtx, c.client, c.req)
 
 		mode := polling.GetStepMode(stepCtx)

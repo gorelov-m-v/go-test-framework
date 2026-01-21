@@ -25,7 +25,6 @@ func New(cfg types.Config, asyncConfig config.AsyncConfig) (*Client, error) {
 		return nil, fmt.Errorf("no topics configured. Please specify 'topics' list in kafka config")
 	}
 
-	// Apply topic prefix to all topics
 	fullTopics := make([]string, len(cfg.Topics))
 	for i, topic := range cfg.Topics {
 		fullTopics[i] = cfg.TopicPrefix + topic

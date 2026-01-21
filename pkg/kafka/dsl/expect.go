@@ -23,6 +23,7 @@ type Expectation struct {
 	topicName   string
 
 	filters         map[string]string
+	containsFilters map[string]string
 	unique          bool
 	duplicateWindow time.Duration
 
@@ -37,17 +38,25 @@ type Expectation struct {
 
 func NewExpectation(sCtx provider.StepCtx, kafkaClient *client.Client, topicName string) *Expectation {
 	return &Expectation{
-		sCtx:         sCtx,
-		kafkaClient:  kafkaClient,
-		topicName:    topicName,
-		filters:      make(map[string]string),
-		expectations: make([]*expect.Expectation[[]byte], 0),
+		sCtx:            sCtx,
+		kafkaClient:     kafkaClient,
+		topicName:       topicName,
+		filters:         make(map[string]string),
+		containsFilters: make(map[string]string),
+		expectations:    make([]*expect.Expectation[[]byte], 0),
 	}
 }
 
 func (e *Expectation) With(key string, value interface{}) *Expectation {
 	if value != nil {
 		e.filters[key] = fmt.Sprintf("%v", value)
+	}
+	return e
+}
+
+func (e *Expectation) WithContains(key string, value interface{}) *Expectation {
+	if value != nil {
+		e.containsFilters[key] = fmt.Sprintf("%v", value)
 	}
 	return e
 }
@@ -112,32 +121,11 @@ func (e *Expectation) ExpectFieldFalse(field string) *Expectation {
 	return e
 }
 
-// ExpectMessage checks that the Kafka message matches the expected struct
-// using exact matching (ALL fields are compared, including zero values).
-//
-// Example:
-//
-//	kafka.ExpectMessage(CategoryEvent{
-//	    Id:        categoryId,
-//	    EventType: "DELETE",
-//	    Status:    0,           // zero value IS checked
-//	    IsDefault: false,       // false IS checked
-//	})
 func (e *Expectation) ExpectMessage(expected any) *Expectation {
 	e.expectations = append(e.expectations, makeMessageExpectation(expected))
 	return e
 }
 
-// ExpectMessagePartial checks that the Kafka message matches the expected struct
-// using partial matching (only non-zero fields are compared).
-//
-// Example:
-//
-//	kafka.ExpectMessagePartial(CategoryEvent{
-//	    Id:        categoryId,
-//	    EventType: "DELETE",
-//	    // Status, IsDefault are skipped as zero values
-//	})
 func (e *Expectation) ExpectMessagePartial(expected any) *Expectation {
 	e.expectations = append(e.expectations, makeMessagePartialExpectation(expected))
 	return e
@@ -199,13 +187,11 @@ func (e *Expectation) Send() {
 			e.checkUniqueness(stepCtx, assertionMode)
 		}
 
-		// Выполняем все expectations
 		e.runExpectations(stepCtx, assertionMode)
 	})
 }
 
 func (e *Expectation) doSearch() ([]byte, error) {
-	// Проверяем что топик слушается
 	if !e.kafkaClient.GetBuffer().IsTopicConfigured(e.topicName) {
 		return nil, &kafkaErrors.KafkaTopicNotListenedError{
 			TopicName:        e.topicName,
@@ -242,7 +228,6 @@ func (e *Expectation) searchMessage(messages []*types.KafkaMessage) ([]byte, err
 		return nil, fmt.Errorf("no messages in buffer")
 	}
 
-	// Ищем с конца (самые свежие)
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
 
@@ -345,10 +330,10 @@ func (e *Expectation) runExpectations(stepCtx provider.StepCtx, mode polling.Ass
 
 func (e *Expectation) matchesFilter(jsonValue []byte) bool {
 	if len(jsonValue) == 0 {
-		return len(e.filters) == 0
+		return len(e.filters) == 0 && len(e.containsFilters) == 0
 	}
 
-	if len(e.filters) == 0 {
+	if len(e.filters) == 0 && len(e.containsFilters) == 0 {
 		return true
 	}
 
@@ -369,17 +354,43 @@ func (e *Expectation) matchesFilter(jsonValue []byte) bool {
 		}
 	}
 
+	for path, expectedValue := range e.containsFilters {
+		result := gjson.GetBytes(jsonValue, path)
+
+		if !result.Exists() {
+			return false
+		}
+
+		if !result.IsArray() {
+			return false
+		}
+
+		found := false
+		for _, item := range result.Array() {
+			if item.String() == expectedValue {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
 	return true
 }
 
 func (e *Expectation) buildFilterDescription() string {
-	if len(e.filters) == 0 {
+	if len(e.filters) == 0 && len(e.containsFilters) == 0 {
 		return ""
 	}
 
-	parts := make([]string, 0, len(e.filters))
+	parts := make([]string, 0, len(e.filters)+len(e.containsFilters))
 	for key, value := range e.filters {
 		parts = append(parts, fmt.Sprintf("%s = %s", key, value))
+	}
+	for key, value := range e.containsFilters {
+		parts = append(parts, fmt.Sprintf("%s contains %s", key, value))
 	}
 
 	return strings.Join(parts, ", ")

@@ -126,20 +126,6 @@ func (q *Query[T]) ExpectColumnJsonEquals(columnName string, expected map[string
 	return q
 }
 
-// ExpectRow checks that the query result matches the expected struct
-// using exact matching (ALL fields are compared, including zero values).
-//
-// Example:
-//
-//	db.Query[Category]().
-//	    SQL("SELECT * FROM game_category WHERE id = $1", id).
-//	    ExpectRow(Category{
-//	        Id:        id,
-//	        Name:      expectedName,
-//	        Status:    0,           // zero value IS checked
-//	        IsDefault: false,       // false IS checked
-//	    }).
-//	    Send()
 func (q *Query[T]) ExpectRow(expected T) *Query[T] {
 	if q.expectsNotFound {
 		q.sCtx.Break("DB DSL Error: ExpectRow() cannot be used with ExpectNotFound()")
@@ -150,19 +136,6 @@ func (q *Query[T]) ExpectRow(expected T) *Query[T] {
 	return q
 }
 
-// ExpectRowPartial checks that the query result matches the expected struct
-// using partial matching (only non-zero fields are compared).
-//
-// Example:
-//
-//	db.Query[Category]().
-//	    SQL("SELECT * FROM game_category WHERE id = $1", id).
-//	    ExpectRowPartial(Category{
-//	        Id:   id,
-//	        Name: expectedName,
-//	        // Status, IsDefault are skipped as zero values
-//	    }).
-//	    Send()
 func (q *Query[T]) ExpectRowPartial(expected T) *Query[T] {
 	if q.expectsNotFound {
 		q.sCtx.Break("DB DSL Error: ExpectRowPartial() cannot be used with ExpectNotFound()")
@@ -803,7 +776,6 @@ func makeRowPartialExpectation[T any](expected T) *expect.Expectation[T] {
 	)
 }
 
-// compareStructsExact compares two structs field by field (ALL fields, including zero values)
 func compareStructsExact[T any](expected, actual T) (bool, string) {
 	expVal := reflect.ValueOf(expected)
 	actVal := reflect.ValueOf(actual)
@@ -846,14 +818,13 @@ func compareStructsExact[T any](expected, actual T) (bool, string) {
 	return true, ""
 }
 
-// compareStructsPartial compares two structs field by field (only non-zero expected fields)
 func compareStructsPartial[T any](expected, actual T) (bool, string) {
 	expVal := reflect.ValueOf(expected)
 	actVal := reflect.ValueOf(actual)
 
 	if expVal.Kind() == reflect.Ptr {
 		if expVal.IsNil() {
-			return true, "" // nil expected means no checks
+			return true, ""
 		}
 		expVal = expVal.Elem()
 	}
@@ -877,7 +848,6 @@ func compareStructsPartial[T any](expected, actual T) (bool, string) {
 
 		expFieldVal := expVal.Field(i)
 
-		// Skip zero values in partial mode
 		if expFieldVal.IsZero() {
 			continue
 		}
@@ -894,7 +864,6 @@ func compareStructsPartial[T any](expected, actual T) (bool, string) {
 	return true, ""
 }
 
-// getDBColumnName extracts the column name from the db tag or falls back to field name
 func getDBColumnName(field reflect.StructField) string {
 	if tag := field.Tag.Get("db"); tag != "" && tag != "-" {
 		return tag

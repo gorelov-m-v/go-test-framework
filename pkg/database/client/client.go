@@ -97,8 +97,6 @@ func (c *Client) Close() error {
 	return c.DB.Close()
 }
 
-// Schema returns the actual schema name for the given alias.
-// If no mapping is found, returns the alias as-is.
 func (c *Client) Schema(alias string) string {
 	if c.schemas == nil {
 		return alias

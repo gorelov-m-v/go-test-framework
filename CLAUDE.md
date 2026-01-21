@@ -99,7 +99,13 @@ your-api-tests/
 - `.ExpectResponseBodyFieldValue("json.path", value)`
 - `.ExpectResponseBodyFieldNotEmpty("json.path")`
 - `.ExpectResponseBodyFieldIsNull("json.path")`
-- `.ExpectResponseHeader("Key", "Val")`
+- `.ExpectResponseBodyFieldIsNotNull("json.path")`
+- `.ExpectResponseBodyFieldTrue("json.path")` / `.ExpectResponseBodyFieldFalse("json.path")`
+- `.ExpectResponseBodyNotEmpty()`
+- `.ExpectResponseBody(structOrMap)` - exact match (all fields)
+- `.ExpectResponseBodyPartial(structOrMap)` - partial match (non-zero fields only)
+- `.ExpectArrayContains("json.path", structOrMap)` - array contains object (partial match)
+- `.ExpectArrayContainsExact("json.path", structOrMap)` - array contains object (exact match)
 
 **Contract Validation (Chain before .Send):**
 - `.ExpectMatchesContract()` - Validates response against OpenAPI spec (auto-detects operation by method + path)
@@ -114,23 +120,33 @@ your-api-tests/
 
 **Expectations:**
 - `.ExpectFound()` / `.ExpectNotFound()`
-- `.ExpectColumnEquals("db_tag_name", value)`
+- `.ExpectColumnEquals("db_tag_name", value)` / `.ExpectColumnNotEquals("db_tag_name", value)`
+- `.ExpectColumnNotEmpty("col")` / `.ExpectColumnEmpty("col")`
 - `.ExpectColumnTrue("is_active")` / `.ExpectColumnFalse("is_deleted")`
 - `.ExpectColumnIsNotNull("created_at")` / `.ExpectColumnIsNull("updated_at")`
+- `.ExpectColumnJsonEquals("col", map[string]interface{})` - compare JSON column
+- `.ExpectRow(expectedStruct)` - exact match (all fields)
+- `.ExpectRowPartial(expectedStruct)` - partial match (non-zero fields only)
 
 **Execute:**
 - `.Send()` -> Returns `Model` struct
+- `.SendAll()` -> Returns `[]Model` slice (all matching rows)
 
 ### 3. Kafka DSL (`dsl.Expect[Topic]`)
 **Setup (Filters):**
 - `.With("json.field", value)` (AND logic for multiple filters)
+- `.WithContains("json.array.field", value)` - filter by array containing value
 - `.Unique()` / `.UniqueWithWindow(duration)`
 
 **Expectations:**
+- `.ExpectCount(n)` - expect exactly N messages matching filters
 - `.ExpectField("json.path", value)`
-- `.ExpectFieldNotEmpty("id")`
+- `.ExpectFieldNotEmpty("id")` / `.ExpectFieldEmpty("id")`
 - `.ExpectFieldTrue("isActive")` / `.ExpectFieldFalse("isDeleted")`
 - `.ExpectFieldIsNull("field")` / `.ExpectFieldIsNotNull("field")`
+- `.ExpectJsonField("field", map[string]interface{})` - compare JSON field
+- `.ExpectMessage(expectedStruct)` - exact match (all fields)
+- `.ExpectMessagePartial(expectedStruct)` - partial match (non-zero fields only)
 
 **Execute:**
 - `.Send()` -> Returns nothing (fails test if not found)
@@ -138,9 +154,8 @@ your-api-tests/
 ### 4. gRPC DSL (`dsl.Call[Req, Resp]`)
 **Setup:**
 - `.Method("/package.Service/Method")` - Full gRPC method path
-- `.Service("player.PlayerService")` + `.MethodName("CreatePlayer")` - Alternative syntax
 - `.RequestBody(reqModel)` - Protobuf request message
-- `.Metadata("key", "value")` / `.MetadataMap(map[string]string{})`
+- `.Metadata("key", "value")`
 
 **Expectations:**
 - `.ExpectNoError()` / `.ExpectError()`

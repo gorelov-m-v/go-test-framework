@@ -171,15 +171,12 @@ func getResponseJSON(resp *client.Response[any]) ([]byte, error) {
 		return nil, fmt.Errorf("response body is nil")
 	}
 
-	// Try RawBody first
 	if len(resp.RawBody) > 0 {
-		// Check if it's valid JSON
 		if gjson.ValidBytes(resp.RawBody) {
 			return resp.RawBody, nil
 		}
 	}
 
-	// Marshal the body to JSON
 	jsonBytes, err := json.Marshal(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)

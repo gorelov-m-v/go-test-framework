@@ -42,9 +42,6 @@ func Load(specPath string) (*openapi3.T, error) {
 		return nil, fmt.Errorf("failed to load OpenAPI spec from '%s': %w", absPath, err)
 	}
 
-	// Skip full spec validation at load time - validation happens at response time
-	// This allows working with specs that have minor issues (incorrect examples, defaults, etc.)
-
 	specCache[absPath] = spec
 	return spec, nil
 }

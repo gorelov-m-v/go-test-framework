@@ -18,10 +18,6 @@ type Call[TReq any, TResp any] struct {
 	client *client.Client
 	ctx    context.Context
 
-	stepName string
-
-	service    string
-	method     string
 	fullMethod string
 	body       *TReq
 	metadata   metadata.MD
@@ -41,44 +37,9 @@ func NewCall[TReq any, TResp any](sCtx provider.StepCtx, grpcClient *client.Clie
 	}
 }
 
-func (c *Call[TReq, TResp]) StepName(name string) *Call[TReq, TResp] {
-	c.stepName = strings.TrimSpace(name)
-	return c
-}
-
-func (c *Call[TReq, TResp]) Context(ctx context.Context) *Call[TReq, TResp] {
-	if ctx != nil {
-		c.ctx = ctx
-	}
-	return c
-}
-
 func (c *Call[TReq, TResp]) Method(fullMethod string) *Call[TReq, TResp] {
 	c.fullMethod = fullMethod
-	parts := strings.Split(fullMethod, "/")
-	if len(parts) >= 3 {
-		c.service = parts[1]
-		c.method = parts[2]
-	}
 	return c
-}
-
-func (c *Call[TReq, TResp]) Service(service string) *Call[TReq, TResp] {
-	c.service = service
-	c.updateFullMethod()
-	return c
-}
-
-func (c *Call[TReq, TResp]) MethodName(method string) *Call[TReq, TResp] {
-	c.method = method
-	c.updateFullMethod()
-	return c
-}
-
-func (c *Call[TReq, TResp]) updateFullMethod() {
-	if c.service != "" && c.method != "" {
-		c.fullMethod = fmt.Sprintf("/%s/%s", c.service, c.method)
-	}
 }
 
 func (c *Call[TReq, TResp]) RequestBody(body TReq) *Call[TReq, TResp] {
@@ -88,13 +49,6 @@ func (c *Call[TReq, TResp]) RequestBody(body TReq) *Call[TReq, TResp] {
 
 func (c *Call[TReq, TResp]) Metadata(key, value string) *Call[TReq, TResp] {
 	c.metadata.Append(key, value)
-	return c
-}
-
-func (c *Call[TReq, TResp]) MetadataMap(md map[string]string) *Call[TReq, TResp] {
-	for k, v := range md {
-		c.metadata.Append(k, v)
-	}
 	return c
 }
 
@@ -110,12 +64,9 @@ func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Respo
 func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validate()
 
-	name := c.stepName
-	if name == "" {
-		name = fmt.Sprintf("gRPC %s", c.fullMethod)
-	}
+	stepName := fmt.Sprintf("gRPC %s", c.fullMethod)
 
-	c.sCtx.WithNewStep(name, func(stepCtx provider.StepCtx) {
+	c.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
 		attachRequest(stepCtx, c)
 
 		mode := polling.GetStepMode(stepCtx)

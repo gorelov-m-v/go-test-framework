@@ -51,13 +51,6 @@ func (q *Query[T]) SQL(query string, args ...any) *Query[T] {
 	return q
 }
 
-func (q *Query[T]) WithContext(ctx context.Context) *Query[T] {
-	if ctx != nil {
-		q.ctx = ctx
-	}
-	return q
-}
-
 func (q *Query[T]) Send() T {
 	tableName := extractTableName(q.sql)
 	stepName := fmt.Sprintf("SELECT %s", tableName)
@@ -119,6 +112,28 @@ func (q *Query[T]) Send() T {
 	})
 
 	return q.scannedResult
+}
+
+func (q *Query[T]) SendAll() []T {
+	tableName := extractTableName(q.sql)
+	stepName := fmt.Sprintf("SELECT %s (all)", tableName)
+
+	var results []T
+
+	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
+		attachQuery(stepCtx, q.sql, q.args)
+
+		err := q.client.DB.SelectContext(q.ctx, &results, q.sql, q.args...)
+
+		if err != nil {
+			attachResult(stepCtx, q.client, nil, err)
+			stepCtx.Require().NoError(err, "DB query failed")
+		} else {
+			attachResult(stepCtx, q.client, results, nil)
+		}
+	})
+
+	return results
 }
 
 func getFieldValueByColumnName(target any, columnName string) (any, error) {

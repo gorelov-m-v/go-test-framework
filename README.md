@@ -744,9 +744,11 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 
 **Проверки значений колонок:**
 *   `.ExpectColumnEquals("col", val)` — Сравнивает значение (поддерживает `*string`, `sql.Null*` типы).
+*   `.ExpectColumnNotEquals("col", val)` — Проверяет, что значение колонки НЕ равно указанному.
+*   `.ExpectColumnNotEmpty("col")` — Проверяет, что колонка не NULL и не пустая строка.
+*   `.ExpectColumnEmpty("col")` — Проверяет, что колонка NULL или пустая строка.
 *   `.ExpectColumnTrue("col")` / `.ExpectColumnFalse("col")` — Для boolean полей.
 *   `.ExpectColumnIsNull("col")` / `.ExpectColumnIsNotNull("col")` — Для `sql.Null*` типов.
-*   `.ExpectColumnEmpty("col")` — Проверяет, что колонка NULL или пустая строка.
 *   `.ExpectColumnJsonEquals("col", map[string]interface{})` — Сравнивает JSON-поле с ожидаемым map.
 
 **Struct matching:**
@@ -797,6 +799,8 @@ const StatusEnabled = int16(1)
     3.  Запускает все проверки.
     4.  Создает шаг в Allure с Query и Result.
     5.  Возвращает заполненную структуру `Model`.
+
+*   `.SendAll()` — Возвращает **все строки** результата как `[]Model` (slice).
 
 ---
 
@@ -975,6 +979,7 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 | Метод | Описание |
 |:---|:---|
 | `.With(key, value)` | Добавляет фильтр для поиска сообщения |
+| `.WithContains(key, value)` | Фильтр: массив в поле содержит указанное значение |
 
 **Примеры:**
 - `.With("playerId", "123")` - простое поле
@@ -1025,10 +1030,12 @@ s.AsyncStep(t, "Verify Kafka Messages", func(sCtx provider.StepCtx) {
 |:---|:---|
 | `.ExpectField(field, value)` | Поле равно значению |
 | `.ExpectFieldNotEmpty(field)` | Поле не пустое |
+| `.ExpectFieldEmpty(field)` | Поле пустое (null, "", 0, []) |
 | `.ExpectFieldIsNull(field)` | Поле = null |
 | `.ExpectFieldIsNotNull(field)` | Поле ≠ null |
 | `.ExpectFieldTrue(field)` | Поле = true |
 | `.ExpectFieldFalse(field)` | Поле = false |
+| `.ExpectJsonField(field, map)` | Сравнивает JSON-объект в поле с map |
 | `.ExpectMessage(struct)` | Exact match: проверяет ВСЕ поля включая zero values |
 | `.ExpectMessagePartial(struct)` | Partial match: проверяет только non-zero поля |
 
@@ -1379,6 +1386,7 @@ func (s *PlayerSuite) TestCreatePlayerFullE2E(t provider.T) {
 **Проверки полей (GJSON Path):**
 *   `.ExpectFieldValue("path", value)` — Значение поля.
 *   `.ExpectFieldNotEmpty("path")` — Непустое поле.
+*   `.ExpectFieldExists("path")` — Поле существует (любое значение включая null).
 *   `.ExpectMetadata("key", "value")` — Metadata в ответе.
 
 ### 3. Выполнение

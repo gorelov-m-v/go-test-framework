@@ -18,20 +18,17 @@ func TestCompareObjectPartial_SimpleStruct(t *testing.T) {
 	jsonData := `{"name": "John", "age": 30, "city": "NYC", "extra": "field"}`
 	jsonObj := gjson.Parse(jsonData)
 
-	// Partial match - only check Name and Age
 	ok, msg := CompareObjectPartial(jsonObj, Person{
 		Name: "John",
 		Age:  30,
 	})
 	assert.True(t, ok, "Should match: %s", msg)
 
-	// Partial match - only check Name
 	ok, msg = CompareObjectPartial(jsonObj, Person{
 		Name: "John",
 	})
 	assert.True(t, ok, "Should match with only Name: %s", msg)
 
-	// No match - wrong name
 	ok, msg = CompareObjectPartial(jsonObj, Person{
 		Name: "Jane",
 	})
@@ -54,20 +51,17 @@ func TestCompareObjectPartial_WithMap(t *testing.T) {
 	}`
 	jsonObj := gjson.Parse(jsonData)
 
-	// Partial match with map
 	ok, msg := CompareObjectPartial(jsonObj, Category{
 		Id:    "123",
 		Names: map[string]string{"ru": "Категория", "en": "Category"},
 	})
 	assert.True(t, ok, "Should match: %s", msg)
 
-	// Partial match - only check Id
 	ok, msg = CompareObjectPartial(jsonObj, Category{
 		Id: "123",
 	})
 	assert.True(t, ok, "Should match with only Id: %s", msg)
 
-	// No match - wrong map value
 	ok, msg = CompareObjectPartial(jsonObj, Category{
 		Names: map[string]string{"ru": "Другое"},
 	})
@@ -84,7 +78,6 @@ func TestCompareObjectPartial_WithBool(t *testing.T) {
 	jsonData := `{"name": "Test", "isDefault": false, "passToCms": true}`
 	jsonObj := gjson.Parse(jsonData)
 
-	// Note: false is zero value for bool, so it won't be checked in partial match
 	ok, msg := CompareObjectPartial(jsonObj, Item{
 		Name:      "Test",
 		PassToCms: true,
@@ -105,17 +98,14 @@ func TestFindInArray(t *testing.T) {
 	]`
 	jsonArr := gjson.Parse(jsonData)
 
-	// Find by Id
 	idx, item := FindInArray(jsonArr, Item{Id: "2"})
 	assert.Equal(t, 1, idx)
 	assert.Equal(t, "Second", item.Get("name").String())
 
-	// Find by Name
 	idx, item = FindInArray(jsonArr, Item{Name: "Third"})
 	assert.Equal(t, 2, idx)
 	assert.Equal(t, "3", item.Get("id").String())
 
-	// Not found
 	idx, _ = FindInArray(jsonArr, Item{Id: "999"})
 	assert.Equal(t, -1, idx)
 }
@@ -196,11 +186,9 @@ func TestCompareObjectExact_ZeroValues(t *testing.T) {
 		ParentId  string `json:"parentId"`
 	}
 
-	// JSON with zero values
 	jsonData := `{"name": "Test", "count": 0, "isDefault": false, "parentId": ""}`
 	jsonObj := gjson.Parse(jsonData)
 
-	// Exact match - all fields including zero values must match
 	ok, msg := CompareObjectExact(jsonObj, Item{
 		Name:      "Test",
 		Count:     0,
@@ -209,13 +197,12 @@ func TestCompareObjectExact_ZeroValues(t *testing.T) {
 	})
 	assert.True(t, ok, "Should match with exact zero values: %s", msg)
 
-	// Exact match fails when zero value doesn't match
 	jsonDataNonZero := `{"name": "Test", "count": 5, "isDefault": true, "parentId": "abc"}`
 	jsonObjNonZero := gjson.Parse(jsonDataNonZero)
 
 	ok, msg = CompareObjectExact(jsonObjNonZero, Item{
 		Name:      "Test",
-		Count:     0, // expected 0, actual 5
+		Count:     0,
 		IsDefault: false,
 		ParentId:  "",
 	})
@@ -237,18 +224,15 @@ func TestCompareObjectExact_vs_Partial(t *testing.T) {
 	expected := Category{
 		Id:         "123",
 		Name:       "Sports",
-		GamesCount: 0,     // zero value
-		IsDefault:  false, // zero value
+		GamesCount: 0,
+		IsDefault:  false,
 	}
 
-	// Partial match succeeds - zero values are skipped
 	ok, _ := CompareObjectPartial(jsonObj, expected)
 	assert.True(t, ok, "Partial should match - zero values skipped")
 
-	// Exact match fails - zero values are checked
 	ok, msg := CompareObjectExact(jsonObj, expected)
 	assert.False(t, ok, "Exact should not match - gamesCount and isDefault differ")
-	// Should mention one of the differing fields
 	assert.True(t, msg != "", "Should have error message")
 }
 
@@ -266,21 +250,17 @@ func TestFindInArrayExact(t *testing.T) {
 	]`
 	jsonArr := gjson.Parse(jsonData)
 
-	// Find with exact match including false
 	idx, item := FindInArrayExact(jsonArr, Item{Id: "1", Name: "First", IsDefault: false})
 	assert.Equal(t, 0, idx)
 	assert.Equal(t, "1", item.Get("id").String())
 
-	// Find item with isDefault: true
 	idx, item = FindInArrayExact(jsonArr, Item{Id: "2", Name: "Second", IsDefault: true})
 	assert.Equal(t, 1, idx)
 	assert.Equal(t, "2", item.Get("id").String())
 
-	// Exact: No match - expected isDefault=false, actual=true
 	idx, _ = FindInArrayExact(jsonArr, Item{Id: "2", Name: "Second", IsDefault: false})
 	assert.Equal(t, -1, idx, "Exact should not find - isDefault differs")
 
-	// Partial: Finds it because IsDefault=false is zero value, so it's skipped
 	idx, _ = FindInArray(jsonArr, Item{Id: "2", Name: "Second", IsDefault: false})
 	assert.Equal(t, 1, idx, "Partial should find it because IsDefault=false is zero value and skipped")
 }
@@ -299,7 +279,6 @@ func TestCompareObjectExact_WithMap(t *testing.T) {
 	}`
 	jsonObj := gjson.Parse(jsonData)
 
-	// Exact match with map
 	ok, msg := CompareObjectExact(jsonObj, Category{
 		Id:    "123",
 		Names: map[string]string{"ru": "Категория", "en": "Category"},
@@ -307,7 +286,6 @@ func TestCompareObjectExact_WithMap(t *testing.T) {
 	})
 	assert.True(t, ok, "Should match: %s", msg)
 
-	// Exact match fails with different map
 	ok, msg = CompareObjectExact(jsonObj, Category{
 		Id:    "123",
 		Names: map[string]string{"ru": "Другое"},
@@ -337,7 +315,6 @@ func TestCompareObjectExact_NestedStruct(t *testing.T) {
 	}`
 	jsonObj := gjson.Parse(jsonData)
 
-	// Exact match with nested struct
 	ok, msg := CompareObjectExact(jsonObj, Person{
 		Name: "John",
 		Age:  30,
@@ -348,12 +325,11 @@ func TestCompareObjectExact_NestedStruct(t *testing.T) {
 	})
 	assert.True(t, ok, "Should match nested struct: %s", msg)
 
-	// Exact match fails with wrong nested value
 	ok, msg = CompareObjectExact(jsonObj, Person{
 		Name: "John",
 		Age:  30,
 		Address: Address{
-			City:    "LA", // wrong city
+			City:    "LA",
 			Country: "USA",
 		},
 	})

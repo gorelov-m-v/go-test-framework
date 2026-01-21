@@ -118,11 +118,9 @@ func (c *Client) TTL(ctx context.Context, key string) *Result {
 	}
 
 	if ttl == -2 {
-		// Key does not exist
 		result.Exists = false
 		result.TTL = 0
 	} else if ttl == -1 {
-		// Key exists but has no TTL
 		result.Exists = true
 		result.TTL = -1
 	} else {

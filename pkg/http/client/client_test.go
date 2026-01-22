@@ -1,6 +1,7 @@
 package client
 
 import (
+	"io"
 	"testing"
 	"time"
 
@@ -342,6 +343,257 @@ func TestParseErrorResponse(t *testing.T) {
 			if tt.wantErrors != nil {
 				assert.Equal(t, tt.wantErrors, result.Errors)
 			}
+		})
+	}
+}
+
+func TestValidateBuildInput(t *testing.T) {
+	validClient := &Client{BaseURL: "https://api.example.com"}
+	validRequest := &Request[any]{Method: "GET", Path: "/users"}
+
+	tests := []struct {
+		name    string
+		client  *Client
+		req     *Request[any]
+		wantErr string
+	}{
+		{
+			name:    "valid input",
+			client:  validClient,
+			req:     validRequest,
+			wantErr: "",
+		},
+		{
+			name:    "nil client",
+			client:  nil,
+			req:     validRequest,
+			wantErr: "httpclient is nil",
+		},
+		{
+			name:    "nil request",
+			client:  validClient,
+			req:     nil,
+			wantErr: "request is nil",
+		},
+		{
+			name:    "empty base URL",
+			client:  &Client{BaseURL: ""},
+			req:     validRequest,
+			wantErr: "base URL is empty",
+		},
+		{
+			name:    "whitespace base URL",
+			client:  &Client{BaseURL: "   "},
+			req:     validRequest,
+			wantErr: "base URL is empty",
+		},
+		{
+			name:    "empty method",
+			client:  validClient,
+			req:     &Request[any]{Method: "", Path: "/users"},
+			wantErr: "request method is empty",
+		},
+		{
+			name:    "whitespace method",
+			client:  validClient,
+			req:     &Request[any]{Method: "  ", Path: "/users"},
+			wantErr: "request method is empty",
+		},
+		{
+			name:    "empty path",
+			client:  validClient,
+			req:     &Request[any]{Method: "GET", Path: ""},
+			wantErr: "request path is empty",
+		},
+		{
+			name:    "whitespace path",
+			client:  validClient,
+			req:     &Request[any]{Method: "GET", Path: "   "},
+			wantErr: "request path is empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateBuildInput(tt.client, tt.req)
+
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBuildBody(t *testing.T) {
+	type testStruct struct {
+		Name  string `json:"name"`
+		Value int    `json:"value"`
+	}
+
+	tests := []struct {
+		name            string
+		req             *Request[testStruct]
+		wantContentType string
+		wantBody        string
+		wantErr         string
+	}{
+		{
+			name:            "no body",
+			req:             &Request[testStruct]{},
+			wantContentType: "",
+			wantBody:        "",
+		},
+		{
+			name: "json body from struct",
+			req: &Request[testStruct]{
+				Body: &testStruct{Name: "test", Value: 42},
+			},
+			wantContentType: "application/json",
+			wantBody:        `{"name":"test","value":42}`,
+		},
+		{
+			name: "json body from map",
+			req: &Request[testStruct]{
+				BodyMap: map[string]interface{}{"key": "value", "num": 123},
+			},
+			wantContentType: "application/json",
+			wantBody:        `{"key":"value","num":123}`,
+		},
+		{
+			name: "raw body",
+			req: &Request[testStruct]{
+				RawBody: []byte("raw content"),
+			},
+			wantContentType: "",
+			wantBody:        "raw content",
+		},
+		{
+			name: "multipart with fields only",
+			req: &Request[testStruct]{
+				Multipart: &MultipartForm{
+					Fields: map[string]string{"field1": "value1"},
+				},
+			},
+			wantContentType: "multipart/form-data",
+		},
+		{
+			name: "multipart with files",
+			req: &Request[testStruct]{
+				Multipart: &MultipartForm{
+					Fields: map[string]string{"name": "test"},
+					Files: []MultipartFile{
+						{FieldName: "file", FileName: "test.txt", Content: []byte("file content")},
+					},
+				},
+			},
+			wantContentType: "multipart/form-data",
+		},
+		{
+			name: "multiple body types error - body and bodymap",
+			req: &Request[testStruct]{
+				Body:    &testStruct{Name: "test"},
+				BodyMap: map[string]interface{}{"key": "value"},
+			},
+			wantErr: "only one body type can be set",
+		},
+		{
+			name: "multiple body types error - body and raw",
+			req: &Request[testStruct]{
+				Body:    &testStruct{Name: "test"},
+				RawBody: []byte("raw"),
+			},
+			wantErr: "only one body type can be set",
+		},
+		{
+			name: "multiple body types error - body and multipart",
+			req: &Request[testStruct]{
+				Body:      &testStruct{Name: "test"},
+				Multipart: &MultipartForm{Fields: map[string]string{"f": "v"}},
+			},
+			wantErr: "only one body type can be set",
+		},
+		{
+			name: "multiple body types error - all four",
+			req: &Request[testStruct]{
+				Body:      &testStruct{Name: "test"},
+				BodyMap:   map[string]interface{}{"key": "value"},
+				RawBody:   []byte("raw"),
+				Multipart: &MultipartForm{Fields: map[string]string{"f": "v"}},
+			},
+			wantErr: "only one body type can be set",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader, contentType, err := buildBody(tt.req)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.wantContentType == "multipart/form-data" {
+				assert.Contains(t, contentType, "multipart/form-data")
+			} else {
+				assert.Equal(t, tt.wantContentType, contentType)
+			}
+
+			if tt.wantBody != "" {
+				body, err := io.ReadAll(reader)
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantBody, string(body))
+			} else if reader == nil {
+				assert.Empty(t, tt.wantBody)
+			}
+		})
+	}
+}
+
+func TestCountTrue(t *testing.T) {
+	tests := []struct {
+		name  string
+		flags []bool
+		want  int
+	}{
+		{
+			name:  "all false",
+			flags: []bool{false, false, false},
+			want:  0,
+		},
+		{
+			name:  "one true",
+			flags: []bool{false, true, false},
+			want:  1,
+		},
+		{
+			name:  "all true",
+			flags: []bool{true, true, true},
+			want:  3,
+		},
+		{
+			name:  "empty",
+			flags: []bool{},
+			want:  0,
+		},
+		{
+			name:  "mixed",
+			flags: []bool{true, false, true, false, true},
+			want:  3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := countTrue(tt.flags...)
+
+			assert.Equal(t, tt.want, result)
 		})
 	}
 }

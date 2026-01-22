@@ -279,7 +279,7 @@ func makeResponseBodyFieldIsNullExpectation(path string) *expect.Expectation[*cl
 			if jsonRes.Type != gjson.Null {
 				return polling.CheckResult{
 					Ok:        false,
-					Retryable: false,
+					Retryable: true,
 					Reason:    fmt.Sprintf("Expected null, got %s: %s", jsonutil.TypeToString(jsonRes.Type), jsonutil.DebugValue(jsonRes)),
 				}
 			}
@@ -321,7 +321,7 @@ func makeResponseBodyFieldIsNotNullExpectation(path string) *expect.Expectation[
 			if jsonRes.Type == gjson.Null {
 				return polling.CheckResult{
 					Ok:        false,
-					Retryable: false,
+					Retryable: true,
 					Reason:    "Expected non-null value, got null",
 				}
 			}
@@ -369,11 +369,18 @@ func makeResponseBodyFieldTrueExpectation(path string) *expect.Expectation[*clie
 					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
 				}
 			}
-			if jsonRes.Type != gjson.True {
+			if jsonRes.Type != gjson.True && jsonRes.Type != gjson.False {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
-					Reason:    fmt.Sprintf("Expected true, got %s: %s", jsonutil.TypeToString(jsonRes.Type), jsonutil.DebugValue(jsonRes)),
+					Reason:    fmt.Sprintf("Expected boolean, got %s: %s", jsonutil.TypeToString(jsonRes.Type), jsonutil.DebugValue(jsonRes)),
+				}
+			}
+			if jsonRes.Type != gjson.True {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Expected true, got false"),
 				}
 			}
 			return polling.CheckResult{Ok: true}
@@ -412,11 +419,18 @@ func makeResponseBodyFieldFalseExpectation(path string) *expect.Expectation[*cli
 					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
 				}
 			}
-			if jsonRes.Type != gjson.False {
+			if jsonRes.Type != gjson.True && jsonRes.Type != gjson.False {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
-					Reason:    fmt.Sprintf("Expected false, got %s: %s", jsonutil.TypeToString(jsonRes.Type), jsonutil.DebugValue(jsonRes)),
+					Reason:    fmt.Sprintf("Expected boolean, got %s: %s", jsonutil.TypeToString(jsonRes.Type), jsonutil.DebugValue(jsonRes)),
+				}
+			}
+			if jsonRes.Type != gjson.False {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Expected false, got true"),
 				}
 			}
 			return polling.CheckResult{Ok: true}
@@ -624,7 +638,7 @@ func makeResponseBodyExpectation(expected any) *expect.Expectation[*client.Respo
 			if !gjson.ValidBytes(resp.RawBody) {
 				return polling.CheckResult{
 					Ok:        false,
-					Retryable: false,
+					Retryable: true,
 					Reason:    "Invalid JSON response body",
 				}
 			}
@@ -660,7 +674,7 @@ func makeResponseBodyPartialExpectation(expected any) *expect.Expectation[*clien
 			if !gjson.ValidBytes(resp.RawBody) {
 				return polling.CheckResult{
 					Ok:        false,
-					Retryable: false,
+					Retryable: true,
 					Reason:    "Invalid JSON response body",
 				}
 			}

@@ -274,6 +274,10 @@ func CompareObjectPartial(jsonObj gjson.Result, expected any) (bool, string) {
 		val = val.Elem()
 	}
 
+	if val.Kind() == reflect.Map {
+		return compareMap(jsonObj, val)
+	}
+
 	if val.Kind() != reflect.Struct {
 		return false, fmt.Sprintf("expected struct, got %T", expected)
 	}
@@ -430,6 +434,10 @@ func CompareObjectExact(jsonObj gjson.Result, expected any) (bool, string) {
 			return true, ""
 		}
 		val = val.Elem()
+	}
+
+	if val.Kind() == reflect.Map {
+		return compareMap(jsonObj, val)
 	}
 
 	if val.Kind() != reflect.Struct {

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gorelov-m-v/go-test-framework/pkg/config"
-	"github.com/gorelov-m-v/go-test-framework/pkg/contract"
+	"github.com/gorelov-m-v/go-test-framework/pkg/http/contract"
 )
 
 type Client struct {

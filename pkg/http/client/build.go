@@ -79,11 +79,7 @@ func buildResolvedURL(base string, pathTemplate string, pathParams map[string]st
 	}
 
 	fullPath := applyPathParams(strings.TrimSpace(pathTemplate), pathParams)
-
-	fullPath = strings.TrimSpace(fullPath)
-	for strings.HasPrefix(fullPath, "/") {
-		fullPath = strings.TrimPrefix(fullPath, "/")
-	}
+	fullPath = strings.TrimLeft(fullPath, "/")
 
 	relURL, err := url.Parse(fullPath)
 	if err != nil {
@@ -119,49 +115,43 @@ func applyPathParams(pathTemplate string, pathParams map[string]string) string {
 }
 
 func buildBody[TReq any](req *Request[TReq]) (io.Reader, string, error) {
-	bodyCount := 0
-	if req.Multipart != nil {
-		bodyCount++
-	}
-	if req.Body != nil {
-		bodyCount++
-	}
-	if req.BodyMap != nil {
-		bodyCount++
-	}
-	if len(req.RawBody) > 0 {
-		bodyCount++
-	}
-	if bodyCount > 1 {
+	hasMultipart := req.Multipart != nil
+	hasBody := req.Body != nil
+	hasBodyMap := req.BodyMap != nil
+	hasRawBody := len(req.RawBody) > 0
+
+	if countTrue(hasMultipart, hasBody, hasBodyMap, hasRawBody) > 1 {
 		return nil, "", fmt.Errorf("only one body type can be set: Body, BodyMap, RawBody, or Multipart")
 	}
 
 	switch {
-	case req.Multipart != nil:
+	case hasMultipart:
 		return buildMultipartBody(req.Multipart)
-	case req.BodyMap != nil:
-		return buildJSONBodyFromMap(req.BodyMap)
-	case req.Body != nil:
+	case hasBodyMap:
+		return buildJSONBody(req.BodyMap)
+	case hasBody:
 		return buildJSONBody(req.Body)
-	case len(req.RawBody) > 0:
+	case hasRawBody:
 		return bytes.NewReader(req.RawBody), "", nil
 	default:
 		return nil, "", nil
 	}
 }
 
-func buildJSONBody[TReq any](body *TReq) (io.Reader, string, error) {
+func countTrue(flags ...bool) int {
+	count := 0
+	for _, f := range flags {
+		if f {
+			count++
+		}
+	}
+	return count
+}
+
+func buildJSONBody(body any) (io.Reader, string, error) {
 	jsonBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to marshal JSON body: %w", err)
-	}
-	return bytes.NewReader(jsonBytes), "application/json", nil
-}
-
-func buildJSONBodyFromMap(body map[string]interface{}) (io.Reader, string, error) {
-	jsonBytes, err := json.Marshal(body)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to marshal JSON body from map: %w", err)
 	}
 	return bytes.NewReader(jsonBytes), "application/json", nil
 }

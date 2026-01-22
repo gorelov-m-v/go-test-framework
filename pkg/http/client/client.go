@@ -31,22 +31,12 @@ type Config struct {
 	AsyncConfig      config.AsyncConfig `mapstructure:"asyncConfig"`
 }
 
-func New(cfg Config) *Client {
+func New(cfg Config) (*Client, error) {
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 30 * time.Second
 	}
 
-	var maskHeaders map[string]bool
-	if cfg.MaskHeaders != "" {
-		maskHeaders = make(map[string]bool)
-		parts := strings.Split(cfg.MaskHeaders, ",")
-		for _, part := range parts {
-			trimmed := strings.TrimSpace(part)
-			if trimmed != "" {
-				maskHeaders[strings.ToLower(trimmed)] = true
-			}
-		}
-	}
+	maskHeaders := parseMaskHeaders(cfg.MaskHeaders)
 
 	asyncCfg := cfg.AsyncConfig
 	if asyncCfg.Timeout == 0 {
@@ -58,7 +48,7 @@ func New(cfg Config) *Client {
 		var err error
 		contractValidator, err = contract.NewValidator(cfg.ContractSpec)
 		if err != nil {
-			panic(fmt.Sprintf("failed to load contract spec '%s': %v", cfg.ContractSpec, err))
+			return nil, fmt.Errorf("failed to load contract spec '%s': %w", cfg.ContractSpec, err)
 		}
 	}
 
@@ -72,7 +62,20 @@ func New(cfg Config) *Client {
 		ContractValidator: contractValidator,
 		ContractBasePath:  cfg.ContractBasePath,
 		maskHeaders:       maskHeaders,
+	}, nil
+}
+
+func parseMaskHeaders(maskHeaders string) map[string]bool {
+	if maskHeaders == "" {
+		return nil
 	}
+	result := make(map[string]bool)
+	for _, part := range strings.Split(maskHeaders, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			result[strings.ToLower(trimmed)] = true
+		}
+	}
+	return result
 }
 
 func (c *Client) ShouldMaskHeader(name string) bool {

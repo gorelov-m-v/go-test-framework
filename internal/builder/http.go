@@ -28,7 +28,7 @@ func injectHTTPClient(v *viper.Viper, fieldValue reflect.Value, field reflect.St
 
 	debugLog("injecting config '%s' into field '%s'", configKey, field.Name)
 
-	httpClient := client.New(client.Config{
+	httpClient, err := client.New(client.Config{
 		BaseURL:          svcCfg.BaseURL,
 		Timeout:          svcCfg.Timeout,
 		DefaultHeaders:   svcCfg.DefaultHeaders,
@@ -36,6 +36,9 @@ func injectHTTPClient(v *viper.Viper, fieldValue reflect.Value, field reflect.St
 		ContractSpec:     svcCfg.ContractSpec,
 		ContractBasePath: svcCfg.ContractBasePath,
 	})
+	if err != nil {
+		return fmt.Errorf("BuildEnv(%s): field '%s' tag config:\"%s\": %w", structName, field.Name, configKey, err)
+	}
 
 	target := fieldValue.Addr().Interface()
 	setter, ok := target.(client.HTTPSetter)

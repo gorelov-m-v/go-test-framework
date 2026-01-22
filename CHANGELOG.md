@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-01-22
+
+### Added
+- Unit tests for HTTP client (`buildBody`, `validateBuildInput`, `countTrue`)
+- Unit tests for HTTP DSL Call builder methods and validation
+- Mock `StepCtx` and `Asserts` for testing
+
+### Changed
+- HTTP client coverage: 38.4% → 64.2%
+- HTTP DSL coverage: 38.3% → 57.5%
+
 ## [0.9.0] - 2026-01-21
 
 ### Added
@@ -80,7 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic retry with exponential backoff
 - GJSON-based JSON path access
 
-[Unreleased]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.9.0...v0.9.3
 [0.9.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.7.0...v0.9.0
 [0.7.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.5.0...v0.6.0

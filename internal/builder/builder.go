@@ -9,6 +9,21 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/pkg/config"
 )
 
+const (
+	tagHTTPConfig  = "config"
+	tagDBConfig    = "db_config"
+	tagAsyncConfig = "async_config"
+	tagKafkaConfig = "kafka_config"
+	tagGRPCConfig  = "grpc_config"
+	tagRedisConfig = "redis_config"
+)
+
+const (
+	asyncKeyKafka = "kafka_dsl.async"
+	asyncKeyGRPC  = "grpc_dsl.async"
+	asyncKeyRedis = "redis_dsl.async"
+)
+
 var debugEnabled = os.Getenv("GO_TEST_FRAMEWORK_DEBUG") == "1"
 
 func debugLog(format string, args ...any) {
@@ -35,42 +50,42 @@ func BuildEnv(envPtr any) error {
 		field := envType.Field(i)
 		fieldValue := envValue.Field(i)
 
-		if configKey := field.Tag.Get("config"); configKey != "" {
+		if configKey := field.Tag.Get(tagHTTPConfig); configKey != "" {
 			if err := injectHTTPClient(v, fieldValue, field, configKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if dbConfigKey := field.Tag.Get("db_config"); dbConfigKey != "" {
+		if dbConfigKey := field.Tag.Get(tagDBConfig); dbConfigKey != "" {
 			if err := injectDBClient(v, fieldValue, field, dbConfigKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if asyncConfigKey := field.Tag.Get("async_config"); asyncConfigKey != "" {
+		if asyncConfigKey := field.Tag.Get(tagAsyncConfig); asyncConfigKey != "" {
 			if err := injectAsyncConfig(v, fieldValue, field, asyncConfigKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if kafkaConfigKey := field.Tag.Get("kafka_config"); kafkaConfigKey != "" {
+		if kafkaConfigKey := field.Tag.Get(tagKafkaConfig); kafkaConfigKey != "" {
 			if err := injectKafkaClient(v, fieldValue, field, kafkaConfigKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if grpcConfigKey := field.Tag.Get("grpc_config"); grpcConfigKey != "" {
+		if grpcConfigKey := field.Tag.Get(tagGRPCConfig); grpcConfigKey != "" {
 			if err := injectGRPCClient(v, fieldValue, field, grpcConfigKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if redisConfigKey := field.Tag.Get("redis_config"); redisConfigKey != "" {
+		if redisConfigKey := field.Tag.Get(tagRedisConfig); redisConfigKey != "" {
 			if err := injectRedisClient(v, fieldValue, field, redisConfigKey, structName); err != nil {
 				return err
 			}

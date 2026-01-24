@@ -240,7 +240,9 @@ func toJSONFieldName(field reflect.StructField) string {
 
 func isZeroValue(v reflect.Value) bool {
 	switch v.Kind() {
-	case reflect.Array, reflect.Map, reflect.Slice:
+	case reflect.Array:
+		return v.Len() == 0
+	case reflect.Map, reflect.Slice:
 		return v.IsNil() || v.Len() == 0
 	case reflect.Bool:
 		return !v.Bool()

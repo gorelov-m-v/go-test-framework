@@ -27,7 +27,7 @@ func injectGRPCClient(v *viper.Viper, fieldValue reflect.Value, field reflect.St
 	}
 
 	var asyncCfg config.AsyncConfig
-	asyncKey := "grpc_dsl.async"
+	asyncKey := asyncKeyGRPC
 	if v.IsSet(asyncKey) {
 		if err := v.UnmarshalKey(asyncKey, &asyncCfg); err != nil {
 			return fmt.Errorf("BuildEnv(%s): field '%s' tag grpc_config:\"%s\": failed to unmarshal async config from '%s': %w", structName, field.Name, grpcConfigKey, asyncKey, err)

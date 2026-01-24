@@ -130,7 +130,12 @@ func (bc *BackgroundConsumer) consumeLoop() {
 				return
 			}
 			log.Printf("[Kafka] Error from consumer: %v", err)
-			time.Sleep(time.Second)
+
+			select {
+			case <-time.After(time.Second):
+			case <-bc.ctx.Done():
+				return
+			}
 		}
 
 		select {

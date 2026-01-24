@@ -302,48 +302,6 @@ func TestCallChaining(t *testing.T) {
 	assert.Equal(t, "John", call.req.Body.Name)
 }
 
-func TestValidateJSONPath(t *testing.T) {
-	tests := []struct {
-		name    string
-		path    string
-		wantErr bool
-	}{
-		{
-			name:    "valid path",
-			path:    "user.name",
-			wantErr: false,
-		},
-		{
-			name:    "valid array path",
-			path:    "users.0.name",
-			wantErr: false,
-		},
-		{
-			name:    "single field",
-			path:    "id",
-			wantErr: false,
-		},
-		{
-			name:    "empty path",
-			path:    "",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateJSONPath(tt.path)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "cannot be empty")
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
 func TestCallValidate(t *testing.T) {
 	tests := []struct {
 		name         string

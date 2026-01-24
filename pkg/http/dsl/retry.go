@@ -101,10 +101,3 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 
 	return resp, err, summary
 }
-
-func validateJSONPath(path string) error {
-	if path == "" {
-		return fmt.Errorf("JSON path cannot be empty")
-	}
-	return nil
-}

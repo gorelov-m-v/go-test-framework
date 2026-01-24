@@ -49,7 +49,7 @@ func NewExpectation(sCtx provider.StepCtx, kafkaClient *client.Client, topicName
 
 func (e *Expectation) With(key string, value interface{}) *Expectation {
 	if value != nil {
-		e.filters[key] = fmt.Sprintf("%v", value)
+		e.filters[key] = formatFilterValue(value)
 	}
 	return e
 }
@@ -83,12 +83,16 @@ func (e *Expectation) ExpectField(field string, expectedValue interface{}) *Expe
 	return e
 }
 
-func (e *Expectation) ExpectJsonField(field string, expected map[string]interface{}) *Expectation {
+func (e *Expectation) ExpectJSONField(field string, expected map[string]interface{}) *Expectation {
 	for key, value := range expected {
 		path := field + "." + key
 		e.expectations = append(e.expectations, makeFieldValueExpectation(path, value))
 	}
 	return e
+}
+
+func (e *Expectation) ExpectJsonField(field string, expected map[string]interface{}) *Expectation {
+	return e.ExpectJSONField(field, expected)
 }
 
 func (e *Expectation) ExpectFieldNotEmpty(field string) *Expectation {
@@ -348,9 +352,16 @@ func (e *Expectation) matchesFilter(jsonValue []byte) bool {
 			return false
 		}
 
-		actualValue := result.String()
-		if actualValue != expectedValue {
-			return false
+		// For arrays, compare as sets (order-independent)
+		if result.IsArray() {
+			if !compareArraysAsSet(result, expectedValue) {
+				return false
+			}
+		} else {
+			actualValue := result.String()
+			if actualValue != expectedValue {
+				return false
+			}
 		}
 	}
 
@@ -401,6 +412,56 @@ func abs(x int64) int64 {
 		return -x
 	}
 	return x
+}
+
+func formatFilterValue(value interface{}) string {
+	if value == nil {
+		return ""
+	}
+	// Check if value is a slice using reflection
+	switch v := value.(type) {
+	case []string:
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("%v", value)
+		}
+		return string(jsonBytes)
+	default:
+		return fmt.Sprintf("%v", value)
+	}
+}
+
+// compareArraysAsSet compares a gjson array result with expected JSON array string
+// Returns true if both arrays contain the same elements with same counts (order-independent)
+func compareArraysAsSet(result gjson.Result, expectedJSON string) bool {
+	var expectedArr []string
+	if err := json.Unmarshal([]byte(expectedJSON), &expectedArr); err != nil {
+		return false
+	}
+
+	actualArr := result.Array()
+
+	if len(actualArr) != len(expectedArr) {
+		return false
+	}
+
+	expectedCounts := make(map[string]int)
+	for _, v := range expectedArr {
+		expectedCounts[v]++
+	}
+
+	actualCounts := make(map[string]int)
+	for _, item := range actualArr {
+		actualCounts[item.String()]++
+	}
+
+	for key, expectedCount := range expectedCounts {
+		if actualCounts[key] != expectedCount {
+			return false
+		}
+	}
+
+	return true
 }
 
 func makeFieldValueExpectation(field string, expectedValue interface{}) *expect.Expectation[[]byte] {

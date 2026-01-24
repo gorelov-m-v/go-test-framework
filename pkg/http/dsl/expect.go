@@ -59,6 +59,13 @@ func preCheckWithBody(err error, resp *client.Response[any]) (polling.CheckResul
 	return polling.CheckResult{}, true
 }
 
+func validateJSONPath(path string) error {
+	if path == "" {
+		return fmt.Errorf("JSON path cannot be empty")
+	}
+	return nil
+}
+
 func (c *Call[TReq, TResp]) ExpectResponseStatus(code int) *Call[TReq, TResp] {
 	c.addExpectation(makeResponseStatusExpectation(code))
 	return c

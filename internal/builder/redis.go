@@ -27,7 +27,7 @@ func injectRedisClient(v *viper.Viper, fieldValue reflect.Value, field reflect.S
 	}
 
 	var asyncCfg config.AsyncConfig
-	asyncKey := "redis_dsl.async"
+	asyncKey := asyncKeyRedis
 	if v.IsSet(asyncKey) {
 		if err := v.UnmarshalKey(asyncKey, &asyncCfg); err != nil {
 			return fmt.Errorf("BuildEnv(%s): field '%s' tag redis_config:\"%s\": failed to unmarshal async config from '%s': %w", structName, field.Name, redisConfigKey, asyncKey, err)

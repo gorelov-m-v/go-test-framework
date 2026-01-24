@@ -6,13 +6,60 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
+	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/internal/typeconv"
 )
+
+var structMapper = reflectx.NewMapper("db")
+
+func getFieldValueByColumnName(target any, columnName string) (any, error) {
+	columnName = strings.TrimSpace(columnName)
+	if columnName == "" {
+		return nil, fmt.Errorf("columnName cannot be empty")
+	}
+
+	if target == nil {
+		return nil, fmt.Errorf("target is nil")
+	}
+
+	v := reflect.ValueOf(target)
+
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return nil, fmt.Errorf("target pointer is nil")
+		}
+		v = v.Elem()
+	}
+
+	if v.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("target is not a struct, got %s", v.Kind())
+	}
+
+	if !v.CanAddr() {
+		ptr := reflect.New(v.Type())
+		ptr.Elem().Set(v)
+		v = ptr.Elem()
+	}
+
+	fieldMap := structMapper.FieldMap(v)
+
+	fieldValue, found := fieldMap[columnName]
+	if !found {
+		return nil, fmt.Errorf("column '%s' not found in struct %T (check 'db' tags)", columnName, target)
+	}
+
+	if !fieldValue.CanInterface() {
+		return nil, fmt.Errorf("field for column '%s' is unexported", columnName)
+	}
+
+	return fieldValue.Interface(), nil
+}
 
 func (q *Query[T]) ExpectFound() *Query[T] {
 	if q.expectsNotFound {
@@ -116,14 +163,18 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 	return q
 }
 
-func (q *Query[T]) ExpectColumnJsonEquals(columnName string, expected map[string]interface{}) *Query[T] {
+func (q *Query[T]) ExpectColumnJSONEquals(columnName string, expected map[string]interface{}) *Query[T] {
 	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnJsonEquals() cannot be used with ExpectNotFound()")
+		q.sCtx.Break("DB DSL Error: ExpectColumnJSONEquals() cannot be used with ExpectNotFound()")
 		q.sCtx.BrokenNow()
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnJsonEqualsExpectation[T](columnName, expected))
+	q.expectations = append(q.expectations, makeColumnJSONEqualsExpectation[T](columnName, expected))
 	return q
+}
+
+func (q *Query[T]) ExpectColumnJsonEquals(columnName string, expected map[string]interface{}) *Query[T] {
+	return q.ExpectColumnJSONEquals(columnName, expected)
 }
 
 func (q *Query[T]) ExpectRow(expected T) *Query[T] {
@@ -621,7 +672,7 @@ func makeColumnNotEqualsExpectation[T any](columnName string, notExpectedValue a
 	)
 }
 
-func makeColumnJsonEqualsExpectation[T any](columnName string, expected map[string]interface{}) *expect.Expectation[T] {
+func makeColumnJSONEqualsExpectation[T any](columnName string, expected map[string]interface{}) *expect.Expectation[T] {
 	name := fmt.Sprintf("Expect: Column '%s' JSON = %v", columnName, expected)
 	return expect.New(
 		name,

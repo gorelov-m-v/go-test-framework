@@ -8,15 +8,12 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/database/client"
 )
-
-var structMapper = reflectx.NewMapper("db")
 
 type Query[T any] struct {
 	sCtx            provider.StepCtx
@@ -134,49 +131,6 @@ func (q *Query[T]) SendAll() []T {
 	})
 
 	return results
-}
-
-func getFieldValueByColumnName(target any, columnName string) (any, error) {
-	columnName = strings.TrimSpace(columnName)
-	if columnName == "" {
-		return nil, fmt.Errorf("columnName cannot be empty")
-	}
-
-	if target == nil {
-		return nil, fmt.Errorf("target is nil")
-	}
-
-	v := reflect.ValueOf(target)
-
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return nil, fmt.Errorf("target pointer is nil")
-		}
-		v = v.Elem()
-	}
-
-	if v.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("target is not a struct, got %s", v.Kind())
-	}
-
-	if !v.CanAddr() {
-		ptr := reflect.New(v.Type())
-		ptr.Elem().Set(v)
-		v = ptr.Elem()
-	}
-
-	fieldMap := structMapper.FieldMap(v)
-
-	fieldValue, found := fieldMap[columnName]
-	if !found {
-		return nil, fmt.Errorf("column '%s' not found in struct %T (check 'db' tags)", columnName, target)
-	}
-
-	if !fieldValue.CanInterface() {
-		return nil, fmt.Errorf("field for column '%s' is unexported", columnName)
-	}
-
-	return fieldValue.Interface(), nil
 }
 
 func extractTableName(query string) string {

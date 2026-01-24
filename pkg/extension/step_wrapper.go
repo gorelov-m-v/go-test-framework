@@ -36,8 +36,10 @@ func (w *stepCtxWrapper) WithNewAsyncStep(stepName string, step func(sCtx provid
 
 func WithAsyncMode(sCtx provider.StepCtx) provider.StepCtx {
 	if wrapped, ok := sCtx.(*stepCtxWrapper); ok {
-		wrapped.mode = AsyncMode
-		return wrapped
+		return &stepCtxWrapper{
+			StepCtx: wrapped.StepCtx,
+			mode:    AsyncMode,
+		}
 	}
 	return &stepCtxWrapper{
 		StepCtx: sCtx,
@@ -47,8 +49,10 @@ func WithAsyncMode(sCtx provider.StepCtx) provider.StepCtx {
 
 func WithSyncMode(sCtx provider.StepCtx) provider.StepCtx {
 	if wrapped, ok := sCtx.(*stepCtxWrapper); ok {
-		wrapped.mode = SyncMode
-		return wrapped
+		return &stepCtxWrapper{
+			StepCtx: wrapped.StepCtx,
+			mode:    SyncMode,
+		}
 	}
 	return &stepCtxWrapper{
 		StepCtx: sCtx,

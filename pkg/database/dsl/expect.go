@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx/reflectx"
-	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
@@ -17,6 +16,15 @@ import (
 )
 
 var structMapper = reflectx.NewMapper("db")
+
+func (q *Query[T]) breakIfNotFound(methodName string) bool {
+	if q.expectsNotFound {
+		q.sCtx.Break(fmt.Sprintf("DB DSL Error: %s cannot be used with ExpectNotFound()", methodName))
+		q.sCtx.BrokenNow()
+		return true
+	}
+	return false
+}
 
 func getFieldValueByColumnName(target any, columnName string) (any, error) {
 	columnName = strings.TrimSpace(columnName)
@@ -61,10 +69,12 @@ func getFieldValueByColumnName(target any, columnName string) (any, error) {
 	return fieldValue.Interface(), nil
 }
 
+func getFieldValue[T any](result T, columnName string) (any, error) {
+	return getFieldValueByColumnName(result, columnName)
+}
+
 func (q *Query[T]) ExpectFound() *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectFound() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectFound()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeFoundExpectation[T]())
@@ -84,9 +94,7 @@ func (q *Query[T]) ExpectNotFound() *Query[T] {
 }
 
 func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnEquals() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectColumnEquals()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnEqualsExpectation[T](columnName, expectedValue))
@@ -94,9 +102,7 @@ func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Que
 }
 
 func (q *Query[T]) ExpectColumnNotEquals(columnName string, notExpectedValue any) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnNotEquals() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectColumnNotEquals()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnNotEqualsExpectation[T](columnName, notExpectedValue))
@@ -104,9 +110,7 @@ func (q *Query[T]) ExpectColumnNotEquals(columnName string, notExpectedValue any
 }
 
 func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnNotEmpty() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectColumnNotEmpty()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnNotEmptyExpectation[T](columnName))
@@ -114,9 +118,7 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 }
 
 func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnIsNull() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectColumnIsNull()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnIsNullExpectation[T](columnName))
@@ -124,9 +126,7 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 }
 
 func (q *Query[T]) ExpectColumnEmpty(columnName string) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnEmpty() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectColumnEmpty()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnEmptyExpectation[T](columnName))
@@ -134,9 +134,7 @@ func (q *Query[T]) ExpectColumnEmpty(columnName string) *Query[T] {
 }
 
 func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnIsNotNull() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectColumnIsNotNull()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnIsNotNullExpectation[T](columnName))
@@ -144,9 +142,7 @@ func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 }
 
 func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnTrue() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectColumnTrue()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnTrueExpectation[T](columnName))
@@ -154,9 +150,7 @@ func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
 }
 
 func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnFalse() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectColumnFalse()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnFalseExpectation[T](columnName))
@@ -164,23 +158,15 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 }
 
 func (q *Query[T]) ExpectColumnJSONEquals(columnName string, expected map[string]interface{}) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectColumnJSONEquals() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectColumnJSONEquals()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnJSONEqualsExpectation[T](columnName, expected))
 	return q
 }
 
-func (q *Query[T]) ExpectColumnJsonEquals(columnName string, expected map[string]interface{}) *Query[T] {
-	return q.ExpectColumnJSONEquals(columnName, expected)
-}
-
 func (q *Query[T]) ExpectRow(expected T) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectRow() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectRow()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeRowExpectation[T](expected))
@@ -188,9 +174,7 @@ func (q *Query[T]) ExpectRow(expected T) *Query[T] {
 }
 
 func (q *Query[T]) ExpectRowPartial(expected T) *Query[T] {
-	if q.expectsNotFound {
-		q.sCtx.Break("DB DSL Error: ExpectRowPartial() cannot be used with ExpectNotFound()")
-		q.sCtx.BrokenNow()
+	if q.breakIfNotFound("ExpectRowPartial()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeRowPartialExpectation[T](expected))
@@ -248,428 +232,98 @@ func makeNotFoundExpectation[T any]() *expect.Expectation[T] {
 }
 
 func makeColumnEqualsExpectation[T any](columnName string, expectedValue any) *expect.Expectation[T] {
-	name := fmt.Sprintf("Expect: Column '%s' = %v", columnName, expectedValue)
-	return expect.New(
-		name,
-		func(err error, result T) polling.CheckResult {
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: true,
-						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
-					}
-				}
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			actualValue, getErr := getFieldValueByColumnName(result, columnName)
-			if getErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
-				}
-			}
-
-			equal, retryable, reason := equalsLoose(expectedValue, actualValue)
-			if !equal {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: retryable,
-					Reason:    fmt.Sprintf("Column '%s': %s", columnName, reason),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[T](name),
-	)
-}
-
-func makeColumnNotEmptyExpectation[T any](columnName string) *expect.Expectation[T] {
-	name := fmt.Sprintf("Expect: Column '%s' not empty", columnName)
-	return expect.New(
-		name,
-		func(err error, result T) polling.CheckResult {
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: true,
-						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
-					}
-				}
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			actualValue, getErr := getFieldValueByColumnName(result, columnName)
-			if getErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
-				}
-			}
-
-			isEmpty := typeconv.IsEmpty(actualValue)
-			if isEmpty {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Expected column '%s' to not be empty, but it is", columnName),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[T](name),
-	)
-}
-
-func makeColumnIsNullExpectation[T any](columnName string) *expect.Expectation[T] {
-	return expect.New(
-		fmt.Sprintf("Expect: Column '%s' IS NULL", columnName),
-		func(err error, result T) polling.CheckResult {
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: true,
-						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
-					}
-				}
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			actualValue, getErr := getFieldValueByColumnName(result, columnName)
-			if getErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
-				}
-			}
-
-			isNull := typeconv.IsNull(actualValue)
-			if !isNull {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Expected column '%s' to be NULL, but it has a value", columnName),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result T, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: Column '%s' IS NULL] %s", columnName, checkRes.Reason)
-				return
-			}
-
-			actualValue, _ := getFieldValueByColumnName(result, columnName)
-			isNull := typeconv.IsNull(actualValue)
-			a.Equal(true, isNull, "[Expect: Column '%s' IS NULL]", columnName)
-		},
-	)
-}
-
-func makeColumnEmptyExpectation[T any](columnName string) *expect.Expectation[T] {
-	return expect.New(
-		fmt.Sprintf("Expect: Column '%s' IS EMPTY", columnName),
-		func(err error, result T) polling.CheckResult {
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: true,
-						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
-					}
-				}
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			actualValue, getErr := getFieldValueByColumnName(result, columnName)
-			if getErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
-				}
-			}
-
-			isEmpty := typeconv.IsEmpty(actualValue)
-			if !isEmpty {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Expected column '%s' to be empty, but got: %v", columnName, actualValue),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result T, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: Column '%s' IS EMPTY] %s", columnName, checkRes.Reason)
-				return
-			}
-
-			actualValue, _ := getFieldValueByColumnName(result, columnName)
-			isEmpty := typeconv.IsEmpty(actualValue)
-			a.Equal(true, isEmpty, "[Expect: Column '%s' IS EMPTY]", columnName)
-		},
-	)
-}
-
-func makeColumnIsNotNullExpectation[T any](columnName string) *expect.Expectation[T] {
-	return expect.New(
-		fmt.Sprintf("Expect: Column '%s' IS NOT NULL", columnName),
-		func(err error, result T) polling.CheckResult {
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: true,
-						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
-					}
-				}
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			actualValue, getErr := getFieldValueByColumnName(result, columnName)
-			if getErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
-				}
-			}
-
-			isNull := typeconv.IsNull(actualValue)
-			if isNull {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Expected column '%s' to be NOT NULL, but it is NULL", columnName),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result T, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: Column '%s' IS NOT NULL] %s", columnName, checkRes.Reason)
-				return
-			}
-
-			actualValue, _ := getFieldValueByColumnName(result, columnName)
-			isNull := typeconv.IsNull(actualValue)
-			a.Equal(false, isNull, "[Expect: Column '%s' IS NOT NULL]", columnName)
-		},
-	)
-}
-
-func makeColumnTrueExpectation[T any](columnName string) *expect.Expectation[T] {
-	return expect.New(
-		fmt.Sprintf("Expect: Column '%s' = true", columnName),
-		func(err error, result T) polling.CheckResult {
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: true,
-						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
-					}
-				}
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			actualValue, getErr := getFieldValueByColumnName(result, columnName)
-			if getErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
-				}
-			}
-
-			if typeconv.IsNull(actualValue) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Column '%s' is NULL yet", columnName),
-				}
-			}
-
-			b, ok := typeconv.ToBool(actualValue)
-			if !ok {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Column '%s' is not a boolean/numeric(0/1) type", columnName),
-				}
-			}
-
-			if !b {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Expected column '%s' to be true, but got false", columnName),
-				}
-			}
-
-			return polling.CheckResult{Ok: true}
-		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result T, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: Column '%s' = true] %s", columnName, checkRes.Reason)
-				return
-			}
-
-			actualValue, _ := getFieldValueByColumnName(result, columnName)
-			b, _ := typeconv.ToBool(actualValue)
-			a.Equal(true, b, "[Expect: Column '%s' = true]", columnName)
-		},
-	)
-}
-
-func makeColumnFalseExpectation[T any](columnName string) *expect.Expectation[T] {
-	return expect.New(
-		fmt.Sprintf("Expect: Column '%s' = false", columnName),
-		func(err error, result T) polling.CheckResult {
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: true,
-						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
-					}
-				}
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
-
-			actualValue, getErr := getFieldValueByColumnName(result, columnName)
-			if getErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
-				}
-			}
-
-			if typeconv.IsNull(actualValue) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Column '%s' is NULL yet", columnName),
-				}
-			}
-
-			b, ok := typeconv.ToBool(actualValue)
-			if !ok {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Column '%s' is not a boolean/numeric(0/1) type", columnName),
-				}
-			}
-
-			if b {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Expected column '%s' to be false, but got true", columnName),
-				}
-			}
-
-			return polling.CheckResult{Ok: true}
-		},
-		func(stepCtx provider.StepCtx, mode polling.AssertionMode, err error, result T, checkRes polling.CheckResult) {
-			a := polling.PickAsserter(stepCtx, mode)
-			if !checkRes.Ok {
-				a.True(false, "[Expect: Column '%s' = false] %s", columnName, checkRes.Reason)
-				return
-			}
-
-			actualValue, _ := getFieldValueByColumnName(result, columnName)
-			b, _ := typeconv.ToBool(actualValue)
-			a.Equal(false, b, "[Expect: Column '%s' = false]", columnName)
-		},
-	)
+	return expect.BuildColumnExpectation(expect.ColumnExpectationConfig[T]{
+		ColumnName: columnName,
+		ExpectName: fmt.Sprintf("Expect: Column '%s' = %v", columnName, expectedValue),
+		GetValue:   getFieldValue[T],
+		ErrNoRows:  sql.ErrNoRows,
+		Check:      expect.CheckEquals(expectedValue, equalsLoose),
+	})
 }
 
 func makeColumnNotEqualsExpectation[T any](columnName string, notExpectedValue any) *expect.Expectation[T] {
-	name := fmt.Sprintf("Expect: Column '%s' != %v", columnName, notExpectedValue)
-	return expect.New(
-		name,
-		func(err error, result T) polling.CheckResult {
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: true,
-						Reason:    fmt.Sprintf("Cannot check column '%s': query returned no rows", columnName),
-					}
-				}
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot check column '%s': query failed", columnName),
-				}
-			}
+	return expect.BuildColumnExpectation(expect.ColumnExpectationConfig[T]{
+		ColumnName: columnName,
+		ExpectName: fmt.Sprintf("Expect: Column '%s' != %v", columnName, notExpectedValue),
+		GetValue:   getFieldValue[T],
+		ErrNoRows:  sql.ErrNoRows,
+		Check:      expect.CheckNotEquals(notExpectedValue, equalsLoose),
+	})
+}
 
-			actualValue, getErr := getFieldValueByColumnName(result, columnName)
-			if getErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Failed to get field value: %v", getErr),
-				}
-			}
+func makeColumnNotEmptyExpectation[T any](columnName string) *expect.Expectation[T] {
+	return expect.BuildColumnExpectation(expect.ColumnExpectationConfig[T]{
+		ColumnName: columnName,
+		ExpectName: fmt.Sprintf("Expect: Column '%s' not empty", columnName),
+		GetValue:   getFieldValue[T],
+		ErrNoRows:  sql.ErrNoRows,
+		Check:      expect.CheckNotEmpty(),
+	})
+}
 
-			equal, _, _ := equalsLoose(notExpectedValue, actualValue)
+func makeColumnEmptyExpectation[T any](columnName string) *expect.Expectation[T] {
+	name := fmt.Sprintf("Expect: Column '%s' IS EMPTY", columnName)
+	return expect.BuildColumnEmptyExpectation(expect.ColumnEmptyExpectationConfig[T]{
+		ColumnName:    columnName,
+		ExpectName:    name,
+		GetValue:      getFieldValue[T],
+		ErrNoRows:     sql.ErrNoRows,
+		Check:         expect.CheckEmpty(),
+		ExpectedEmpty: true,
+		IsEmptyFunc:   typeconv.IsEmpty,
+	})
+}
 
-			if equal {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Column '%s' equals %v, but expected NOT to equal", columnName, actualValue),
-				}
-			}
+func makeColumnIsNullExpectation[T any](columnName string) *expect.Expectation[T] {
+	name := fmt.Sprintf("Expect: Column '%s' IS NULL", columnName)
+	return expect.BuildColumnNullExpectation(expect.ColumnNullExpectationConfig[T]{
+		ColumnName:   columnName,
+		ExpectName:   name,
+		GetValue:     getFieldValue[T],
+		ErrNoRows:    sql.ErrNoRows,
+		Check:        expect.CheckIsNull(),
+		ExpectedNull: true,
+		IsNullFunc:   typeconv.IsNull,
+	})
+}
 
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[T](name),
-	)
+func makeColumnIsNotNullExpectation[T any](columnName string) *expect.Expectation[T] {
+	name := fmt.Sprintf("Expect: Column '%s' IS NOT NULL", columnName)
+	return expect.BuildColumnNullExpectation(expect.ColumnNullExpectationConfig[T]{
+		ColumnName:   columnName,
+		ExpectName:   name,
+		GetValue:     getFieldValue[T],
+		ErrNoRows:    sql.ErrNoRows,
+		Check:        expect.CheckIsNotNull(),
+		ExpectedNull: false,
+		IsNullFunc:   typeconv.IsNull,
+	})
+}
+
+func makeColumnTrueExpectation[T any](columnName string) *expect.Expectation[T] {
+	name := fmt.Sprintf("Expect: Column '%s' = true", columnName)
+	return expect.BuildColumnBoolExpectation(expect.ColumnBoolExpectationConfig[T]{
+		ColumnName:   columnName,
+		ExpectName:   name,
+		GetValue:     getFieldValue[T],
+		ErrNoRows:    sql.ErrNoRows,
+		Check:        expect.CheckTrue(),
+		ExpectedBool: true,
+		ToBoolFunc:   typeconv.ToBool,
+	})
+}
+
+func makeColumnFalseExpectation[T any](columnName string) *expect.Expectation[T] {
+	name := fmt.Sprintf("Expect: Column '%s' = false", columnName)
+	return expect.BuildColumnBoolExpectation(expect.ColumnBoolExpectationConfig[T]{
+		ColumnName:   columnName,
+		ExpectName:   name,
+		GetValue:     getFieldValue[T],
+		ErrNoRows:    sql.ErrNoRows,
+		Check:        expect.CheckFalse(),
+		ExpectedBool: false,
+		ToBoolFunc:   typeconv.ToBool,
+	})
 }
 
 func makeColumnJSONEqualsExpectation[T any](columnName string, expected map[string]interface{}) *expect.Expectation[T] {

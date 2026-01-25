@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -262,23 +263,8 @@ func setFieldValue(field reflect.Value, value interface{}) error {
 }
 
 func splitPath(path string) []string {
-	var parts []string
-	var current string
-
-	for _, ch := range path {
-		if ch == '.' {
-			if current != "" {
-				parts = append(parts, current)
-				current = ""
-			}
-		} else {
-			current += string(ch)
-		}
+	if path == "" {
+		return nil
 	}
-
-	if current != "" {
-		parts = append(parts, current)
-	}
-
-	return parts
+	return strings.Split(path, ".")
 }

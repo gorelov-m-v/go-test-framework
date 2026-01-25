@@ -91,10 +91,6 @@ func (e *Expectation) ExpectJSONField(field string, expected map[string]interfac
 	return e
 }
 
-func (e *Expectation) ExpectJsonField(field string, expected map[string]interface{}) *Expectation {
-	return e.ExpectJSONField(field, expected)
-}
-
 func (e *Expectation) ExpectFieldNotEmpty(field string) *Expectation {
 	e.expectations = append(e.expectations, makeFieldNotEmptyExpectation(field))
 	return e
@@ -352,7 +348,6 @@ func (e *Expectation) matchesFilter(jsonValue []byte) bool {
 			return false
 		}
 
-		// For arrays, compare as sets (order-independent)
 		if result.IsArray() {
 			if !compareArraysAsSet(result, expectedValue) {
 				return false
@@ -418,7 +413,6 @@ func formatFilterValue(value interface{}) string {
 	if value == nil {
 		return ""
 	}
-	// Check if value is a slice using reflection
 	switch v := value.(type) {
 	case []string:
 		jsonBytes, err := json.Marshal(v)
@@ -431,8 +425,6 @@ func formatFilterValue(value interface{}) string {
 	}
 }
 
-// compareArraysAsSet compares a gjson array result with expected JSON array string
-// Returns true if both arrays contain the same elements with same counts (order-independent)
 func compareArraysAsSet(result gjson.Result, expectedJSON string) bool {
 	var expectedArr []string
 	if err := json.Unmarshal([]byte(expectedJSON), &expectedArr); err != nil {
@@ -466,282 +458,80 @@ func compareArraysAsSet(result gjson.Result, expectedJSON string) bool {
 
 func makeFieldValueExpectation(field string, expectedValue interface{}) *expect.Expectation[[]byte] {
 	name := fmt.Sprintf("Expect: Field '%s' = %v", field, expectedValue)
-	return expect.New(
-		name,
-		func(err error, msgBytes []byte) polling.CheckResult {
-			if len(msgBytes) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Message bytes are empty",
-				}
-			}
-			result := gjson.GetBytes(msgBytes, field)
-			if !result.Exists() {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Field '%s' not found", field),
-				}
-			}
-			ok, msg := jsonutil.Compare(result, expectedValue)
-			if !ok {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    msg,
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[[]byte](name),
-	)
+	return expect.BuildBytesJSONFieldExpectation(expect.BytesJSONFieldExpectationConfig{
+		Path:       field,
+		ExpectName: name,
+		Check:      expect.JSONCheckEquals(expectedValue),
+	})
 }
 
 func makeFieldNotEmptyExpectation(field string) *expect.Expectation[[]byte] {
 	name := fmt.Sprintf("Expect: Field '%s' not empty", field)
-	return expect.New(
-		name,
-		func(err error, msgBytes []byte) polling.CheckResult {
-			if len(msgBytes) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Message bytes are empty",
-				}
-			}
-			result := gjson.GetBytes(msgBytes, field)
-			if !result.Exists() {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Field '%s' not found", field),
-				}
-			}
-			if jsonutil.IsEmpty(result) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Field '%s' is empty", field),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[[]byte](name),
-	)
+	return expect.BuildBytesJSONFieldExpectation(expect.BytesJSONFieldExpectationConfig{
+		Path:       field,
+		ExpectName: name,
+		Check:      expect.JSONCheckNotEmpty(),
+	})
 }
 
 func makeFieldEmptyExpectation(field string) *expect.Expectation[[]byte] {
 	name := fmt.Sprintf("Expect: Field '%s' is empty", field)
-	return expect.New(
-		name,
-		func(err error, msgBytes []byte) polling.CheckResult {
-			if len(msgBytes) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Message bytes are empty",
-				}
-			}
-			result := gjson.GetBytes(msgBytes, field)
-			if !result.Exists() {
-				return polling.CheckResult{Ok: true}
-			}
-			if !jsonutil.IsEmpty(result) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Field '%s' is not empty, got: %s", field, result.String()),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[[]byte](name),
-	)
+	return expect.BuildBytesJSONFieldWithExistsCheck(expect.BytesJSONFieldExistsCheckConfig{
+		Path:          field,
+		ExpectName:    name,
+		RequireExists: false,
+		Check:         expect.JSONCheckEmpty(),
+	})
 }
 
 func makeFieldIsNullExpectation(field string) *expect.Expectation[[]byte] {
 	name := fmt.Sprintf("Expect: Field '%s' is null", field)
-	return expect.New(
-		name,
-		func(err error, msgBytes []byte) polling.CheckResult {
-			if len(msgBytes) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Message bytes are empty",
-				}
-			}
-			result := gjson.GetBytes(msgBytes, field)
-			if result.Exists() && result.Type != gjson.Null {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Expected null, got %s: %s", jsonutil.TypeToString(result.Type), jsonutil.DebugValue(result)),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[[]byte](name),
-	)
+	return expect.BuildBytesJSONFieldNullCheck(expect.BytesJSONFieldNullCheckConfig{
+		Path:         field,
+		ExpectName:   name,
+		ExpectedNull: true,
+	})
 }
 
 func makeFieldIsNotNullExpectation(field string) *expect.Expectation[[]byte] {
 	name := fmt.Sprintf("Expect: Field '%s' is not null", field)
-	return expect.New(
-		name,
-		func(err error, msgBytes []byte) polling.CheckResult {
-			if len(msgBytes) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Message bytes are empty",
-				}
-			}
-			result := gjson.GetBytes(msgBytes, field)
-			if !result.Exists() || result.Type == gjson.Null {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Field '%s' is null", field),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[[]byte](name),
-	)
+	return expect.BuildBytesJSONFieldNullCheck(expect.BytesJSONFieldNullCheckConfig{
+		Path:         field,
+		ExpectName:   name,
+		ExpectedNull: false,
+	})
 }
 
 func makeFieldTrueExpectation(field string) *expect.Expectation[[]byte] {
 	name := fmt.Sprintf("Expect: Field '%s' is true", field)
-	return expect.New(
-		name,
-		func(err error, msgBytes []byte) polling.CheckResult {
-			if len(msgBytes) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Message bytes are empty",
-				}
-			}
-			result := gjson.GetBytes(msgBytes, field)
-			if !result.Exists() {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Field '%s' not found", field),
-				}
-			}
-			if result.Type != gjson.True {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Expected true, got %s: %s", jsonutil.TypeToString(result.Type), jsonutil.DebugValue(result)),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[[]byte](name),
-	)
+	return expect.BuildBytesJSONFieldExpectation(expect.BytesJSONFieldExpectationConfig{
+		Path:       field,
+		ExpectName: name,
+		Check:      expect.JSONCheckTrue(),
+	})
 }
 
 func makeFieldFalseExpectation(field string) *expect.Expectation[[]byte] {
 	name := fmt.Sprintf("Expect: Field '%s' is false", field)
-	return expect.New(
-		name,
-		func(err error, msgBytes []byte) polling.CheckResult {
-			if len(msgBytes) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Message bytes are empty",
-				}
-			}
-			result := gjson.GetBytes(msgBytes, field)
-			if !result.Exists() {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Field '%s' not found", field),
-				}
-			}
-			if result.Type != gjson.False {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Expected false, got %s: %s", jsonutil.TypeToString(result.Type), jsonutil.DebugValue(result)),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[[]byte](name),
-	)
+	return expect.BuildBytesJSONFieldExpectation(expect.BytesJSONFieldExpectationConfig{
+		Path:       field,
+		ExpectName: name,
+		Check:      expect.JSONCheckFalse(),
+	})
 }
 
 func makeMessageExpectation(expected any) *expect.Expectation[[]byte] {
-	name := "Expect: Message matches (exact)"
-	return expect.New(
-		name,
-		func(err error, msgBytes []byte) polling.CheckResult {
-			if len(msgBytes) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Message bytes are empty",
-				}
-			}
-			if !gjson.ValidBytes(msgBytes) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Invalid JSON message",
-				}
-			}
-			jsonRes := gjson.ParseBytes(msgBytes)
-			ok, msg := jsonutil.CompareObjectExact(jsonRes, expected)
-			if !ok {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    msg,
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[[]byte](name),
-	)
+	return expect.BuildBytesObjectExpectation(expect.BytesObjectExpectationConfig{
+		ExpectName: "Expect: Message matches (exact)",
+		Expected:   expected,
+		Compare:    jsonutil.CompareObjectExact,
+	})
 }
 
 func makeMessagePartialExpectation(expected any) *expect.Expectation[[]byte] {
-	name := "Expect: Message matches (partial)"
-	return expect.New(
-		name,
-		func(err error, msgBytes []byte) polling.CheckResult {
-			if len(msgBytes) == 0 {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Message bytes are empty",
-				}
-			}
-			if !gjson.ValidBytes(msgBytes) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Invalid JSON message",
-				}
-			}
-			jsonRes := gjson.ParseBytes(msgBytes)
-			ok, msg := jsonutil.CompareObjectPartial(jsonRes, expected)
-			if !ok {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    msg,
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[[]byte](name),
-	)
+	return expect.BuildBytesObjectExpectation(expect.BytesObjectExpectationConfig{
+		ExpectName: "Expect: Message matches (partial)",
+		Expected:   expected,
+		Compare:    jsonutil.CompareObjectPartial,
+	})
 }

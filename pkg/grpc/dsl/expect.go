@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
-	"github.com/gorelov-m-v/go-test-framework/internal/jsonutil"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/grpc/client"
 )
@@ -186,77 +185,24 @@ func getResponseJSON(resp *client.Response[any]) ([]byte, error) {
 
 func makeFieldValueExpectation(path string, expected any) *expect.Expectation[*client.Response[any]] {
 	name := fmt.Sprintf("Expect: Field '%s' = %v", path, expected)
-	return expect.New(
-		name,
-		func(err error, resp *client.Response[any]) polling.CheckResult {
-			if res, ok := preCheckWithBody(err, resp); !ok {
-				return res
-			}
-			jsonBytes, jsonErr := getResponseJSON(resp)
-			if jsonErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot parse response: %v", jsonErr),
-				}
-			}
-			result := gjson.GetBytes(jsonBytes, path)
-			if !result.Exists() {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Field '%s' does not exist", path),
-				}
-			}
-			ok, msg := jsonutil.Compare(result, expected)
-			if !ok {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    msg,
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[*client.Response[any]](name),
-	)
+	return expect.BuildJSONFieldExpectation(expect.JSONFieldExpectationConfig[*client.Response[any]]{
+		Path:       path,
+		ExpectName: name,
+		GetJSON:    func(resp *client.Response[any]) ([]byte, error) { return getResponseJSON(resp) },
+		PreCheck:   preCheckWithBody,
+		Check:      expect.JSONCheckEquals(expected),
+	})
 }
 
 func makeFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Response[any]] {
 	name := fmt.Sprintf("Expect: Field '%s' not empty", path)
-	return expect.New(
-		name,
-		func(err error, resp *client.Response[any]) polling.CheckResult {
-			if res, ok := preCheckWithBody(err, resp); !ok {
-				return res
-			}
-			jsonBytes, jsonErr := getResponseJSON(resp)
-			if jsonErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot parse response: %v", jsonErr),
-				}
-			}
-			result := gjson.GetBytes(jsonBytes, path)
-			if !result.Exists() {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Field '%s' does not exist", path),
-				}
-			}
-			if jsonutil.IsEmpty(result) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Field '%s' is empty", path),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[*client.Response[any]](name),
-	)
+	return expect.BuildJSONFieldExpectation(expect.JSONFieldExpectationConfig[*client.Response[any]]{
+		Path:       path,
+		ExpectName: name,
+		GetJSON:    func(resp *client.Response[any]) ([]byte, error) { return getResponseJSON(resp) },
+		PreCheck:   preCheckWithBody,
+		Check:      expect.JSONCheckNotEmpty(),
+	})
 }
 
 func makeFieldExistsExpectation(path string) *expect.Expectation[*client.Response[any]] {

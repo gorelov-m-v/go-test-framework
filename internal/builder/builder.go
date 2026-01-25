@@ -19,6 +19,8 @@ const (
 )
 
 const (
+	asyncKeyHTTP  = "http_dsl.async"
+	asyncKeyDB    = "db_dsl.async"
 	asyncKeyKafka = "kafka_dsl.async"
 	asyncKeyGRPC  = "grpc_dsl.async"
 	asyncKeyRedis = "redis_dsl.async"

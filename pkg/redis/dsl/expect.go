@@ -8,7 +8,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
-	"github.com/gorelov-m-v/go-test-framework/internal/jsonutil"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
@@ -171,75 +170,34 @@ func makeValueNotEmptyExpectation() *expect.Expectation[*client.Result] {
 
 func makeJSONFieldExpectation(path string, expected any) *expect.Expectation[*client.Result] {
 	name := fmt.Sprintf("Expect: JSON field '%s' = %v", path, expected)
-	return expect.New(
-		name,
-		func(err error, result *client.Result) polling.CheckResult {
-			if res, ok := preCheckKeyExists(err, result); !ok {
-				return res
-			}
+	return expect.BuildJSONFieldExpectation(expect.JSONFieldExpectationConfig[*client.Result]{
+		Path:       path,
+		ExpectName: name,
+		GetJSON: func(result *client.Result) ([]byte, error) {
 			if !gjson.Valid(result.Value) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Value is not valid JSON",
-				}
+				return nil, fmt.Errorf("value is not valid JSON")
 			}
-			gjResult := gjson.Get(result.Value, path)
-			if !gjResult.Exists() {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
-				}
-			}
-			ok, msg := jsonutil.Compare(gjResult, expected)
-			if !ok {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    msg,
-				}
-			}
-			return polling.CheckResult{Ok: true}
+			return []byte(result.Value), nil
 		},
-		expect.StandardReport[*client.Result](name),
-	)
+		PreCheck: preCheckKeyExists,
+		Check:    expect.JSONCheckEquals(expected),
+	})
 }
 
 func makeJSONFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Result] {
 	name := fmt.Sprintf("Expect: JSON field '%s' not empty", path)
-	return expect.New(
-		name,
-		func(err error, result *client.Result) polling.CheckResult {
-			if res, ok := preCheckKeyExists(err, result); !ok {
-				return res
-			}
+	return expect.BuildJSONFieldExpectation(expect.JSONFieldExpectationConfig[*client.Result]{
+		Path:       path,
+		ExpectName: name,
+		GetJSON: func(result *client.Result) ([]byte, error) {
 			if !gjson.Valid(result.Value) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    "Value is not valid JSON",
-				}
+				return nil, fmt.Errorf("value is not valid JSON")
 			}
-			gjResult := gjson.Get(result.Value, path)
-			if !gjResult.Exists() {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("JSON field '%s' does not exist", path),
-				}
-			}
-			if jsonutil.IsEmpty(gjResult) {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("JSON field '%s' is empty", path),
-				}
-			}
-			return polling.CheckResult{Ok: true}
+			return []byte(result.Value), nil
 		},
-		expect.StandardReport[*client.Result](name),
-	)
+		PreCheck: preCheckKeyExists,
+		Check:    expect.JSONCheckNotEmpty(),
+	})
 }
 
 func makeTTLExpectation(minTTL, maxTTL time.Duration) *expect.Expectation[*client.Result] {

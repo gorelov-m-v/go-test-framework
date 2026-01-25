@@ -109,25 +109,18 @@ func (q *Query) getStepName() string {
 }
 
 func (q *Query) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	mode := polling.GetStepMode(stepCtx)
-	if mode == polling.AsyncMode {
-		polling.AttachPollingSummary(stepCtx, summary)
-	}
+	polling.AttachIfAsync(stepCtx, summary)
 	attachResult(stepCtx, q.result)
 }
 
 func (q *Query) assertResults(stepCtx provider.StepCtx, err error) {
-	mode := polling.GetStepMode(stepCtx)
-	assertionMode := polling.GetAssertionModeFromStepMode(mode)
+	expect.AssertExpectations(stepCtx, q.expectations, err, q.result, q.assertNoExpectations)
+}
 
-	if len(q.expectations) == 0 {
-		if err != nil {
-			polling.NoError(stepCtx, assertionMode, err, "Redis query failed: %v", err)
-		}
-		return
+func (q *Query) assertNoExpectations(stepCtx provider.StepCtx, mode polling.AssertionMode, err error) {
+	if err != nil {
+		polling.NoError(stepCtx, mode, err, "Redis query failed: %v", err)
 	}
-
-	expect.ReportAll(stepCtx, assertionMode, q.expectations, err, q.result)
 }
 
 func (q *Query) validate() {

@@ -158,11 +158,7 @@ func (q *Query[T]) stepName() string {
 }
 
 func (q *Query[T]) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	mode := polling.GetStepMode(stepCtx)
-	if mode == polling.AsyncMode {
-		polling.AttachPollingSummary(stepCtx, summary)
-	}
-
+	polling.AttachIfAsync(stepCtx, summary)
 	attachSearchInfoByTopic(stepCtx, q.topicName, q.filters, q.client.GetDefaultTimeout(), q.unique)
 	q.attachMessage(stepCtx)
 }
@@ -214,7 +210,7 @@ func (q *Query[T]) assertResults(stepCtx provider.StepCtx, err error) {
 		q.checkUniqueness(stepCtx, assertionMode)
 	}
 
-	q.runExpectations(stepCtx, assertionMode, err)
+	q.runExpectations(stepCtx, err)
 }
 
 func (q *Query[T]) buildResult() *Result[T] {
@@ -371,9 +367,6 @@ func (q *Query[T]) checkExpectedCount(stepCtx provider.StepCtx, mode polling.Ass
 	}
 }
 
-func (q *Query[T]) runExpectations(stepCtx provider.StepCtx, mode polling.AssertionMode, err error) {
-	if len(q.expectations) == 0 {
-		return
-	}
-	expect.ReportAll(stepCtx, mode, q.expectations, err, q.messageBytes)
+func (q *Query[T]) runExpectations(stepCtx provider.StepCtx, err error) {
+	expect.AssertExpectations(stepCtx, q.expectations, err, q.messageBytes, nil)
 }

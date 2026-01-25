@@ -13,6 +13,12 @@ func AttachPollingSummary(stepCtx provider.StepCtx, summary PollingSummary) {
 	stepCtx.WithNewAttachment("Polling Summary", allure.JSON, summaryJSON)
 }
 
+func AttachIfAsync(stepCtx provider.StepCtx, summary PollingSummary) {
+	if GetStepMode(stepCtx) == AsyncMode {
+		AttachPollingSummary(stepCtx, summary)
+	}
+}
+
 func FinalFailureMessage(summary PollingSummary) string {
 	if len(summary.FailedChecks) == 0 {
 		return "Expectations not met within timeout"

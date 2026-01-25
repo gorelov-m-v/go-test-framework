@@ -160,23 +160,12 @@ func (c *Call[TReq, TResp]) stepName() string {
 }
 
 func (c *Call[TReq, TResp]) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	mode := polling.GetStepMode(stepCtx)
-	if mode == polling.AsyncMode {
-		polling.AttachPollingSummary(stepCtx, summary)
-	}
+	polling.AttachIfAsync(stepCtx, summary)
 	attachResponse(stepCtx, c.client, c.resp)
 }
 
 func (c *Call[TReq, TResp]) assertResults(stepCtx provider.StepCtx, err error) {
-	mode := polling.GetStepMode(stepCtx)
-	assertionMode := polling.GetAssertionModeFromStepMode(mode)
-
-	if len(c.expectations) == 0 {
-		c.assertNoExpectations(stepCtx, assertionMode, err)
-		return
-	}
-
-	expect.ReportAll(stepCtx, assertionMode, c.expectations, err, c.convertToAny())
+	expect.AssertExpectations(stepCtx, c.expectations, err, c.convertToAny(), c.assertNoExpectations)
 }
 
 func (c *Call[TReq, TResp]) assertNoExpectations(stepCtx provider.StepCtx, mode polling.AssertionMode, err error) {

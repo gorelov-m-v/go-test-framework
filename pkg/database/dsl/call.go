@@ -97,10 +97,7 @@ func (q *Query[T]) stepName() string {
 }
 
 func (q *Query[T]) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	mode := polling.GetStepMode(stepCtx)
-	if mode == polling.AsyncMode {
-		polling.AttachPollingSummary(stepCtx, summary)
-	}
+	polling.AttachIfAsync(stepCtx, summary)
 
 	if q.lastError != nil {
 		if errors.Is(q.lastError, sql.ErrNoRows) {
@@ -113,15 +110,7 @@ func (q *Query[T]) attachResults(stepCtx provider.StepCtx, summary polling.Polli
 }
 
 func (q *Query[T]) assertResults(stepCtx provider.StepCtx, err error) {
-	mode := polling.GetStepMode(stepCtx)
-	assertMd := polling.GetAssertionModeFromStepMode(mode)
-
-	if len(q.expectations) > 0 {
-		expect.ReportAll(stepCtx, assertMd, q.expectations, err, q.scannedResult)
-		return
-	}
-
-	q.assertNoExpectations(stepCtx, assertMd, err)
+	expect.AssertExpectations(stepCtx, q.expectations, err, q.scannedResult, q.assertNoExpectations)
 }
 
 func (q *Query[T]) assertNoExpectations(stepCtx provider.StepCtx, mode polling.AssertionMode, err error) {
@@ -163,10 +152,7 @@ func (q *Query[T]) stepNameAll() string {
 }
 
 func (q *Query[T]) attachResultsAll(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	mode := polling.GetStepMode(stepCtx)
-	if mode == polling.AsyncMode {
-		polling.AttachPollingSummary(stepCtx, summary)
-	}
+	polling.AttachIfAsync(stepCtx, summary)
 
 	if q.lastError != nil {
 		attachResult(stepCtx, q.client, nil, q.lastError)
@@ -176,16 +162,12 @@ func (q *Query[T]) attachResultsAll(stepCtx provider.StepCtx, summary polling.Po
 }
 
 func (q *Query[T]) assertResultsAll(stepCtx provider.StepCtx, err error) {
-	mode := polling.GetStepMode(stepCtx)
-	assertionMode := polling.GetAssertionModeFromStepMode(mode)
+	expect.AssertExpectations(stepCtx, q.expectationsAll, err, q.scannedResults, q.assertNoExpectationsAll)
+}
 
-	if len(q.expectationsAll) > 0 {
-		expect.ReportAll(stepCtx, assertionMode, q.expectationsAll, err, q.scannedResults)
-		return
-	}
-
+func (q *Query[T]) assertNoExpectationsAll(stepCtx provider.StepCtx, mode polling.AssertionMode, err error) {
 	if err != nil {
-		polling.NoError(stepCtx, assertionMode, err, "DB query failed: %v", err)
+		polling.NoError(stepCtx, mode, err, "DB query failed: %v", err)
 	}
 }
 

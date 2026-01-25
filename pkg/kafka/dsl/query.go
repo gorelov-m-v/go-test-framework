@@ -11,6 +11,7 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	kafkaErrors "github.com/gorelov-m-v/go-test-framework/internal/kafka/errors"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
+	"github.com/gorelov-m-v/go-test-framework/internal/validation"
 	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/client"
 	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/topic"
 	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
@@ -114,16 +115,9 @@ func (q *Query[T]) Context(ctx context.Context) *Query[T] {
 }
 
 func (q *Query[T]) validate() {
-	if q.client == nil {
-		q.sCtx.Break("Kafka DSL Error: Kafka client is nil. Check test configuration.")
-		q.sCtx.BrokenNow()
-		return
-	}
-	if q.topicName == "" {
-		q.sCtx.Break("Kafka DSL Error: Topic name is empty. Use Consume[TopicType]() or NewQuery().")
-		q.sCtx.BrokenNow()
-		return
-	}
+	v := validation.New(q.sCtx, "Kafka")
+	v.RequireNotNil(q.client, "Kafka client")
+	v.RequireNotEmptyWithHint(q.topicName, "Topic name", "Use Consume[TopicType]() or NewQuery().")
 }
 
 // Send executes the Kafka message search and validates all expectations.

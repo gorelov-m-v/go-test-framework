@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
+	"github.com/gorelov-m-v/go-test-framework/internal/validation"
 	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
 
@@ -124,14 +125,7 @@ func (q *Query) assertNoExpectations(stepCtx provider.StepCtx, mode polling.Asse
 }
 
 func (q *Query) validate() {
-	if q.client == nil {
-		q.sCtx.Break("Redis DSL Error: Redis client is nil. Check test configuration.")
-		q.sCtx.BrokenNow()
-		return
-	}
-	if strings.TrimSpace(q.key) == "" {
-		q.sCtx.Break("Redis DSL Error: Redis key is not set. Use .Key(\"key_name\").")
-		q.sCtx.BrokenNow()
-		return
-	}
+	v := validation.New(q.sCtx, "Redis")
+	v.RequireNotNil(q.client, "Redis client")
+	v.RequireNotEmptyWithHint(q.key, "Redis key", "Use .Key(\"key_name\").")
 }

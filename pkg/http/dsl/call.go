@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
+	"github.com/gorelov-m-v/go-test-framework/internal/validation"
 	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 )
 
@@ -190,26 +191,15 @@ func (c *Call[TReq, TResp]) convertToAny() *client.Response[any] {
 }
 
 func (c *Call[TReq, TResp]) validate() {
-	if c.client == nil {
-		c.sCtx.Break("HTTP DSL Error: HTTP client is nil. Check test configuration.")
-		c.sCtx.BrokenNow()
+	v := validation.New(c.sCtx, "HTTP")
+	if !v.RequireNotNil(c.client, "HTTP client") {
 		return
 	}
-	if c.req == nil {
-		c.sCtx.Break("HTTP DSL Error: HTTP request is nil. This is an internal error.")
-		c.sCtx.BrokenNow()
+	if !v.RequireNotNil(c.req, "HTTP request") {
 		return
 	}
-	if strings.TrimSpace(c.req.Method) == "" {
-		c.sCtx.Break("HTTP DSL Error: HTTP method is not set. Use .GET(), .POST(), .PUT(), .PATCH(), or .DELETE().")
-		c.sCtx.BrokenNow()
-		return
-	}
-	if strings.TrimSpace(c.req.Path) == "" {
-		c.sCtx.Break("HTTP DSL Error: HTTP path is not set. Provide path in method call like .GET(\"/api/users\").")
-		c.sCtx.BrokenNow()
-		return
-	}
+	v.RequireNotEmptyWithHint(c.req.Method, "HTTP method", "Use .GET(), .POST(), .PUT(), .PATCH(), or .DELETE().")
+	v.RequireNotEmptyWithHint(c.req.Path, "HTTP path", "Provide path in method call like .GET(\"/api/users\").")
 }
 
 func (c *Call[TReq, TResp]) validateContractConfig() {

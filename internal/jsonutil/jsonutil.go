@@ -10,6 +10,13 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+type CompareMode int
+
+const (
+	ModePartial CompareMode = iota
+	ModeExact
+)
+
 func IsEmpty(res gjson.Result) bool {
 	if !res.Exists() {
 		return true
@@ -264,6 +271,14 @@ func isZeroValue(v reflect.Value) bool {
 }
 
 func CompareObjectPartial(jsonObj gjson.Result, expected any) (bool, string) {
+	return compareObject(jsonObj, expected, ModePartial)
+}
+
+func CompareObjectExact(jsonObj gjson.Result, expected any) (bool, string) {
+	return compareObject(jsonObj, expected, ModeExact)
+}
+
+func compareObject(jsonObj gjson.Result, expected any, mode CompareMode) (bool, string) {
 	if expected == nil {
 		return true, ""
 	}
@@ -297,24 +312,35 @@ func CompareObjectPartial(jsonObj gjson.Result, expected any) (bool, string) {
 			continue
 		}
 
-		if isZeroValue(fieldVal) {
-			continue
-		}
-
 		jsonFieldName := toJSONFieldName(field)
 		jsonField := jsonObj.Get(jsonFieldName)
 
-		if !jsonField.Exists() {
-			return false, fmt.Sprintf("field '%s' not found in JSON", jsonFieldName)
+		if mode == ModePartial {
+			if isZeroValue(fieldVal) {
+				continue
+			}
+			if !jsonField.Exists() {
+				return false, fmt.Sprintf("field '%s' not found in JSON", jsonFieldName)
+			}
+		} else {
+			if !jsonField.Exists() {
+				continue
+			}
 		}
 
 		if fieldVal.Kind() == reflect.Ptr {
 			if fieldVal.IsNil() {
+				if mode == ModePartial {
+					continue
+				}
+				if jsonField.Exists() && jsonField.Type != gjson.Null {
+					return false, fmt.Sprintf("field '%s': expected null, got %s: %s", jsonFieldName, TypeToString(jsonField.Type), DebugValue(jsonField))
+				}
 				continue
 			}
 			derefVal := fieldVal.Elem()
 			if derefVal.Kind() == reflect.Struct {
-				ok, msg := CompareObjectPartial(jsonField, derefVal.Interface())
+				ok, msg := compareObject(jsonField, derefVal.Interface(), mode)
 				if !ok {
 					return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
 				}
@@ -324,7 +350,7 @@ func CompareObjectPartial(jsonObj gjson.Result, expected any) (bool, string) {
 		}
 
 		if fieldVal.Kind() == reflect.Struct {
-			ok, msg := CompareObjectPartial(jsonField, fieldVal.Interface())
+			ok, msg := compareObject(jsonField, fieldVal.Interface(), mode)
 			if !ok {
 				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
 			}
@@ -340,7 +366,7 @@ func CompareObjectPartial(jsonObj gjson.Result, expected any) (bool, string) {
 		}
 
 		if fieldVal.Kind() == reflect.Slice {
-			ok, msg := compareSlice(jsonField, fieldVal)
+			ok, msg := compareSliceWithMode(jsonField, fieldVal, mode)
 			if !ok {
 				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
 			}
@@ -380,6 +406,10 @@ func compareMap(jsonObj gjson.Result, mapVal reflect.Value) (bool, string) {
 }
 
 func compareSlice(jsonArr gjson.Result, sliceVal reflect.Value) (bool, string) {
+	return compareSliceWithMode(jsonArr, sliceVal, ModePartial)
+}
+
+func compareSliceWithMode(jsonArr gjson.Result, sliceVal reflect.Value, mode CompareMode) (bool, string) {
 	if !jsonArr.IsArray() {
 		return false, fmt.Sprintf("expected JSON array, got %s", TypeToString(jsonArr.Type))
 	}
@@ -395,7 +425,7 @@ func compareSlice(jsonArr gjson.Result, sliceVal reflect.Value) (bool, string) {
 
 		itemVal := reflect.ValueOf(expectedItem)
 		if itemVal.Kind() == reflect.Struct {
-			ok, msg := CompareObjectPartial(jsonItem, expectedItem)
+			ok, msg := compareObject(jsonItem, expectedItem, mode)
 			if !ok {
 				return false, fmt.Sprintf("index %d: %s", i, msg)
 			}
@@ -423,98 +453,6 @@ func FindInArray(jsonArr gjson.Result, expected any) (int, gjson.Result) {
 	}
 
 	return -1, gjson.Result{}
-}
-
-func CompareObjectExact(jsonObj gjson.Result, expected any) (bool, string) {
-	if expected == nil {
-		return true, ""
-	}
-
-	val := reflect.ValueOf(expected)
-	if val.Kind() == reflect.Ptr {
-		if val.IsNil() {
-			return true, ""
-		}
-		val = val.Elem()
-	}
-
-	if val.Kind() == reflect.Map {
-		return compareMap(jsonObj, val)
-	}
-
-	if val.Kind() != reflect.Struct {
-		return false, fmt.Sprintf("expected struct, got %T", expected)
-	}
-
-	if !jsonObj.IsObject() {
-		return false, fmt.Sprintf("expected JSON object, got %s", TypeToString(jsonObj.Type))
-	}
-
-	typ := val.Type()
-	for i := 0; i < val.NumField(); i++ {
-		field := typ.Field(i)
-		fieldVal := val.Field(i)
-
-		if !field.IsExported() {
-			continue
-		}
-
-		jsonFieldName := toJSONFieldName(field)
-		jsonField := jsonObj.Get(jsonFieldName)
-
-		if !jsonField.Exists() {
-			continue
-		}
-
-		if fieldVal.Kind() == reflect.Ptr {
-			if fieldVal.IsNil() {
-				if jsonField.Exists() && jsonField.Type != gjson.Null {
-					return false, fmt.Sprintf("field '%s': expected null, got %s: %s", jsonFieldName, TypeToString(jsonField.Type), DebugValue(jsonField))
-				}
-				continue
-			}
-			derefVal := fieldVal.Elem()
-			if derefVal.Kind() == reflect.Struct {
-				ok, msg := CompareObjectExact(jsonField, derefVal.Interface())
-				if !ok {
-					return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
-				}
-				continue
-			}
-			fieldVal = derefVal
-		}
-
-		if fieldVal.Kind() == reflect.Struct {
-			ok, msg := CompareObjectExact(jsonField, fieldVal.Interface())
-			if !ok {
-				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
-			}
-			continue
-		}
-
-		if fieldVal.Kind() == reflect.Map {
-			ok, msg := compareMap(jsonField, fieldVal)
-			if !ok {
-				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
-			}
-			continue
-		}
-
-		if fieldVal.Kind() == reflect.Slice {
-			ok, msg := compareSlice(jsonField, fieldVal)
-			if !ok {
-				return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
-			}
-			continue
-		}
-
-		ok, msg := Compare(jsonField, fieldVal.Interface())
-		if !ok {
-			return false, fmt.Sprintf("field '%s': %s", jsonFieldName, msg)
-		}
-	}
-
-	return true, ""
 }
 
 func FindInArrayExact(jsonArr gjson.Result, expected any) (int, gjson.Result) {

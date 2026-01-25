@@ -3,13 +3,13 @@ package dsl
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
+	"github.com/gorelov-m-v/go-test-framework/internal/validation"
 	"github.com/gorelov-m-v/go-test-framework/pkg/grpc/client"
 )
 
@@ -141,14 +141,7 @@ func (c *Call[TReq, TResp]) convertToAny() *client.Response[any] {
 }
 
 func (c *Call[TReq, TResp]) validate() {
-	if c.client == nil {
-		c.sCtx.Break("gRPC DSL Error: gRPC client is nil. Check test configuration.")
-		c.sCtx.BrokenNow()
-		return
-	}
-	if strings.TrimSpace(c.fullMethod) == "" {
-		c.sCtx.Break("gRPC DSL Error: gRPC method is not set. Use .Method(\"/package.Service/Method\") or .Service().MethodName().")
-		c.sCtx.BrokenNow()
-		return
-	}
+	v := validation.New(c.sCtx, "gRPC")
+	v.RequireNotNil(c.client, "gRPC client")
+	v.RequireNotEmptyWithHint(c.fullMethod, "gRPC method", "Use .Method(\"/package.Service/Method\").")
 }

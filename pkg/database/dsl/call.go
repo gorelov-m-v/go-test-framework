@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
+	"github.com/gorelov-m-v/go-test-framework/internal/validation"
 	"github.com/gorelov-m-v/go-test-framework/pkg/database/client"
 )
 
@@ -73,10 +74,18 @@ func (q *Query[T]) SQL(query string, args ...any) *Query[T] {
 	return q
 }
 
+func (q *Query[T]) validate() {
+	v := validation.New(q.sCtx, "DB")
+	v.RequireNotNil(q.client, "Database client")
+	v.RequireNotEmptyWithHint(q.sql, "SQL query", "Use .SQL(\"SELECT...\", args...).")
+}
+
 // Send executes the query expecting a single row result.
 // In async mode (AsyncStep), automatically retries with backoff until expectations pass.
 // Returns the scanned struct. Use ExpectNotFound if no rows is the expected outcome.
 func (q *Query[T]) Send() T {
+	q.validate()
+
 	q.sCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
@@ -132,6 +141,8 @@ func (q *Query[T]) assertNoExpectations(stepCtx provider.StepCtx, mode polling.A
 // In async mode (AsyncStep), automatically retries with backoff until expectations pass.
 // Returns a slice of scanned structs.
 func (q *Query[T]) SendAll() []T {
+	q.validate()
+
 	q.sCtx.WithNewStep(q.stepNameAll(), func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 

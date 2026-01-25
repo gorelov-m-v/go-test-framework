@@ -23,20 +23,7 @@ func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*ex
 		return result, err
 	}
 
-	checker := func(result T, err error) []polling.CheckResult {
-		results := make([]polling.CheckResult, 0, len(expectations))
-		for _, exp := range expectations {
-			checkRes := exp.Check(err, result)
-			results = append(results, polling.CheckResult{
-				Ok:        checkRes.Ok,
-				Retryable: checkRes.Retryable,
-				Reason:    checkRes.Reason,
-			})
-		}
-		return results
-	}
-
-	return retry.ExecuteWithRetry(q.ctx, stepCtx, cfg, executor, checker)
+	return retry.ExecuteWithRetry(q.ctx, stepCtx, cfg, executor, retry.BuildExpectationsChecker(expectations))
 }
 
 func (q *Query[T]) executeSingle() (T, error, polling.PollingSummary) {

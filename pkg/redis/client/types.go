@@ -10,3 +10,10 @@ type Result struct {
 	Error    error
 	Duration time.Duration
 }
+
+func (r *Result) GetError() error {
+	if r == nil {
+		return nil
+	}
+	return r.Error
+}

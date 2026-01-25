@@ -20,3 +20,10 @@ type Response[TResp any] struct {
 	Error    error
 	RawBody  []byte
 }
+
+func (r *Response[TResp]) GetError() error {
+	if r == nil {
+		return nil
+	}
+	return r.Error
+}

@@ -27,6 +27,13 @@ type Response[V any] struct {
 	NetworkError string
 }
 
+func (r *Response[V]) GetNetworkError() string {
+	if r == nil {
+		return ""
+	}
+	return r.NetworkError
+}
+
 type ErrorResponse struct {
 	Body       string
 	StatusCode int

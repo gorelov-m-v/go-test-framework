@@ -61,30 +61,15 @@ func (q *Query) executeWithRetry(
 		return result, result.Error
 	}
 
-	checker := func(result *client.Result, err error) []polling.CheckResult {
-		results := make([]polling.CheckResult, 0, len(expectations))
-		for _, exp := range expectations {
-			checkRes := exp.Check(err, result)
-			results = append(results, polling.CheckResult{
-				Ok:        checkRes.Ok,
-				Retryable: checkRes.Retryable,
-				Reason:    checkRes.Reason,
-			})
-		}
+	result, err, summary := retry.ExecuteWithRetry(
+		q.ctx,
+		stepCtx,
+		asyncCfg,
+		executor,
+		retry.BuildExpectationsChecker(expectations),
+	)
 
-		return results
-	}
-
-	result, err, summary := retry.ExecuteWithRetry(q.ctx, stepCtx, asyncCfg, executor, checker)
-
-	if err == nil && result != nil && result.Error != nil {
-		if summary.Success {
-			summary.Success = false
-		}
-		if summary.LastError == "" {
-			summary.LastError = result.Error.Error()
-		}
-	}
+	retry.PostProcessSummary(result, err, &summary)
 
 	return result, err, summary
 }

@@ -65,8 +65,8 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 		return resp, err
 	}
 
-	checker := func(resp *client.Response[TResp], err error) []polling.CheckResult {
-		respAny := &client.Response[any]{
+	checker := retry.BuildExpectationsCheckerWithConvert(expectations, func(resp *client.Response[TResp]) *client.Response[any] {
+		return &client.Response[any]{
 			StatusCode:   resp.StatusCode,
 			Headers:      resp.Headers,
 			RawBody:      resp.RawBody,
@@ -74,30 +74,11 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 			Duration:     resp.Duration,
 			NetworkError: resp.NetworkError,
 		}
-
-		results := make([]polling.CheckResult, 0, len(expectations))
-		for _, exp := range expectations {
-			checkRes := exp.Check(err, respAny)
-			results = append(results, polling.CheckResult{
-				Ok:        checkRes.Ok,
-				Retryable: checkRes.Retryable,
-				Reason:    checkRes.Reason,
-			})
-		}
-
-		return results
-	}
+	})
 
 	resp, err, summary := retry.ExecuteWithRetry(c.ctx, stepCtx, asyncCfg, executor, checker)
 
-	if err == nil && resp != nil && resp.NetworkError != "" {
-		if summary.Success {
-			summary.Success = false
-		}
-		if summary.LastError == "" {
-			summary.LastError = resp.NetworkError
-		}
-	}
+	retry.PostProcessNetworkError(resp, err, &summary)
 
 	return resp, err, summary
 }

@@ -65,18 +65,17 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 		return resp, err
 	}
 
-	checker := func(resp *client.Response[TResp], err error) []polling.CheckResult {
-		var bodyAny any
+	checker := retry.BuildExpectationsCheckerWithConvert(expectations, func(resp *client.Response[TResp]) *client.Response[any] {
 		respAny := &client.Response[any]{
 			Body:     nil,
 			Metadata: nil,
 			Duration: 0,
-			Error:    err,
+			Error:    nil,
 		}
 
 		if resp != nil {
 			if resp.Body != nil {
-				bodyAny = resp.Body
+				var bodyAny any = resp.Body
 				respAny.Body = &bodyAny
 			}
 			respAny.Metadata = resp.Metadata
@@ -85,29 +84,12 @@ func (c *Call[TReq, TResp]) executeWithRetry(
 			respAny.RawBody = resp.RawBody
 		}
 
-		results := make([]polling.CheckResult, 0, len(expectations))
-		for _, exp := range expectations {
-			checkRes := exp.Check(err, respAny)
-			results = append(results, polling.CheckResult{
-				Ok:        checkRes.Ok,
-				Retryable: checkRes.Retryable,
-				Reason:    checkRes.Reason,
-			})
-		}
-
-		return results
-	}
+		return respAny
+	})
 
 	resp, err, summary := retry.ExecuteWithRetry(c.ctx, stepCtx, asyncCfg, executor, checker)
 
-	if err == nil && resp != nil && resp.Error != nil {
-		if summary.Success {
-			summary.Success = false
-		}
-		if summary.LastError == "" {
-			summary.LastError = resp.Error.Error()
-		}
-	}
+	retry.PostProcessSummary(resp, err, &summary)
 
 	return resp, err, summary
 }

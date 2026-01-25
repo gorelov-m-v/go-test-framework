@@ -95,15 +95,15 @@ your-api-tests/
 - `.Header("Key", "Val")` / `.QueryParam("Key", "Val")` / `.PathParam("key", "val")`
 
 **Expectations (Chain before .Send):**
-- `.ExpectResponseStatus(200)`
-- `.ExpectResponseBodyFieldValue("json.path", value)`
-- `.ExpectResponseBodyFieldNotEmpty("json.path")`
-- `.ExpectResponseBodyFieldIsNull("json.path")`
-- `.ExpectResponseBodyFieldIsNotNull("json.path")`
-- `.ExpectResponseBodyFieldTrue("json.path")` / `.ExpectResponseBodyFieldFalse("json.path")`
-- `.ExpectResponseBodyNotEmpty()`
-- `.ExpectResponseBody(structOrMap)` - exact match (all fields)
-- `.ExpectResponseBodyPartial(structOrMap)` - partial match (non-zero fields only)
+- `.ExpectResponseStatus(200)` - HTTP status code
+- `.ExpectFieldEquals("json.path", value)` - field value equals
+- `.ExpectFieldNotEmpty("json.path")` - field is not empty
+- `.ExpectFieldIsNull("json.path")` - field is null
+- `.ExpectFieldIsNotNull("json.path")` - field is not null
+- `.ExpectFieldTrue("json.path")` / `.ExpectFieldFalse("json.path")` - boolean checks
+- `.ExpectBodyNotEmpty()` - response body is not empty
+- `.ExpectBodyEquals(structOrMap)` - exact match (all fields)
+- `.ExpectBodyPartial(structOrMap)` - partial match (non-zero fields only)
 - `.ExpectArrayContains("json.path", structOrMap)` - array contains object (partial match)
 - `.ExpectArrayContainsExact("json.path", structOrMap)` - array contains object (exact match)
 
@@ -124,32 +124,49 @@ your-api-tests/
 - `.ExpectColumnNotEmpty("col")` / `.ExpectColumnEmpty("col")`
 - `.ExpectColumnTrue("is_active")` / `.ExpectColumnFalse("is_deleted")`
 - `.ExpectColumnIsNotNull("created_at")` / `.ExpectColumnIsNull("updated_at")`
-- `.ExpectColumnJsonEquals("col", map[string]interface{})` - compare JSON column
-- `.ExpectRow(expectedStruct)` - exact match (all fields)
+- `.ExpectColumnJSON("col", map[string]interface{})` - compare JSON column
+- `.ExpectRowEquals(expectedStruct)` - exact match (all fields)
 - `.ExpectRowPartial(expectedStruct)` - partial match (non-zero fields only)
 
 **Execute:**
 - `.Send()` -> Returns `Model` struct
 - `.SendAll()` -> Returns `[]Model` slice (all matching rows)
 
-### 3. Kafka DSL (`dsl.Expect[Topic]`)
-**Setup (Filters):**
+### 3. Kafka DSL (`dsl.Query[T]`)
+**Setup:**
+- `Consume[TopicType](sCtx, kafkaClient)` - Create typed query for topic
+
+**Filters:**
 - `.With("json.field", value)` (AND logic for multiple filters)
 - `.WithContains("json.array.field", value)` - filter by array containing value
-- `.Unique()` / `.UniqueWithWindow(duration)`
+- `.Unique()` / `.UniqueWithWindow(duration)` - require unique message
 
 **Expectations:**
 - `.ExpectCount(n)` - expect exactly N messages matching filters
-- `.ExpectField("json.path", value)`
+- `.ExpectFieldEquals("json.path", value)` - field value equals
 - `.ExpectFieldNotEmpty("id")` / `.ExpectFieldEmpty("id")`
 - `.ExpectFieldTrue("isActive")` / `.ExpectFieldFalse("isDeleted")`
 - `.ExpectFieldIsNull("field")` / `.ExpectFieldIsNotNull("field")`
-- `.ExpectJsonField("field", map[string]interface{})` - compare JSON field
-- `.ExpectMessage(expectedStruct)` - exact match (all fields)
-- `.ExpectMessagePartial(expectedStruct)` - partial match (non-zero fields only)
+- `.ExpectFieldJSON("field", map[string]interface{})` - compare JSON field
+- `.ExpectBodyEquals(expectedStruct)` - exact match (all fields)
+- `.ExpectBodyPartial(expectedStruct)` - partial match (non-zero fields only)
 
 **Execute:**
-- `.Send()` -> Returns nothing (fails test if not found)
+- `.Send()` -> Returns `*Result[T]` with found message
+
+**Result fields:**
+- `result.Found` - whether message was found
+- `result.Message` - deserialized message (type T)
+- `result.RawMessage` - raw message bytes
+- `result.AllMessages` - all matching messages (for ExpectCount)
+- `result.MatchCount` - number of matching messages
+- `result.ParseError` - error if message could not be deserialized to T
+
+**Optional:**
+- `.Context(ctx)` - set custom context for cancellation
+
+**Backward Compatibility:**
+- `Expect[TopicType]()` still works but is deprecated - use `Consume[TopicType]()`
 
 ### 4. gRPC DSL (`dsl.Call[Req, Resp]`)
 **Setup:**
@@ -160,7 +177,7 @@ your-api-tests/
 **Expectations:**
 - `.ExpectNoError()` / `.ExpectError()`
 - `.ExpectStatusCode(codes.OK)` - gRPC status code
-- `.ExpectFieldValue("json.path", value)` - Uses GJSON paths
+- `.ExpectFieldEquals("json.path", value)` - Uses GJSON paths
 - `.ExpectFieldNotEmpty("path")` / `.ExpectFieldExists("path")`
 - `.ExpectMetadata("key", "value")`
 
@@ -173,8 +190,8 @@ your-api-tests/
 
 **Expectations:**
 - `.ExpectExists()` / `.ExpectNotExists()`
-- `.ExpectValue("expected_string")` / `.ExpectValueNotEmpty()`
-- `.ExpectJSONField("json.path", value)` / `.ExpectJSONFieldNotEmpty("path")`
+- `.ExpectValueEquals("expected_string")` / `.ExpectValueNotEmpty()`
+- `.ExpectFieldEquals("json.path", value)` / `.ExpectFieldNotEmpty("path")`
 - `.ExpectTTL(minDuration, maxDuration)` / `.ExpectNoTTL()`
 
 **Execute:**
@@ -297,10 +314,10 @@ const (
 ExpectColumnEquals("status_id", StatusEnabled)  // ✅ Works
 
 // Kafka DSL - compares int with JSON number
-ExpectField("status", 1)  // ✅ Works
+ExpectFieldEquals("status", 1)  // ✅ Works
 
 // HTTP DSL - compares int with JSON number
-ExpectResponseBodyFieldValue("status", 1)  // ✅ Works
+ExpectFieldEquals("status", 1)  // ✅ Works
 ```
 
 ### ❌ Avoid explicit type casting:
@@ -456,7 +473,7 @@ func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
         resp := game.CreatePlayer(sCtx).
             RequestBody(models.CreateReq{Username: username}).
             ExpectResponseStatus(201).
-            ExpectResponseBodyFieldNotEmpty("id").
+            ExpectFieldNotEmpty("id").
             Send()
         playerID = resp.Body.ID
     })
@@ -472,10 +489,10 @@ func (s *PlayerSuite) TestCreatePlayerE2E(t provider.T) {
 
     // Step 3: Kafka - Wait for event (async with retry)
     s.AsyncStep(t, "Verify Kafka event", func(sCtx provider.StepCtx) {
-        kafkaDSL.Expect[kafka.PlayerEventsTopic](sCtx, kafka.Client()).
+        kafkaDSL.Consume[kafka.PlayerEventsTopic](sCtx, kafka.Client()).
             With("playerId", playerID).
             With("eventType", "PLAYER_CREATED").
-            ExpectField("playerName", username).
+            ExpectFieldEquals("playerName", username).
             Send()
     })
 }
@@ -539,7 +556,7 @@ s.Step(t, "Register without email", func(sCtx provider.StepCtx) {
             // email field is completely missing
         }).
         ExpectResponseStatus(400).
-        ExpectResponseBodyFieldValue("detail.code", "EMAIL_REQUIRED").
+        ExpectFieldEquals("detail.code", "EMAIL_REQUIRED").
         Send()
 })
 

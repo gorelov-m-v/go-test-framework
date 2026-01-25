@@ -15,6 +15,18 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/pkg/database/client"
 )
 
+// Query represents a database query builder with fluent interface.
+// It supports SQL queries, expectations on columns and rows, and automatic retry in async mode.
+//
+// Type parameter T must be a struct with `db` tags for column mapping.
+//
+// Example:
+//
+//	dsl.NewQuery[models.User](sCtx, dbClient).
+//	    SQL("SELECT * FROM users WHERE id = ?", userID).
+//	    ExpectFound().
+//	    ExpectColumnEquals("status", "active").
+//	    Send()
 type Query[T any] struct {
 	sCtx            provider.StepCtx
 	client          *client.Client
@@ -22,10 +34,21 @@ type Query[T any] struct {
 	sql             string
 	args            []any
 	expectations    []*expect.Expectation[T]
+	expectationsAll []*expect.Expectation[[]T]
 	expectsNotFound bool
 	scannedResult   T
+	scannedResults  []T
+	lastError       error
 }
 
+// NewQuery creates a new database query builder.
+// The type parameter T must be a struct with `db` tags for column mapping.
+//
+// Parameters:
+//   - sCtx: Allure step context for test reporting
+//   - dbClient: Database client with connection pool
+//
+// Returns a Query builder that can be configured with SQL and expectations.
 func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
 	var zero T
 	t := reflect.TypeOf(zero)
@@ -42,95 +65,128 @@ func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
 	}
 }
 
+// SQL sets the SQL query and its arguments.
+// Use ? for MySQL placeholders or $1, $2 for PostgreSQL.
 func (q *Query[T]) SQL(query string, args ...any) *Query[T] {
 	q.sql = query
 	q.args = args
 	return q
 }
 
+// Send executes the query expecting a single row result.
+// In async mode (AsyncStep), automatically retries with backoff until expectations pass.
+// Returns the scanned struct. Use ExpectNotFound if no rows is the expected outcome.
 func (q *Query[T]) Send() T {
-	tableName := extractTableName(q.sql)
-	stepName := fmt.Sprintf("SELECT %s", tableName)
-
-	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
+	q.sCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
-		mode := polling.GetStepMode(stepCtx)
-		var result T
-		var err error
-		var summary polling.PollingSummary
-
-		useRetry := mode == polling.AsyncMode && len(q.expectations) > 0
-
-		if useRetry {
-			result, err, summary = q.executeWithRetry(stepCtx, q.expectations)
-		} else {
-			result, err, summary = q.executeSingle()
-		}
-
-		if mode == polling.AsyncMode {
-			polling.AttachPollingSummary(stepCtx, summary)
-		}
-
+		result, err, summary := q.execute(stepCtx, q.expectations)
 		q.scannedResult = result
+		q.lastError = err
 
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				stepCtx.Logf("Query returned no rows")
-			}
-			attachResult(stepCtx, q.client, nil, err)
-		} else {
-			attachResult(stepCtx, q.client, result, nil)
-		}
-
-		assertMd := polling.GetAssertionModeFromStepMode(mode)
-
-		if len(q.expectations) > 0 {
-			expect.ReportAll(stepCtx, assertMd, q.expectations, err, result)
-		} else {
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					if !q.expectsNotFound {
-						suffix := ""
-						if useRetry {
-							suffix = " after retry"
-						}
-						polling.NoError(stepCtx, assertMd, err, "Expected row to exist, but got sql.ErrNoRows%s. Use ExpectNotFound() if 'not found' is expected", suffix)
-					}
-				} else {
-					msg := "DB query failed"
-					if mode == polling.AsyncMode {
-						msg = polling.FinalFailureMessage(summary)
-					}
-					polling.NoError(stepCtx, assertMd, err, msg)
-				}
-			}
-		}
+		q.attachResults(stepCtx, summary)
+		q.assertResults(stepCtx, err)
 	})
 
 	return q.scannedResult
 }
 
-func (q *Query[T]) SendAll() []T {
+func (q *Query[T]) stepName() string {
 	tableName := extractTableName(q.sql)
-	stepName := fmt.Sprintf("SELECT %s (all)", tableName)
+	return fmt.Sprintf("SELECT %s", tableName)
+}
 
-	var results []T
+func (q *Query[T]) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
+	mode := polling.GetStepMode(stepCtx)
+	if mode == polling.AsyncMode {
+		polling.AttachPollingSummary(stepCtx, summary)
+	}
 
-	q.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
+	if q.lastError != nil {
+		if errors.Is(q.lastError, sql.ErrNoRows) {
+			stepCtx.Logf("Query returned no rows")
+		}
+		attachResult(stepCtx, q.client, nil, q.lastError)
+	} else {
+		attachResult(stepCtx, q.client, q.scannedResult, nil)
+	}
+}
+
+func (q *Query[T]) assertResults(stepCtx provider.StepCtx, err error) {
+	mode := polling.GetStepMode(stepCtx)
+	assertMd := polling.GetAssertionModeFromStepMode(mode)
+
+	if len(q.expectations) > 0 {
+		expect.ReportAll(stepCtx, assertMd, q.expectations, err, q.scannedResult)
+		return
+	}
+
+	q.assertNoExpectations(stepCtx, assertMd, err)
+}
+
+func (q *Query[T]) assertNoExpectations(stepCtx provider.StepCtx, mode polling.AssertionMode, err error) {
+	if err == nil {
+		return
+	}
+
+	if errors.Is(err, sql.ErrNoRows) {
+		if !q.expectsNotFound {
+			polling.NoError(stepCtx, mode, err, "Expected row to exist, but got sql.ErrNoRows. Use ExpectNotFound() if 'not found' is expected")
+		}
+		return
+	}
+
+	polling.NoError(stepCtx, mode, err, "DB query failed: %v", err)
+}
+
+// SendAll executes the query expecting multiple row results.
+// In async mode (AsyncStep), automatically retries with backoff until expectations pass.
+// Returns a slice of scanned structs.
+func (q *Query[T]) SendAll() []T {
+	q.sCtx.WithNewStep(q.stepNameAll(), func(stepCtx provider.StepCtx) {
 		attachQuery(stepCtx, q.sql, q.args)
 
-		err := q.client.DB.SelectContext(q.ctx, &results, q.sql, q.args...)
+		results, err, summary := q.executeAll(stepCtx)
+		q.scannedResults = results
+		q.lastError = err
 
-		if err != nil {
-			attachResult(stepCtx, q.client, nil, err)
-			stepCtx.Require().NoError(err, "DB query failed")
-		} else {
-			attachResult(stepCtx, q.client, results, nil)
-		}
+		q.attachResultsAll(stepCtx, summary)
+		q.assertResultsAll(stepCtx, err)
 	})
 
-	return results
+	return q.scannedResults
+}
+
+func (q *Query[T]) stepNameAll() string {
+	tableName := extractTableName(q.sql)
+	return fmt.Sprintf("SELECT %s (all)", tableName)
+}
+
+func (q *Query[T]) attachResultsAll(stepCtx provider.StepCtx, summary polling.PollingSummary) {
+	mode := polling.GetStepMode(stepCtx)
+	if mode == polling.AsyncMode {
+		polling.AttachPollingSummary(stepCtx, summary)
+	}
+
+	if q.lastError != nil {
+		attachResult(stepCtx, q.client, nil, q.lastError)
+	} else {
+		attachResult(stepCtx, q.client, q.scannedResults, nil)
+	}
+}
+
+func (q *Query[T]) assertResultsAll(stepCtx provider.StepCtx, err error) {
+	mode := polling.GetStepMode(stepCtx)
+	assertionMode := polling.GetAssertionModeFromStepMode(mode)
+
+	if len(q.expectationsAll) > 0 {
+		expect.ReportAll(stepCtx, assertionMode, q.expectationsAll, err, q.scannedResults)
+		return
+	}
+
+	if err != nil {
+		polling.NoError(stepCtx, assertionMode, err, "DB query failed: %v", err)
+	}
 }
 
 func extractTableName(query string) string {

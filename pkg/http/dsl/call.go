@@ -13,6 +13,22 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 )
 
+// Call represents an HTTP request builder with fluent interface.
+// It supports all HTTP methods, request/response body typing, headers,
+// path/query parameters, expectations, and automatic retry in async mode.
+//
+// Type parameters:
+//   - TReq: Request body type (use any for requests without body)
+//   - TResp: Response body type for automatic JSON deserialization
+//
+// Example:
+//
+//	dsl.NewCall[CreateUserReq, CreateUserResp](sCtx, httpClient).
+//	    POST("/api/users").
+//	    RequestBody(CreateUserReq{Name: "John"}).
+//	    ExpectResponseStatus(201).
+//	    ExpectFieldNotEmpty("id").
+//	    Send()
 type Call[TReq any, TResp any] struct {
 	sCtx   provider.StepCtx
 	client *client.Client
@@ -27,6 +43,13 @@ type Call[TReq any, TResp any] struct {
 	contractSchema   string
 }
 
+// NewCall creates a new HTTP request builder.
+//
+// Parameters:
+//   - sCtx: Allure step context for test reporting
+//   - httpClient: HTTP client configured with base URL and settings
+//
+// Returns a Call builder that can be configured with HTTP method, path, and expectations.
 func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Client) *Call[TReq, TResp] {
 	return &Call[TReq, TResp]{
 		sCtx:   sCtx,
@@ -40,51 +63,62 @@ func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Clie
 	}
 }
 
+// GET sets the HTTP method to GET and specifies the request path.
 func (c *Call[TReq, TResp]) GET(path string) *Call[TReq, TResp] {
 	c.req.Method, c.req.Path = http.MethodGet, path
 	return c
 }
 
+// POST sets the HTTP method to POST and specifies the request path.
 func (c *Call[TReq, TResp]) POST(path string) *Call[TReq, TResp] {
 	c.req.Method, c.req.Path = http.MethodPost, path
 	return c
 }
 
+// PUT sets the HTTP method to PUT and specifies the request path.
 func (c *Call[TReq, TResp]) PUT(path string) *Call[TReq, TResp] {
 	c.req.Method, c.req.Path = http.MethodPut, path
 	return c
 }
 
+// PATCH sets the HTTP method to PATCH and specifies the request path.
 func (c *Call[TReq, TResp]) PATCH(path string) *Call[TReq, TResp] {
 	c.req.Method, c.req.Path = http.MethodPatch, path
 	return c
 }
 
+// DELETE sets the HTTP method to DELETE and specifies the request path.
 func (c *Call[TReq, TResp]) DELETE(path string) *Call[TReq, TResp] {
 	c.req.Method, c.req.Path = http.MethodDelete, path
 	return c
 }
 
+// Header adds an HTTP header to the request.
 func (c *Call[TReq, TResp]) Header(key, value string) *Call[TReq, TResp] {
 	c.req.Headers[key] = value
 	return c
 }
 
+// PathParam adds a path parameter that will replace {key} or :key in the URL path.
 func (c *Call[TReq, TResp]) PathParam(key, value string) *Call[TReq, TResp] {
 	c.req.PathParams[key] = value
 	return c
 }
 
+// QueryParam adds a query parameter to the request URL.
 func (c *Call[TReq, TResp]) QueryParam(key, value string) *Call[TReq, TResp] {
 	c.req.QueryParams[key] = value
 	return c
 }
 
+// RequestBody sets the typed request body that will be serialized to JSON.
 func (c *Call[TReq, TResp]) RequestBody(body TReq) *Call[TReq, TResp] {
 	c.req.Body = &body
 	return c
 }
 
+// RequestBodyMap sets the request body as a map for untyped requests.
+// Useful for negative tests with missing fields, extra fields, or wrong types.
 func (c *Call[TReq, TResp]) RequestBodyMap(body map[string]interface{}) *Call[TReq, TResp] {
 	c.req.BodyMap = body
 	return c
@@ -99,74 +133,71 @@ func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Respo
 	c.expectations = append(c.expectations, exp)
 }
 
+// Send executes the HTTP request and validates all expectations.
+// In async mode (AsyncStep), automatically retries with backoff until expectations pass.
+// Returns the response containing status code, headers, and deserialized body.
 func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validate()
 	c.validateContractConfig()
 
-	stepName := fmt.Sprintf("%s %s", c.req.Method, c.req.Path)
-
-	c.sCtx.WithNewStep(stepName, func(stepCtx provider.StepCtx) {
+	c.sCtx.WithNewStep(c.stepName(), func(stepCtx provider.StepCtx) {
 		attachRequest(stepCtx, c.client, c.req)
 
-		mode := polling.GetStepMode(stepCtx)
-		useRetry := mode == polling.AsyncMode && len(c.expectations) > 0
-
-		var (
-			resp    *client.Response[TResp]
-			err     error
-			summary polling.PollingSummary
-		)
-
-		if useRetry {
-			resp, err, summary = c.executeWithRetry(stepCtx, c.expectations)
-		} else {
-			resp, err, summary = c.executeSingle()
-		}
-
-		if resp == nil {
-			resp = &client.Response[TResp]{NetworkError: "nil response"}
-			if err == nil {
-				err = fmt.Errorf("unexpected nil response")
-			}
-		}
-
+		resp, err, summary := c.execute(stepCtx, c.expectations)
 		c.resp = resp
 		c.sent = true
 
-		if mode == polling.AsyncMode {
-			polling.AttachPollingSummary(stepCtx, summary)
-		}
-
-		attachResponse(stepCtx, c.client, c.resp)
-
-		respAny := &client.Response[any]{
-			StatusCode:   resp.StatusCode,
-			Headers:      resp.Headers,
-			RawBody:      resp.RawBody,
-			Error:        resp.Error,
-			Duration:     resp.Duration,
-			NetworkError: resp.NetworkError,
-		}
-
-		assertionMode := polling.GetAssertionModeFromStepMode(mode)
-
-		if len(c.expectations) == 0 {
-			if err != nil {
-				polling.NoError(stepCtx, assertionMode, err, "HTTP request failed: %v", err)
-				return
-			}
-			if c.resp.NetworkError != "" {
-				polling.Equal(stepCtx, assertionMode, "", c.resp.NetworkError, "HTTP network error")
-				return
-			}
-		} else {
-			expect.ReportAll(stepCtx, assertionMode, c.expectations, err, respAny)
-		}
-
-		c.performContractValidation(stepCtx, resp)
+		c.attachResults(stepCtx, summary)
+		c.assertResults(stepCtx, err)
+		c.performContractValidation(stepCtx, c.resp)
 	})
 
 	return c.resp
+}
+
+func (c *Call[TReq, TResp]) stepName() string {
+	return fmt.Sprintf("%s %s", c.req.Method, c.req.Path)
+}
+
+func (c *Call[TReq, TResp]) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
+	mode := polling.GetStepMode(stepCtx)
+	if mode == polling.AsyncMode {
+		polling.AttachPollingSummary(stepCtx, summary)
+	}
+	attachResponse(stepCtx, c.client, c.resp)
+}
+
+func (c *Call[TReq, TResp]) assertResults(stepCtx provider.StepCtx, err error) {
+	mode := polling.GetStepMode(stepCtx)
+	assertionMode := polling.GetAssertionModeFromStepMode(mode)
+
+	if len(c.expectations) == 0 {
+		c.assertNoExpectations(stepCtx, assertionMode, err)
+		return
+	}
+
+	expect.ReportAll(stepCtx, assertionMode, c.expectations, err, c.convertToAny())
+}
+
+func (c *Call[TReq, TResp]) assertNoExpectations(stepCtx provider.StepCtx, mode polling.AssertionMode, err error) {
+	if err != nil {
+		polling.NoError(stepCtx, mode, err, "HTTP request failed: %v", err)
+		return
+	}
+	if c.resp.NetworkError != "" {
+		polling.Equal(stepCtx, mode, "", c.resp.NetworkError, "HTTP network error")
+	}
+}
+
+func (c *Call[TReq, TResp]) convertToAny() *client.Response[any] {
+	return &client.Response[any]{
+		StatusCode:   c.resp.StatusCode,
+		Headers:      c.resp.Headers,
+		RawBody:      c.resp.RawBody,
+		Error:        c.resp.Error,
+		Duration:     c.resp.Duration,
+		NetworkError: c.resp.NetworkError,
+	}
 }
 
 func (c *Call[TReq, TResp]) validate() {

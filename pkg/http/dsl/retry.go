@@ -2,83 +2,51 @@ package dsl
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/constants"
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/internal/retry"
 	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 )
 
-func (c *Call[TReq, TResp]) executeSingle() (*client.Response[TResp], error, polling.PollingSummary) {
-	executor := func(ctx context.Context) (*client.Response[TResp], error) {
-		resp, err := client.DoTyped[TReq, TResp](ctx, c.client, c.req)
-		if err != nil && resp == nil {
-			resp = &client.Response[TResp]{NetworkError: err.Error()}
-		}
-
-		if resp == nil {
-			resp = &client.Response[TResp]{NetworkError: "nil response"}
-			if err == nil {
-				err = fmt.Errorf("unexpected nil response")
-			}
-		}
-
-		return resp, err
-	}
-
-	resp, err, summary := retry.ExecuteSingle(c.ctx, executor)
-
-	if err == nil && resp.NetworkError != "" {
-		summary.Success = false
-		summary.LastError = resp.NetworkError
-	}
-
-	return resp, err, summary
-}
-
-func (c *Call[TReq, TResp]) executeWithRetry(
+func (c *Call[TReq, TResp]) execute(
 	stepCtx provider.StepCtx,
 	expectations []*expect.Expectation[*client.Response[any]],
 ) (*client.Response[TResp], error, polling.PollingSummary) {
-	asyncCfg := c.client.AsyncConfig
+	return retry.ExecuteDSL(retry.DSLConfig[*client.Response[TResp], *client.Response[any]]{
+		Ctx:          c.ctx,
+		StepCtx:      stepCtx,
+		AsyncConfig:  c.client.AsyncConfig,
+		Expectations: expectations,
 
-	if !asyncCfg.Enabled {
-		return c.executeSingle()
-	}
+		Executor: func(ctx context.Context) (*client.Response[TResp], error) {
+			return client.DoTyped[TReq, TResp](ctx, c.client, c.req)
+		},
 
-	executor := func(ctx context.Context) (*client.Response[TResp], error) {
-		resp, err := client.DoTyped[TReq, TResp](ctx, c.client, c.req)
-		if err != nil && resp == nil {
-			resp = &client.Response[TResp]{NetworkError: err.Error()}
-		}
-
-		if resp == nil {
-			resp = &client.Response[TResp]{NetworkError: "nil response"}
-			if err == nil {
-				err = fmt.Errorf("unexpected nil response")
+		Convert: func(resp *client.Response[TResp]) *client.Response[any] {
+			return &client.Response[any]{
+				StatusCode:   resp.StatusCode,
+				Headers:      resp.Headers,
+				RawBody:      resp.RawBody,
+				Error:        resp.Error,
+				Duration:     resp.Duration,
+				NetworkError: resp.NetworkError,
 			}
-		}
+		},
 
-		return resp, err
-	}
+		PostProcess: func(resp *client.Response[TResp], err error, summary *polling.PollingSummary) {
+			retry.PostProcessNetworkError(resp, err, summary)
+		},
 
-	checker := retry.BuildExpectationsCheckerWithConvert(expectations, func(resp *client.Response[TResp]) *client.Response[any] {
-		return &client.Response[any]{
-			StatusCode:   resp.StatusCode,
-			Headers:      resp.Headers,
-			RawBody:      resp.RawBody,
-			Error:        resp.Error,
-			Duration:     resp.Duration,
-			NetworkError: resp.NetworkError,
-		}
+		NilResultFactory: func(err error) *client.Response[TResp] {
+			msg := constants.ErrNilResponse
+			if err != nil {
+				msg = err.Error()
+			}
+			return &client.Response[TResp]{NetworkError: msg}
+		},
 	})
-
-	resp, err, summary := retry.ExecuteWithRetry(c.ctx, stepCtx, asyncCfg, executor, checker)
-
-	retry.PostProcessNetworkError(resp, err, &summary)
-
-	return resp, err, summary
 }

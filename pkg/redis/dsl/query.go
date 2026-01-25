@@ -12,6 +12,17 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
 
+// Query represents a Redis key query builder with fluent interface.
+// It supports key existence checks, value expectations, JSON field access,
+// TTL validation, and automatic retry in async mode.
+//
+// Example:
+//
+//	dsl.NewQuery(sCtx, redisClient).
+//	    Key("user:123").
+//	    ExpectExists().
+//	    ExpectFieldEquals("status", "active").
+//	    Send()
 type Query struct {
 	sCtx   provider.StepCtx
 	client *client.Client
@@ -26,6 +37,13 @@ type Query struct {
 	expectations []*expect.Expectation[*client.Result]
 }
 
+// NewQuery creates a new Redis query builder.
+//
+// Parameters:
+//   - sCtx: Allure step context for test reporting
+//   - redisClient: Redis client configured with connection settings
+//
+// Returns a Query builder that can be configured with key and expectations.
 func NewQuery(sCtx provider.StepCtx, redisClient *client.Client) *Query {
 	return &Query{
 		sCtx:   sCtx,
@@ -34,11 +52,13 @@ func NewQuery(sCtx provider.StepCtx, redisClient *client.Client) *Query {
 	}
 }
 
+// StepName overrides the default step name in Allure report.
 func (q *Query) StepName(name string) *Query {
 	q.stepName = strings.TrimSpace(name)
 	return q
 }
 
+// Context sets a custom context for the query operation.
 func (q *Query) Context(ctx context.Context) *Query {
 	if ctx != nil {
 		q.ctx = ctx
@@ -46,6 +66,7 @@ func (q *Query) Context(ctx context.Context) *Query {
 	return q
 }
 
+// Key sets the Redis key to query.
 func (q *Query) Key(key string) *Query {
 	q.key = key
 	return q
@@ -60,62 +81,53 @@ func (q *Query) addExpectation(exp *expect.Expectation[*client.Result]) {
 	q.expectations = append(q.expectations, exp)
 }
 
+// Send executes the Redis query and validates all expectations.
+// In async mode (AsyncStep), automatically retries with backoff until expectations pass.
+// Returns the Result containing key existence, value, and TTL information.
 func (q *Query) Send() *client.Result {
 	q.validate()
 
-	name := q.stepName
-	if name == "" {
-		name = fmt.Sprintf("Redis GET %s", q.key)
-	}
-
-	q.sCtx.WithNewStep(name, func(stepCtx provider.StepCtx) {
+	q.sCtx.WithNewStep(q.getStepName(), func(stepCtx provider.StepCtx) {
 		attachRequest(stepCtx, q)
 
-		mode := polling.GetStepMode(stepCtx)
-		useRetry := mode == polling.AsyncMode && len(q.expectations) > 0
-
-		var (
-			result  *client.Result
-			err     error
-			summary polling.PollingSummary
-		)
-
-		if useRetry {
-			result, err, summary = q.executeWithRetry(stepCtx, q.expectations)
-		} else {
-			result, err, summary = q.executeSingle()
-		}
-
-		if result == nil {
-			result = &client.Result{Key: q.key, Error: fmt.Errorf("nil result")}
-			if err == nil {
-				err = fmt.Errorf("unexpected nil result")
-			}
-		}
-
+		result, err, summary := q.execute(stepCtx, q.expectations)
 		q.result = result
 		q.sent = true
 
-		if mode == polling.AsyncMode {
-			polling.AttachPollingSummary(stepCtx, summary)
-		}
-
-		attachResult(stepCtx, result)
-
-		assertionMode := polling.GetAssertionModeFromStepMode(mode)
-
-		if len(q.expectations) == 0 {
-			if err != nil {
-				polling.NoError(stepCtx, assertionMode, err, "Redis query failed: %v", err)
-				return
-			}
-			return
-		}
-
-		expect.ReportAll(stepCtx, assertionMode, q.expectations, err, result)
+		q.attachResults(stepCtx, summary)
+		q.assertResults(stepCtx, err)
 	})
 
 	return q.result
+}
+
+func (q *Query) getStepName() string {
+	if q.stepName != "" {
+		return q.stepName
+	}
+	return fmt.Sprintf("Redis GET %s", q.key)
+}
+
+func (q *Query) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
+	mode := polling.GetStepMode(stepCtx)
+	if mode == polling.AsyncMode {
+		polling.AttachPollingSummary(stepCtx, summary)
+	}
+	attachResult(stepCtx, q.result)
+}
+
+func (q *Query) assertResults(stepCtx provider.StepCtx, err error) {
+	mode := polling.GetStepMode(stepCtx)
+	assertionMode := polling.GetAssertionModeFromStepMode(mode)
+
+	if len(q.expectations) == 0 {
+		if err != nil {
+			polling.NoError(stepCtx, assertionMode, err, "Redis query failed: %v", err)
+		}
+		return
+	}
+
+	expect.ReportAll(stepCtx, assertionMode, q.expectations, err, q.result)
 }
 
 func (q *Query) validate() {

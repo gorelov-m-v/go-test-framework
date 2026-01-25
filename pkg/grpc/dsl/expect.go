@@ -13,36 +13,49 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/pkg/grpc/client"
 )
 
+// ExpectNoError checks that the gRPC call succeeds without error.
 func (c *Call[TReq, TResp]) ExpectNoError() *Call[TReq, TResp] {
 	c.addExpectation(makeNoErrorExpectation())
 	return c
 }
 
+// ExpectError checks that the gRPC call returns an error.
 func (c *Call[TReq, TResp]) ExpectError() *Call[TReq, TResp] {
 	c.addExpectation(makeErrorExpectation())
 	return c
 }
 
+// ExpectStatusCode checks that the gRPC response status code equals the expected value.
 func (c *Call[TReq, TResp]) ExpectStatusCode(code codes.Code) *Call[TReq, TResp] {
 	c.addExpectation(makeStatusCodeExpectation(code))
 	return c
 }
 
-func (c *Call[TReq, TResp]) ExpectFieldValue(path string, expected any) *Call[TReq, TResp] {
+// ExpectFieldEquals checks that a JSON field at the given GJSON path equals the expected value.
+// Path uses GJSON syntax on the JSON-serialized protobuf response.
+func (c *Call[TReq, TResp]) ExpectFieldEquals(path string, expected any) *Call[TReq, TResp] {
 	c.addExpectation(makeFieldValueExpectation(path, expected))
 	return c
 }
 
+// Deprecated: Use ExpectFieldEquals instead. Will be removed in v2.0.
+func (c *Call[TReq, TResp]) ExpectFieldValue(path string, expected any) *Call[TReq, TResp] {
+	return c.ExpectFieldEquals(path, expected)
+}
+
+// ExpectFieldNotEmpty checks that a JSON field at the given GJSON path is not empty.
 func (c *Call[TReq, TResp]) ExpectFieldNotEmpty(path string) *Call[TReq, TResp] {
 	c.addExpectation(makeFieldNotEmptyExpectation(path))
 	return c
 }
 
+// ExpectFieldExists checks that a JSON field at the given GJSON path exists in the response.
 func (c *Call[TReq, TResp]) ExpectFieldExists(path string) *Call[TReq, TResp] {
 	c.addExpectation(makeFieldExistsExpectation(path))
 	return c
 }
 
+// ExpectMetadata checks that the response metadata contains the expected key-value pair.
 func (c *Call[TReq, TResp]) ExpectMetadata(key, value string) *Call[TReq, TResp] {
 	c.addExpectation(makeMetadataExpectation(key, value))
 	return c

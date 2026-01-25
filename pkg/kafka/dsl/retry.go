@@ -9,31 +9,29 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/internal/retry"
 )
 
-func (e *Expectation) executeSingle() ([]byte, bool, polling.PollingSummary) {
-	executor := func(ctx context.Context) ([]byte, error) {
-		return e.doSearch()
-	}
+func (q *Query[T]) execute(stepCtx provider.StepCtx) ([]byte, bool, error, polling.PollingSummary) {
+	result, err, summary := retry.ExecuteDSL(retry.DSLConfig[[]byte, []byte]{
+		Ctx:          q.ctx,
+		StepCtx:      stepCtx,
+		AsyncConfig:  q.client.GetAsyncConfig(),
+		Expectations: q.expectations,
 
-	result, err, summary := retry.ExecuteSingle(context.Background(), executor)
+		Executor: func(ctx context.Context) ([]byte, error) {
+			return q.doSearch()
+		},
+
+		Checker: q.buildChecker(),
+	})
 
 	if err != nil {
-		summary.Success = false
-		summary.LastError = err.Error()
-		return nil, false, summary
+		return nil, false, err, summary
 	}
 
-	summary.Success = true
-	return result, true, summary
+	return result, true, nil, summary
 }
 
-func (e *Expectation) executeWithRetry(stepCtx provider.StepCtx) ([]byte, bool, polling.PollingSummary) {
-	asyncCfg := e.kafkaClient.GetAsyncConfig()
-
-	executor := func(ctx context.Context) ([]byte, error) {
-		return e.doSearch()
-	}
-
-	checker := func(result []byte, err error) []polling.CheckResult {
+func (q *Query[T]) buildChecker() retry.Checker[[]byte] {
+	return func(result []byte, err error) []polling.CheckResult {
 		if err != nil {
 			return []polling.CheckResult{{
 				Ok:        false,
@@ -42,23 +40,15 @@ func (e *Expectation) executeWithRetry(stepCtx provider.StepCtx) ([]byte, bool, 
 			}}
 		}
 
-		return []polling.CheckResult{{
-			Ok:        true,
-			Retryable: false,
-		}}
+		if len(q.expectations) == 0 {
+			return []polling.CheckResult{{Ok: true}}
+		}
+
+		results := make([]polling.CheckResult, 0, len(q.expectations))
+		for _, exp := range q.expectations {
+			checkRes := exp.Check(err, result)
+			results = append(results, checkRes)
+		}
+		return results
 	}
-
-	result, err, summary := retry.ExecuteWithRetry(
-		context.Background(),
-		stepCtx,
-		asyncCfg,
-		executor,
-		checker,
-	)
-
-	if err != nil {
-		return nil, false, summary
-	}
-
-	return result, true, summary
 }

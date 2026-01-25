@@ -10,28 +10,35 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/internal/retry"
 )
 
-func (q *Query[T]) executeWithRetry(stepCtx provider.StepCtx, expectations []*expect.Expectation[T]) (T, error, polling.PollingSummary) {
-	cfg := q.client.AsyncConfig
+func (q *Query[T]) execute(
+	stepCtx provider.StepCtx,
+	expectations []*expect.Expectation[T],
+) (T, error, polling.PollingSummary) {
+	return retry.ExecuteDSLSimple(retry.DSLConfig[T, T]{
+		Ctx:          q.ctx,
+		StepCtx:      stepCtx,
+		AsyncConfig:  q.client.AsyncConfig,
+		Expectations: expectations,
 
-	if !cfg.Enabled {
-		return q.executeSingle()
-	}
-
-	executor := func(ctx context.Context) (T, error) {
-		var result T
-		err := q.client.DB.GetContext(ctx, &result, q.sql, q.args...)
-		return result, err
-	}
-
-	return retry.ExecuteWithRetry(q.ctx, stepCtx, cfg, executor, retry.BuildExpectationsChecker(expectations))
+		Executor: func(ctx context.Context) (T, error) {
+			var result T
+			err := q.client.DB.GetContext(ctx, &result, q.sql, q.args...)
+			return result, err
+		},
+	})
 }
 
-func (q *Query[T]) executeSingle() (T, error, polling.PollingSummary) {
-	executor := func(ctx context.Context) (T, error) {
-		var result T
-		err := q.client.DB.GetContext(ctx, &result, q.sql, q.args...)
-		return result, err
-	}
+func (q *Query[T]) executeAll(stepCtx provider.StepCtx) ([]T, error, polling.PollingSummary) {
+	return retry.ExecuteDSLSimple(retry.DSLConfig[[]T, []T]{
+		Ctx:          q.ctx,
+		StepCtx:      stepCtx,
+		AsyncConfig:  q.client.AsyncConfig,
+		Expectations: q.expectationsAll,
 
-	return retry.ExecuteSingle(q.ctx, executor)
+		Executor: func(ctx context.Context) ([]T, error) {
+			var results []T
+			err := q.client.DB.SelectContext(ctx, &results, q.sql, q.args...)
+			return results, err
+		},
+	})
 }

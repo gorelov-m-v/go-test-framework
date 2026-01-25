@@ -7,6 +7,7 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/constants"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/config"
 )
@@ -158,13 +159,10 @@ func ExecuteSingle[T any](
 }
 
 func SanitizeForLog(reason string) string {
-	const maxLength = 80
-	const keepChars = 20
-
 	runes := []rune(reason)
-	if len(runes) <= maxLength {
+	if len(runes) <= constants.LogReasonMaxLength {
 		return reason
 	}
 
-	return string(runes[:keepChars]) + "... [truncated for security]"
+	return string(runes[:constants.LogReasonPreviewLength]) + constants.LogTruncatedSuffix
 }

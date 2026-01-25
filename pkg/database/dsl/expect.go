@@ -73,6 +73,7 @@ func getFieldValue[T any](result T, columnName string) (any, error) {
 	return getFieldValueByColumnName(result, columnName)
 }
 
+// ExpectFound checks that the query returns at least one row.
 func (q *Query[T]) ExpectFound() *Query[T] {
 	if q.breakIfNotFound("ExpectFound()") {
 		return q
@@ -81,6 +82,8 @@ func (q *Query[T]) ExpectFound() *Query[T] {
 	return q
 }
 
+// ExpectNotFound checks that the query returns no rows (sql.ErrNoRows).
+// Cannot be combined with other expectations.
 func (q *Query[T]) ExpectNotFound() *Query[T] {
 	if len(q.expectations) > 0 {
 		q.sCtx.Break("DB DSL Error: ExpectNotFound() cannot be used after other expectations (ExpectFound, ExpectColumnEquals, etc.)")
@@ -93,6 +96,8 @@ func (q *Query[T]) ExpectNotFound() *Query[T] {
 	return q
 }
 
+// ExpectColumnEquals checks that a column value equals the expected value.
+// Column name must match the `db` tag on the struct field. Supports numeric type coercion.
 func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnEquals()") {
 		return q
@@ -101,6 +106,7 @@ func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Que
 	return q
 }
 
+// ExpectColumnNotEquals checks that a column value does not equal the specified value.
 func (q *Query[T]) ExpectColumnNotEquals(columnName string, notExpectedValue any) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnNotEquals()") {
 		return q
@@ -109,6 +115,7 @@ func (q *Query[T]) ExpectColumnNotEquals(columnName string, notExpectedValue any
 	return q
 }
 
+// ExpectColumnNotEmpty checks that a column value is not empty.
 func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnNotEmpty()") {
 		return q
@@ -117,6 +124,7 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 	return q
 }
 
+// ExpectColumnIsNull checks that a column value is NULL.
 func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnIsNull()") {
 		return q
@@ -125,6 +133,7 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 	return q
 }
 
+// ExpectColumnEmpty checks that a column value is empty (zero value).
 func (q *Query[T]) ExpectColumnEmpty(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnEmpty()") {
 		return q
@@ -133,6 +142,7 @@ func (q *Query[T]) ExpectColumnEmpty(columnName string) *Query[T] {
 	return q
 }
 
+// ExpectColumnIsNotNull checks that a column value is not NULL.
 func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnIsNotNull()") {
 		return q
@@ -141,6 +151,7 @@ func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 	return q
 }
 
+// ExpectColumnTrue checks that a boolean column value is true.
 func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnTrue()") {
 		return q
@@ -149,6 +160,7 @@ func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
 	return q
 }
 
+// ExpectColumnFalse checks that a boolean column value is false.
 func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnFalse()") {
 		return q
@@ -157,27 +169,57 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 	return q
 }
 
-func (q *Query[T]) ExpectColumnJSONEquals(columnName string, expected map[string]interface{}) *Query[T] {
-	if q.breakIfNotFound("ExpectColumnJSONEquals()") {
+// ExpectColumnJSON checks that a JSON column contains all expected key-value pairs.
+func (q *Query[T]) ExpectColumnJSON(columnName string, expected map[string]interface{}) *Query[T] {
+	if q.breakIfNotFound("ExpectColumnJSON()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeColumnJSONEqualsExpectation[T](columnName, expected))
 	return q
 }
 
-func (q *Query[T]) ExpectRow(expected T) *Query[T] {
-	if q.breakIfNotFound("ExpectRow()") {
+// Deprecated: Use ExpectColumnJSON instead. Will be removed in v2.0.
+func (q *Query[T]) ExpectColumnJSONEquals(columnName string, expected map[string]interface{}) *Query[T] {
+	return q.ExpectColumnJSON(columnName, expected)
+}
+
+// Deprecated: Use ExpectColumnJSON instead. Will be removed in v2.0.
+func (q *Query[T]) ExpectColumnJsonEquals(columnName string, expected map[string]interface{}) *Query[T] {
+	return q.ExpectColumnJSON(columnName, expected)
+}
+
+// ExpectRowEquals checks that the row exactly matches the expected struct (all fields must match).
+func (q *Query[T]) ExpectRowEquals(expected T) *Query[T] {
+	if q.breakIfNotFound("ExpectRowEquals()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeRowExpectation[T](expected))
 	return q
 }
 
+// Deprecated: Use ExpectRowEquals instead. Will be removed in v2.0.
+func (q *Query[T]) ExpectRow(expected T) *Query[T] {
+	return q.ExpectRowEquals(expected)
+}
+
+// ExpectRowPartial checks that the row contains fields from the expected struct (non-zero fields only).
 func (q *Query[T]) ExpectRowPartial(expected T) *Query[T] {
 	if q.breakIfNotFound("ExpectRowPartial()") {
 		return q
 	}
 	q.expectations = append(q.expectations, makeRowPartialExpectation[T](expected))
+	return q
+}
+
+// ExpectCountAll checks that the query returns exactly the specified number of rows. Use with SendAll().
+func (q *Query[T]) ExpectCountAll(count int) *Query[T] {
+	q.expectationsAll = append(q.expectationsAll, makeCountAllExpectation[T](count))
+	return q
+}
+
+// ExpectNotEmptyAll checks that the query returns at least one row. Use with SendAll().
+func (q *Query[T]) ExpectNotEmptyAll() *Query[T] {
+	q.expectationsAll = append(q.expectationsAll, makeNotEmptyAllExpectation[T]())
 	return q
 }
 
@@ -574,4 +616,54 @@ func getDBColumnName(field reflect.StructField) string {
 		return tag
 	}
 	return field.Name
+}
+
+func makeCountAllExpectation[T any](expectedCount int) *expect.Expectation[[]T] {
+	name := fmt.Sprintf("Expect: %d rows", expectedCount)
+	return expect.New(
+		name,
+		func(err error, results []T) polling.CheckResult {
+			if err != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    err.Error(),
+				}
+			}
+			if len(results) != expectedCount {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("expected %d rows, got %d", expectedCount, len(results)),
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		expect.StandardReport[[]T](name),
+	)
+}
+
+func makeNotEmptyAllExpectation[T any]() *expect.Expectation[[]T] {
+	name := "Expect: rows not empty"
+	return expect.New(
+		name,
+		func(err error, results []T) polling.CheckResult {
+			if err != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    err.Error(),
+				}
+			}
+			if len(results) == 0 {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "expected non-empty result, got 0 rows",
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		expect.StandardReport[[]T](name),
+	)
 }

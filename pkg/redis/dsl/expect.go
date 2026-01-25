@@ -12,41 +12,66 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
 
+// ExpectExists checks that the Redis key exists.
 func (q *Query) ExpectExists() *Query {
 	q.addExpectation(makeExistsExpectation())
 	return q
 }
 
+// ExpectNotExists checks that the Redis key does not exist.
 func (q *Query) ExpectNotExists() *Query {
 	q.addExpectation(makeNotExistsExpectation())
 	return q
 }
 
-func (q *Query) ExpectValue(expected string) *Query {
+// ExpectValueEquals checks that the key's string value equals the expected value.
+func (q *Query) ExpectValueEquals(expected string) *Query {
 	q.addExpectation(makeValueExpectation(expected))
 	return q
 }
 
+// Deprecated: Use ExpectValueEquals instead. Will be removed in v2.0.
+func (q *Query) ExpectValue(expected string) *Query {
+	return q.ExpectValueEquals(expected)
+}
+
+// ExpectValueNotEmpty checks that the key's string value is not empty.
 func (q *Query) ExpectValueNotEmpty() *Query {
 	q.addExpectation(makeValueNotEmptyExpectation())
 	return q
 }
 
-func (q *Query) ExpectJSONField(path string, expected any) *Query {
+// ExpectFieldEquals checks that a JSON field at the given GJSON path equals the expected value.
+// The key's value must be valid JSON.
+func (q *Query) ExpectFieldEquals(path string, expected any) *Query {
 	q.addExpectation(makeJSONFieldExpectation(path, expected))
 	return q
 }
 
-func (q *Query) ExpectJSONFieldNotEmpty(path string) *Query {
+// Deprecated: Use ExpectFieldEquals instead. Will be removed in v2.0.
+func (q *Query) ExpectJSONField(path string, expected any) *Query {
+	return q.ExpectFieldEquals(path, expected)
+}
+
+// ExpectFieldNotEmpty checks that a JSON field at the given GJSON path is not empty.
+// The key's value must be valid JSON.
+func (q *Query) ExpectFieldNotEmpty(path string) *Query {
 	q.addExpectation(makeJSONFieldNotEmptyExpectation(path))
 	return q
 }
 
+// Deprecated: Use ExpectFieldNotEmpty instead. Will be removed in v2.0.
+func (q *Query) ExpectJSONFieldNotEmpty(path string) *Query {
+	return q.ExpectFieldNotEmpty(path)
+}
+
+// ExpectTTL checks that the key's TTL is within the specified range.
 func (q *Query) ExpectTTL(minTTL, maxTTL time.Duration) *Query {
 	q.addExpectation(makeTTLExpectation(minTTL, maxTTL))
 	return q
 }
 
+// ExpectNoTTL checks that the key is persistent (no TTL set).
 func (q *Query) ExpectNoTTL() *Query {
 	q.addExpectation(makeNoTTLExpectation())
 	return q

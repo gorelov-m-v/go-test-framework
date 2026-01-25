@@ -178,16 +178,6 @@ func (q *Query[T]) ExpectColumnJSON(columnName string, expected map[string]inter
 	return q
 }
 
-// Deprecated: Use ExpectColumnJSON instead. Will be removed in v2.0.
-func (q *Query[T]) ExpectColumnJSONEquals(columnName string, expected map[string]interface{}) *Query[T] {
-	return q.ExpectColumnJSON(columnName, expected)
-}
-
-// Deprecated: Use ExpectColumnJSON instead. Will be removed in v2.0.
-func (q *Query[T]) ExpectColumnJsonEquals(columnName string, expected map[string]interface{}) *Query[T] {
-	return q.ExpectColumnJSON(columnName, expected)
-}
-
 // ExpectRowEquals checks that the row exactly matches the expected struct (all fields must match).
 func (q *Query[T]) ExpectRowEquals(expected T) *Query[T] {
 	if q.breakIfNotFound("ExpectRowEquals()") {
@@ -195,11 +185,6 @@ func (q *Query[T]) ExpectRowEquals(expected T) *Query[T] {
 	}
 	q.expectations = append(q.expectations, makeRowExpectation[T](expected))
 	return q
-}
-
-// Deprecated: Use ExpectRowEquals instead. Will be removed in v2.0.
-func (q *Query[T]) ExpectRow(expected T) *Query[T] {
-	return q.ExpectRowEquals(expected)
 }
 
 // ExpectRowPartial checks that the row contains fields from the expected struct (non-zero fields only).

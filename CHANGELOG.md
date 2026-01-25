@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-01-25
+
+### Changed
+- **BREAKING:** Removed deprecated HTTP DSL methods:
+  - `ExpectResponseBodyNotEmpty()` → use `ExpectBodyNotEmpty()`
+  - `ExpectResponseBodyFieldNotEmpty()` → use `ExpectFieldNotEmpty()`
+  - `ExpectResponseBodyFieldValue()` → use `ExpectFieldEquals()`
+  - `ExpectResponseBodyFieldIsNull()` → use `ExpectFieldIsNull()`
+  - `ExpectResponseBodyFieldIsNotNull()` → use `ExpectFieldIsNotNull()`
+  - `ExpectResponseBodyFieldTrue()` → use `ExpectFieldTrue()`
+  - `ExpectResponseBodyFieldFalse()` → use `ExpectFieldFalse()`
+  - `ExpectResponseBody()` → use `ExpectBodyEquals()`
+  - `ExpectResponseBodyPartial()` → use `ExpectBodyPartial()`
+- **BREAKING:** Removed deprecated Kafka DSL methods:
+  - `Expect[T]()` → use `Consume[T]()`
+  - `ExpectField()` → use `ExpectFieldEquals()`
+  - `ExpectJSONField()` → use `ExpectFieldJSON()`
+  - `ExpectMessage()` → use `ExpectBodyEquals()`
+  - `ExpectMessagePartial()` → use `ExpectBodyPartial()`
+- **BREAKING:** Removed deprecated gRPC DSL methods:
+  - `ExpectFieldValue()` → use `ExpectFieldEquals()`
+- **BREAKING:** Removed deprecated Redis DSL methods:
+  - `ExpectValue()` → use `ExpectValueEquals()`
+  - `ExpectJSONField()` → use `ExpectFieldEquals()`
+  - `ExpectJSONFieldNotEmpty()` → use `ExpectFieldNotEmpty()`
+- **BREAKING:** Removed deprecated Database DSL methods:
+  - `ExpectColumnJSONEquals()` → use `ExpectColumnJSON()`
+  - `ExpectColumnJsonEquals()` → use `ExpectColumnJSON()`
+  - `ExpectRow()` → use `ExpectRowEquals()`
+- Unified `CompareObjectPartial`/`CompareObjectExact` implementation (DRY)
+- Created `internal/validation` helper for DSL validation
+
 ## [0.9.3] - 2026-01-22
 
 ### Added
@@ -91,7 +123,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic retry with exponential backoff
 - GJSON-based JSON path access
 
-[Unreleased]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/gorelov-m-v/go-test-framework/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.9.3...v1.0.0
 [0.9.3]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.9.0...v0.9.3
 [0.9.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.7.0...v0.9.0
 [0.7.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.6.0...v0.7.0

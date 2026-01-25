@@ -30,11 +30,6 @@ func (q *Query) ExpectValueEquals(expected string) *Query {
 	return q
 }
 
-// Deprecated: Use ExpectValueEquals instead. Will be removed in v2.0.
-func (q *Query) ExpectValue(expected string) *Query {
-	return q.ExpectValueEquals(expected)
-}
-
 // ExpectValueNotEmpty checks that the key's string value is not empty.
 func (q *Query) ExpectValueNotEmpty() *Query {
 	q.addExpectation(makeValueNotEmptyExpectation())
@@ -48,21 +43,11 @@ func (q *Query) ExpectFieldEquals(path string, expected any) *Query {
 	return q
 }
 
-// Deprecated: Use ExpectFieldEquals instead. Will be removed in v2.0.
-func (q *Query) ExpectJSONField(path string, expected any) *Query {
-	return q.ExpectFieldEquals(path, expected)
-}
-
 // ExpectFieldNotEmpty checks that a JSON field at the given GJSON path is not empty.
 // The key's value must be valid JSON.
 func (q *Query) ExpectFieldNotEmpty(path string) *Query {
 	q.addExpectation(makeJSONFieldNotEmptyExpectation(path))
 	return q
-}
-
-// Deprecated: Use ExpectFieldNotEmpty instead. Will be removed in v2.0.
-func (q *Query) ExpectJSONFieldNotEmpty(path string) *Query {
-	return q.ExpectFieldNotEmpty(path)
 }
 
 // ExpectTTL checks that the key's TTL is within the specified range.

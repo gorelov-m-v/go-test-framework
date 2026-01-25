@@ -78,21 +78,11 @@ func (c *Call[TReq, TResp]) ExpectBodyNotEmpty() *Call[TReq, TResp] {
 	return c
 }
 
-// Deprecated: Use ExpectBodyNotEmpty instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectResponseBodyNotEmpty() *Call[TReq, TResp] {
-	return c.ExpectBodyNotEmpty()
-}
-
 // ExpectFieldNotEmpty checks that a JSON field at the given GJSON path is not empty.
 // Path uses GJSON syntax: "user.id", "items.0.name", "data.#".
 func (c *Call[TReq, TResp]) ExpectFieldNotEmpty(path string) *Call[TReq, TResp] {
 	c.addExpectation(makeResponseBodyFieldNotEmptyExpectation(path))
 	return c
-}
-
-// Deprecated: Use ExpectFieldNotEmpty instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectResponseBodyFieldNotEmpty(path string) *Call[TReq, TResp] {
-	return c.ExpectFieldNotEmpty(path)
 }
 
 // ExpectFieldEquals checks that a JSON field at the given GJSON path equals the expected value.
@@ -103,20 +93,10 @@ func (c *Call[TReq, TResp]) ExpectFieldEquals(path string, expected any) *Call[T
 	return c
 }
 
-// Deprecated: Use ExpectFieldEquals instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectResponseBodyFieldValue(path string, expected any) *Call[TReq, TResp] {
-	return c.ExpectFieldEquals(path, expected)
-}
-
 // ExpectFieldIsNull checks that a JSON field at the given GJSON path is null.
 func (c *Call[TReq, TResp]) ExpectFieldIsNull(path string) *Call[TReq, TResp] {
 	c.addExpectation(makeResponseBodyFieldIsNullExpectation(path))
 	return c
-}
-
-// Deprecated: Use ExpectFieldIsNull instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectResponseBodyFieldIsNull(path string) *Call[TReq, TResp] {
-	return c.ExpectFieldIsNull(path)
 }
 
 // ExpectFieldIsNotNull checks that a JSON field at the given GJSON path is not null.
@@ -125,31 +105,16 @@ func (c *Call[TReq, TResp]) ExpectFieldIsNotNull(path string) *Call[TReq, TResp]
 	return c
 }
 
-// Deprecated: Use ExpectFieldIsNotNull instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectResponseBodyFieldIsNotNull(path string) *Call[TReq, TResp] {
-	return c.ExpectFieldIsNotNull(path)
-}
-
 // ExpectFieldTrue checks that a JSON boolean field at the given GJSON path is true.
 func (c *Call[TReq, TResp]) ExpectFieldTrue(path string) *Call[TReq, TResp] {
 	c.addExpectation(makeResponseBodyFieldTrueExpectation(path))
 	return c
 }
 
-// Deprecated: Use ExpectFieldTrue instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectResponseBodyFieldTrue(path string) *Call[TReq, TResp] {
-	return c.ExpectFieldTrue(path)
-}
-
 // ExpectFieldFalse checks that a JSON boolean field at the given GJSON path is false.
 func (c *Call[TReq, TResp]) ExpectFieldFalse(path string) *Call[TReq, TResp] {
 	c.addExpectation(makeResponseBodyFieldFalseExpectation(path))
 	return c
-}
-
-// Deprecated: Use ExpectFieldFalse instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectResponseBodyFieldFalse(path string) *Call[TReq, TResp] {
-	return c.ExpectFieldFalse(path)
 }
 
 func makeResponseStatusExpectation(code int) *expect.Expectation[*client.Response[any]] {
@@ -578,20 +543,10 @@ func (c *Call[TReq, TResp]) ExpectBodyEquals(expected any) *Call[TReq, TResp] {
 	return c
 }
 
-// Deprecated: Use ExpectBodyEquals instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectResponseBody(expected any) *Call[TReq, TResp] {
-	return c.ExpectBodyEquals(expected)
-}
-
 // ExpectBodyPartial checks that the response body contains fields from the expected struct or map (non-zero fields only).
 func (c *Call[TReq, TResp]) ExpectBodyPartial(expected any) *Call[TReq, TResp] {
 	c.addExpectation(makeResponseBodyPartialExpectation(expected))
 	return c
-}
-
-// Deprecated: Use ExpectBodyPartial instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectResponseBodyPartial(expected any) *Call[TReq, TResp] {
-	return c.ExpectBodyPartial(expected)
 }
 
 func makeResponseBodyExpectation(expected any) *expect.Expectation[*client.Response[any]] {

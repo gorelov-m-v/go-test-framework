@@ -458,32 +458,32 @@ func TestExpectMethodsAddExpectations(t *testing.T) {
 			setup: func(c *Call[any, any]) { c.ExpectResponseStatus(200) },
 		},
 		{
-			name:  "ExpectResponseBodyNotEmpty",
-			setup: func(c *Call[any, any]) { c.ExpectResponseBodyNotEmpty() },
+			name:  "ExpectBodyNotEmpty",
+			setup: func(c *Call[any, any]) { c.ExpectBodyNotEmpty() },
 		},
 		{
-			name:  "ExpectResponseBodyFieldNotEmpty",
-			setup: func(c *Call[any, any]) { c.ExpectResponseBodyFieldNotEmpty("id") },
+			name:  "ExpectFieldNotEmpty",
+			setup: func(c *Call[any, any]) { c.ExpectFieldNotEmpty("id") },
 		},
 		{
-			name:  "ExpectResponseBodyFieldValue",
-			setup: func(c *Call[any, any]) { c.ExpectResponseBodyFieldValue("status", "active") },
+			name:  "ExpectFieldEquals",
+			setup: func(c *Call[any, any]) { c.ExpectFieldEquals("status", "active") },
 		},
 		{
-			name:  "ExpectResponseBodyFieldIsNull",
-			setup: func(c *Call[any, any]) { c.ExpectResponseBodyFieldIsNull("deleted_at") },
+			name:  "ExpectFieldIsNull",
+			setup: func(c *Call[any, any]) { c.ExpectFieldIsNull("deleted_at") },
 		},
 		{
-			name:  "ExpectResponseBodyFieldIsNotNull",
-			setup: func(c *Call[any, any]) { c.ExpectResponseBodyFieldIsNotNull("id") },
+			name:  "ExpectFieldIsNotNull",
+			setup: func(c *Call[any, any]) { c.ExpectFieldIsNotNull("id") },
 		},
 		{
-			name:  "ExpectResponseBodyFieldTrue",
-			setup: func(c *Call[any, any]) { c.ExpectResponseBodyFieldTrue("is_active") },
+			name:  "ExpectFieldTrue",
+			setup: func(c *Call[any, any]) { c.ExpectFieldTrue("is_active") },
 		},
 		{
-			name:  "ExpectResponseBodyFieldFalse",
-			setup: func(c *Call[any, any]) { c.ExpectResponseBodyFieldFalse("is_deleted") },
+			name:  "ExpectFieldFalse",
+			setup: func(c *Call[any, any]) { c.ExpectFieldFalse("is_deleted") },
 		},
 		{
 			name:  "ExpectMatchesContract",
@@ -506,15 +506,15 @@ func TestExpectMethodsAddExpectations(t *testing.T) {
 			},
 		},
 		{
-			name: "ExpectResponseBody",
+			name: "ExpectBodyEquals",
 			setup: func(c *Call[any, any]) {
-				c.ExpectResponseBody(map[string]interface{}{"id": 1})
+				c.ExpectBodyEquals(map[string]interface{}{"id": 1})
 			},
 		},
 		{
-			name: "ExpectResponseBodyPartial",
+			name: "ExpectBodyPartial",
 			setup: func(c *Call[any, any]) {
-				c.ExpectResponseBodyPartial(map[string]interface{}{"id": 1})
+				c.ExpectBodyPartial(map[string]interface{}{"id": 1})
 			},
 		},
 	}
@@ -552,17 +552,17 @@ func TestCallMethodsReturnSelf(t *testing.T) {
 	assert.Same(t, call, call.QueryParam("key", "value"))
 	assert.Same(t, call, call.RequestBodyMap(nil))
 	assert.Same(t, call, call.ExpectResponseStatus(200))
-	assert.Same(t, call, call.ExpectResponseBodyNotEmpty())
-	assert.Same(t, call, call.ExpectResponseBodyFieldNotEmpty("id"))
-	assert.Same(t, call, call.ExpectResponseBodyFieldValue("id", 1))
-	assert.Same(t, call, call.ExpectResponseBodyFieldIsNull("id"))
-	assert.Same(t, call, call.ExpectResponseBodyFieldIsNotNull("id"))
-	assert.Same(t, call, call.ExpectResponseBodyFieldTrue("active"))
-	assert.Same(t, call, call.ExpectResponseBodyFieldFalse("deleted"))
+	assert.Same(t, call, call.ExpectBodyNotEmpty())
+	assert.Same(t, call, call.ExpectFieldNotEmpty("id"))
+	assert.Same(t, call, call.ExpectFieldEquals("id", 1))
+	assert.Same(t, call, call.ExpectFieldIsNull("id"))
+	assert.Same(t, call, call.ExpectFieldIsNotNull("id"))
+	assert.Same(t, call, call.ExpectFieldTrue("active"))
+	assert.Same(t, call, call.ExpectFieldFalse("deleted"))
 	assert.Same(t, call, call.ExpectMatchesContract())
 	assert.Same(t, call, call.ExpectMatchesSchema("Schema"))
 	assert.Same(t, call, call.ExpectArrayContains("items", nil))
 	assert.Same(t, call, call.ExpectArrayContainsExact("items", nil))
-	assert.Same(t, call, call.ExpectResponseBody(nil))
-	assert.Same(t, call, call.ExpectResponseBodyPartial(nil))
+	assert.Same(t, call, call.ExpectBodyEquals(nil))
+	assert.Same(t, call, call.ExpectBodyPartial(nil))
 }

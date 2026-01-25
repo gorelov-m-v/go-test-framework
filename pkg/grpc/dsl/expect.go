@@ -38,11 +38,6 @@ func (c *Call[TReq, TResp]) ExpectFieldEquals(path string, expected any) *Call[T
 	return c
 }
 
-// Deprecated: Use ExpectFieldEquals instead. Will be removed in v2.0.
-func (c *Call[TReq, TResp]) ExpectFieldValue(path string, expected any) *Call[TReq, TResp] {
-	return c.ExpectFieldEquals(path, expected)
-}
-
 // ExpectFieldNotEmpty checks that a JSON field at the given GJSON path is not empty.
 func (c *Call[TReq, TResp]) ExpectFieldNotEmpty(path string) *Call[TReq, TResp] {
 	c.addExpectation(makeFieldNotEmptyExpectation(path))

@@ -23,11 +23,6 @@ func (q *Query[T]) ExpectFieldEquals(field string, expectedValue interface{}) *Q
 	return q
 }
 
-// Deprecated: Use ExpectFieldEquals instead. Will be removed in v2.0.
-func (q *Query[T]) ExpectField(field string, expectedValue interface{}) *Query[T] {
-	return q.ExpectFieldEquals(field, expectedValue)
-}
-
 // ExpectFieldJSON checks that a JSON object field contains all expected key-value pairs.
 func (q *Query[T]) ExpectFieldJSON(field string, expected map[string]interface{}) *Query[T] {
 	for key, value := range expected {
@@ -35,11 +30,6 @@ func (q *Query[T]) ExpectFieldJSON(field string, expected map[string]interface{}
 		q.addExpectation(makeFieldValueExpectation(path, value))
 	}
 	return q
-}
-
-// Deprecated: Use ExpectFieldJSON instead. Will be removed in v2.0.
-func (q *Query[T]) ExpectJSONField(field string, expected map[string]interface{}) *Query[T] {
-	return q.ExpectFieldJSON(field, expected)
 }
 
 // ExpectFieldNotEmpty checks that a JSON field at the given path is not empty.
@@ -84,20 +74,10 @@ func (q *Query[T]) ExpectBodyEquals(expected any) *Query[T] {
 	return q
 }
 
-// Deprecated: Use ExpectBodyEquals instead. Will be removed in v2.0.
-func (q *Query[T]) ExpectMessage(expected any) *Query[T] {
-	return q.ExpectBodyEquals(expected)
-}
-
 // ExpectBodyPartial checks that the message body contains fields from the expected struct or map (non-zero fields only).
 func (q *Query[T]) ExpectBodyPartial(expected any) *Query[T] {
 	q.addExpectation(makeMessagePartialExpectation(expected))
 	return q
-}
-
-// Deprecated: Use ExpectBodyPartial instead. Will be removed in v2.0.
-func (q *Query[T]) ExpectMessagePartial(expected any) *Query[T] {
-	return q.ExpectBodyPartial(expected)
 }
 
 func makeFieldValueExpectation(field string, expectedValue interface{}) *expect.Expectation[[]byte] {

@@ -1,12 +1,14 @@
 package dsl
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
@@ -406,4 +408,280 @@ func TestQuery_Chaining(t *testing.T) {
 	assert.Equal(t, "123", q.filters["id"])
 	assert.Equal(t, "test", q.containsFilters["tags"])
 	assert.Equal(t, 2, q.expectedCount)
+}
+
+func TestQuery_UniqueWithWindow(t *testing.T) {
+	q := &Query[any]{
+		filters:         make(map[string]string),
+		containsFilters: make(map[string]string),
+	}
+
+	result := q.UniqueWithWindow(5 * time.Second)
+
+	assert.Same(t, q, result)
+	assert.True(t, q.unique)
+	assert.Equal(t, 5*time.Second, q.duplicateWindow)
+}
+
+func TestQuery_UniqueWithWindow_Chaining(t *testing.T) {
+	q := &Query[any]{
+		filters:         make(map[string]string),
+		containsFilters: make(map[string]string),
+	}
+
+	q.With("id", "123").UniqueWithWindow(10 * time.Second).ExpectCount(1)
+
+	assert.Equal(t, "123", q.filters["id"])
+	assert.True(t, q.unique)
+	assert.Equal(t, 10*time.Second, q.duplicateWindow)
+	assert.Equal(t, 1, q.expectedCount)
+}
+
+func TestQuery_Context(t *testing.T) {
+	q := &Query[any]{
+		ctx: context.Background(),
+	}
+
+	customCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	result := q.Context(customCtx)
+
+	assert.Same(t, q, result)
+	assert.Same(t, customCtx, q.ctx)
+}
+
+func TestQuery_StepName(t *testing.T) {
+	q := &Query[any]{
+		topicName: "test-topic",
+	}
+
+	name := q.stepName()
+
+	assert.Equal(t, "Kafka: Consume from 'test-topic'", name)
+}
+
+func TestQuery_StepName_WithPrefix(t *testing.T) {
+	q := &Query[any]{
+		topicName: "prefix.events.user-created",
+	}
+
+	name := q.stepName()
+
+	assert.Equal(t, "Kafka: Consume from 'prefix.events.user-created'", name)
+}
+
+func TestQuery_BuildChecker_WithError(t *testing.T) {
+	q := &Query[any]{
+		expectations: nil,
+	}
+
+	checker := q.buildChecker()
+	results := checker(nil, assert.AnError)
+
+	require.Len(t, results, 1)
+	assert.False(t, results[0].Ok)
+	assert.True(t, results[0].Retryable)
+	assert.Contains(t, results[0].Reason, "assert.AnError")
+}
+
+func TestQuery_BuildChecker_NoExpectations(t *testing.T) {
+	q := &Query[any]{
+		expectations: nil,
+	}
+
+	checker := q.buildChecker()
+	results := checker([]byte(`{"id": 1}`), nil)
+
+	require.Len(t, results, 1)
+	assert.True(t, results[0].Ok)
+}
+
+func TestQuery_BuildChecker_WithExpectations(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+	}
+
+	q.expectations = append(q.expectations, makeFieldValueExpectation("id", 123))
+
+	checker := q.buildChecker()
+	results := checker([]byte(`{"id": 123}`), nil)
+
+	require.Len(t, results, 1)
+	assert.True(t, results[0].Ok)
+}
+
+func TestQuery_BuildChecker_WithFailingExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+	}
+
+	q.expectations = append(q.expectations, makeFieldValueExpectation("id", 999))
+
+	checker := q.buildChecker()
+	results := checker([]byte(`{"id": 123}`), nil)
+
+	require.Len(t, results, 1)
+	assert.False(t, results[0].Ok)
+	assert.True(t, results[0].Retryable)
+}
+
+func TestQuery_BuildChecker_MultipleExpectations(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+	}
+
+	q.expectations = append(q.expectations, makeFieldValueExpectation("id", 123))
+	q.expectations = append(q.expectations, makeFieldValueExpectation("name", "test"))
+
+	checker := q.buildChecker()
+	results := checker([]byte(`{"id": 123, "name": "test"}`), nil)
+
+	require.Len(t, results, 2)
+	assert.True(t, results[0].Ok)
+	assert.True(t, results[1].Ok)
+}
+
+func TestQuery_ExpectFieldEquals_AddsExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	result := q.ExpectFieldEquals("id", 123)
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 1)
+}
+
+func TestQuery_ExpectFieldNotEmpty_AddsExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	result := q.ExpectFieldNotEmpty("id")
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 1)
+}
+
+func TestQuery_ExpectFieldEmpty_AddsExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	result := q.ExpectFieldEmpty("id")
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 1)
+}
+
+func TestQuery_ExpectFieldIsNull_AddsExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	result := q.ExpectFieldIsNull("id")
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 1)
+}
+
+func TestQuery_ExpectFieldIsNotNull_AddsExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	result := q.ExpectFieldIsNotNull("id")
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 1)
+}
+
+func TestQuery_ExpectFieldTrue_AddsExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	result := q.ExpectFieldTrue("active")
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 1)
+}
+
+func TestQuery_ExpectFieldFalse_AddsExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	result := q.ExpectFieldFalse("deleted")
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 1)
+}
+
+func TestQuery_ExpectBodyEquals_AddsExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	expected := map[string]interface{}{"id": 123}
+	result := q.ExpectBodyEquals(expected)
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 1)
+}
+
+func TestQuery_ExpectBodyPartial_AddsExpectation(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	expected := map[string]interface{}{"id": 123}
+	result := q.ExpectBodyPartial(expected)
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 1)
+}
+
+func TestQuery_ExpectFieldJSON_AddsMultipleExpectations(t *testing.T) {
+	q := &Query[any]{
+		expectations: make([]*expect.Expectation[[]byte], 0),
+		sent:         false,
+	}
+
+	expected := map[string]interface{}{
+		"name": "test",
+		"age":  25,
+	}
+	result := q.ExpectFieldJSON("user", expected)
+
+	assert.Same(t, q, result)
+	assert.Len(t, q.expectations, 2)
+}
+
+func TestQuery_ExpectationChaining(t *testing.T) {
+	q := &Query[any]{
+		expectations:    make([]*expect.Expectation[[]byte], 0),
+		filters:         make(map[string]string),
+		containsFilters: make(map[string]string),
+		sent:            false,
+	}
+
+	q.With("type", "user").
+		ExpectFieldEquals("id", 123).
+		ExpectFieldNotEmpty("name").
+		ExpectFieldIsNotNull("email").
+		ExpectFieldTrue("active")
+
+	assert.Equal(t, "user", q.filters["type"])
+	assert.Len(t, q.expectations, 4)
 }

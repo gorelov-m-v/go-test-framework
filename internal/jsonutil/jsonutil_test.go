@@ -8,6 +8,482 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+func TestIsEmpty(t *testing.T) {
+	tests := []struct {
+		name   string
+		json   string
+		path   string
+		expect bool
+	}{
+		{"non-existent field", `{"a": 1}`, "b", true},
+		{"null value", `{"a": null}`, "a", true},
+		{"empty string", `{"a": ""}`, "a", true},
+		{"whitespace string", `{"a": "   "}`, "a", true},
+		{"non-empty string", `{"a": "hello"}`, "a", false},
+		{"empty array", `{"a": []}`, "a", true},
+		{"non-empty array", `{"a": [1,2]}`, "a", false},
+		{"empty object", `{"a": {}}`, "a", true},
+		{"non-empty object", `{"a": {"b": 1}}`, "a", false},
+		{"number zero", `{"a": 0}`, "a", false},
+		{"number non-zero", `{"a": 42}`, "a", false},
+		{"boolean false", `{"a": false}`, "a", false},
+		{"boolean true", `{"a": true}`, "a", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := gjson.Get(tt.json, tt.path)
+			got := IsEmpty(res)
+			if got != tt.expect {
+				t.Errorf("IsEmpty() = %v, want %v", got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestTypeToString(t *testing.T) {
+	tests := []struct {
+		typ    gjson.Type
+		expect string
+	}{
+		{gjson.Null, "null"},
+		{gjson.False, "boolean"},
+		{gjson.True, "boolean"},
+		{gjson.Number, "number"},
+		{gjson.String, "string"},
+		{gjson.JSON, "object/array"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expect, func(t *testing.T) {
+			got := TypeToString(tt.typ)
+			if got != tt.expect {
+				t.Errorf("TypeToString(%v) = %v, want %v", tt.typ, got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestDebugValue(t *testing.T) {
+	tests := []struct {
+		name   string
+		json   string
+		expect string
+	}{
+		{"string", `"hello"`, `"hello"`},
+		{"number", `42`, `42`},
+		{"null", `null`, `null`},
+		{"bool", `true`, `true`},
+		{"object", `{"a":1}`, `{"a":1}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := gjson.Parse(tt.json)
+			got := DebugValue(res)
+			if got != tt.expect {
+				t.Errorf("DebugValue() = %v, want %v", got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestToInt64(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  any
+		expect int64
+		ok     bool
+	}{
+		{"int", int(42), 42, true},
+		{"int8", int8(42), 42, true},
+		{"int16", int16(42), 42, true},
+		{"int32", int32(42), 42, true},
+		{"int64", int64(42), 42, true},
+		{"negative int", int(-10), -10, true},
+		{"string", "42", 0, false},
+		{"float64", float64(42), 0, false},
+		{"uint", uint(42), 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := ToInt64(tt.input)
+			if ok != tt.ok {
+				t.Errorf("ToInt64() ok = %v, want %v", ok, tt.ok)
+			}
+			if ok && got != tt.expect {
+				t.Errorf("ToInt64() = %v, want %v", got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestToUint64(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  any
+		expect uint64
+		ok     bool
+	}{
+		{"uint", uint(42), 42, true},
+		{"uint8", uint8(42), 42, true},
+		{"uint16", uint16(42), 42, true},
+		{"uint32", uint32(42), 42, true},
+		{"uint64", uint64(42), 42, true},
+		{"string", "42", 0, false},
+		{"int", int(42), 0, false},
+		{"float64", float64(42), 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := ToUint64(tt.input)
+			if ok != tt.ok {
+				t.Errorf("ToUint64() ok = %v, want %v", ok, tt.ok)
+			}
+			if ok && got != tt.expect {
+				t.Errorf("ToUint64() = %v, want %v", got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestToFloat64(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  any
+		expect float64
+		ok     bool
+	}{
+		{"float32", float32(3.14), float64(float32(3.14)), true},
+		{"float64", float64(3.14159), 3.14159, true},
+		{"string", "3.14", 0, false},
+		{"int", int(42), 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := ToFloat64(tt.input)
+			if ok != tt.ok {
+				t.Errorf("ToFloat64() ok = %v, want %v", ok, tt.ok)
+			}
+			if ok && got != tt.expect {
+				t.Errorf("ToFloat64() = %v, want %v", got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestCompare(t *testing.T) {
+	t.Run("string match", func(t *testing.T) {
+		res := gjson.Parse(`"hello"`)
+		ok, _ := Compare(res, "hello")
+		assert.True(t, ok)
+	})
+
+	t.Run("string mismatch", func(t *testing.T) {
+		res := gjson.Parse(`"hello"`)
+		ok, msg := Compare(res, "world")
+		assert.False(t, ok)
+		assert.Contains(t, msg, "hello")
+	})
+
+	t.Run("string type mismatch", func(t *testing.T) {
+		res := gjson.Parse(`42`)
+		ok, msg := Compare(res, "hello")
+		assert.False(t, ok)
+		assert.Contains(t, msg, "string")
+	})
+
+	t.Run("bool true match", func(t *testing.T) {
+		res := gjson.Parse(`true`)
+		ok, _ := Compare(res, true)
+		assert.True(t, ok)
+	})
+
+	t.Run("bool false match", func(t *testing.T) {
+		res := gjson.Parse(`false`)
+		ok, _ := Compare(res, false)
+		assert.True(t, ok)
+	})
+
+	t.Run("bool mismatch", func(t *testing.T) {
+		res := gjson.Parse(`true`)
+		ok, _ := Compare(res, false)
+		assert.False(t, ok)
+	})
+
+	t.Run("bool type mismatch", func(t *testing.T) {
+		res := gjson.Parse(`"true"`)
+		ok, msg := Compare(res, true)
+		assert.False(t, ok)
+		assert.Contains(t, msg, "boolean")
+	})
+
+	t.Run("int match", func(t *testing.T) {
+		res := gjson.Parse(`42`)
+		ok, _ := Compare(res, 42)
+		assert.True(t, ok)
+	})
+
+	t.Run("int mismatch", func(t *testing.T) {
+		res := gjson.Parse(`42`)
+		ok, _ := Compare(res, 100)
+		assert.False(t, ok)
+	})
+
+	t.Run("int type mismatch", func(t *testing.T) {
+		res := gjson.Parse(`"42"`)
+		ok, msg := Compare(res, 42)
+		assert.False(t, ok)
+		assert.Contains(t, msg, "number")
+	})
+
+	t.Run("int vs float mismatch", func(t *testing.T) {
+		res := gjson.Parse(`42.5`)
+		ok, msg := Compare(res, 42)
+		assert.False(t, ok)
+		assert.Contains(t, msg, "float")
+	})
+
+	t.Run("uint match", func(t *testing.T) {
+		res := gjson.Parse(`42`)
+		ok, _ := Compare(res, uint(42))
+		assert.True(t, ok)
+	})
+
+	t.Run("uint mismatch", func(t *testing.T) {
+		res := gjson.Parse(`42`)
+		ok, _ := Compare(res, uint(100))
+		assert.False(t, ok)
+	})
+
+	t.Run("float64 match", func(t *testing.T) {
+		res := gjson.Parse(`3.14`)
+		ok, _ := Compare(res, 3.14)
+		assert.True(t, ok)
+	})
+
+	t.Run("float64 mismatch", func(t *testing.T) {
+		res := gjson.Parse(`3.14`)
+		ok, _ := Compare(res, 2.71)
+		assert.False(t, ok)
+	})
+
+	t.Run("nil match null", func(t *testing.T) {
+		res := gjson.Parse(`null`)
+		ok, _ := Compare(res, nil)
+		assert.True(t, ok)
+	})
+
+	t.Run("nil vs non-null", func(t *testing.T) {
+		res := gjson.Parse(`"hello"`)
+		ok, msg := Compare(res, nil)
+		assert.False(t, ok)
+		assert.Contains(t, msg, "null")
+	})
+
+	t.Run("nil pointer match null", func(t *testing.T) {
+		res := gjson.Parse(`null`)
+		var p *string
+		ok, _ := Compare(res, p)
+		assert.True(t, ok)
+	})
+
+	t.Run("nil pointer vs non-null", func(t *testing.T) {
+		res := gjson.Parse(`"hello"`)
+		var p *string
+		ok, msg := Compare(res, p)
+		assert.False(t, ok)
+		assert.Contains(t, msg, "null")
+	})
+
+	t.Run("non-nil pointer dereferenced", func(t *testing.T) {
+		res := gjson.Parse(`"hello"`)
+		s := "hello"
+		ok, _ := Compare(res, &s)
+		assert.True(t, ok)
+	})
+
+	t.Run("[]string match", func(t *testing.T) {
+		res := gjson.Parse(`["a", "b", "c"]`)
+		ok, _ := Compare(res, []string{"a", "b", "c"})
+		assert.True(t, ok)
+	})
+
+	t.Run("[]string wrong length", func(t *testing.T) {
+		res := gjson.Parse(`["a", "b"]`)
+		ok, msg := Compare(res, []string{"a", "b", "c"})
+		assert.False(t, ok)
+		assert.Contains(t, msg, "length")
+	})
+
+	t.Run("[]string missing element", func(t *testing.T) {
+		res := gjson.Parse(`["a", "b", "d"]`)
+		ok, msg := Compare(res, []string{"a", "b", "c"})
+		assert.False(t, ok)
+		assert.Contains(t, msg, "missing")
+	})
+
+	t.Run("[]string not array", func(t *testing.T) {
+		res := gjson.Parse(`"hello"`)
+		ok, msg := Compare(res, []string{"a"})
+		assert.False(t, ok)
+		assert.Contains(t, msg, "array")
+	})
+
+	t.Run("map match", func(t *testing.T) {
+		res := gjson.Parse(`{"a": 1, "b": 2}`)
+		ok, _ := Compare(res, map[string]int{"a": 1, "b": 2})
+		assert.True(t, ok)
+	})
+
+	t.Run("map not object", func(t *testing.T) {
+		res := gjson.Parse(`[1, 2]`)
+		ok, msg := Compare(res, map[string]int{"a": 1})
+		assert.False(t, ok)
+		assert.Contains(t, msg, "object")
+	})
+
+	t.Run("unsupported type", func(t *testing.T) {
+		res := gjson.Parse(`42`)
+		ok, msg := Compare(res, struct{ X int }{X: 42})
+		assert.False(t, ok)
+		assert.Contains(t, msg, "unsupported")
+	})
+
+	t.Run("nil expected field not exists", func(t *testing.T) {
+		res := gjson.Get(`{"a": 1}`, "b")
+		ok, msg := Compare(res, nil)
+		assert.False(t, ok)
+		assert.Contains(t, msg, "does not exist")
+	})
+}
+
+func TestIsZeroValue(t *testing.T) {
+	tests := []struct {
+		name   string
+		value  any
+		expect bool
+	}{
+		{"empty array", [0]int{}, true},
+		{"non-empty array", [1]int{1}, false},
+		{"nil slice", ([]int)(nil), true},
+		{"empty slice", []int{}, true},
+		{"non-empty slice", []int{1}, false},
+		{"nil map", (map[string]int)(nil), true},
+		{"empty map", map[string]int{}, true},
+		{"non-empty map", map[string]int{"a": 1}, false},
+		{"bool false", false, true},
+		{"bool true", true, false},
+		{"int zero", int(0), true},
+		{"int non-zero", int(42), false},
+		{"int8 zero", int8(0), true},
+		{"int16 zero", int16(0), true},
+		{"int32 zero", int32(0), true},
+		{"int64 zero", int64(0), true},
+		{"uint zero", uint(0), true},
+		{"uint non-zero", uint(42), false},
+		{"uint8 zero", uint8(0), true},
+		{"uint16 zero", uint16(0), true},
+		{"uint32 zero", uint32(0), true},
+		{"uint64 zero", uint64(0), true},
+		{"float32 zero", float32(0), true},
+		{"float32 non-zero", float32(3.14), false},
+		{"float64 zero", float64(0), true},
+		{"float64 non-zero", float64(3.14), false},
+		{"string empty", "", true},
+		{"string non-empty", "hello", false},
+		{"nil pointer", (*int)(nil), true},
+		{"non-nil pointer", new(int), false},
+		{"struct", struct{ X int }{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := reflect.ValueOf(tt.value)
+			got := isZeroValue(v)
+			if got != tt.expect {
+				t.Errorf("isZeroValue(%v) = %v, want %v", tt.value, got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestCompareSlice(t *testing.T) {
+	t.Run("match simple slice", func(t *testing.T) {
+		jsonArr := gjson.Parse(`[1, 2, 3]`)
+		ok, _ := compareSlice(jsonArr, reflect.ValueOf([]int{1, 2, 3}))
+		assert.True(t, ok)
+	})
+
+	t.Run("length mismatch", func(t *testing.T) {
+		jsonArr := gjson.Parse(`[1, 2]`)
+		ok, msg := compareSlice(jsonArr, reflect.ValueOf([]int{1, 2, 3}))
+		assert.False(t, ok)
+		assert.Contains(t, msg, "length")
+	})
+
+	t.Run("not array", func(t *testing.T) {
+		jsonArr := gjson.Parse(`"hello"`)
+		ok, msg := compareSlice(jsonArr, reflect.ValueOf([]int{1}))
+		assert.False(t, ok)
+		assert.Contains(t, msg, "array")
+	})
+
+	t.Run("element mismatch", func(t *testing.T) {
+		jsonArr := gjson.Parse(`[1, 5, 3]`)
+		ok, msg := compareSlice(jsonArr, reflect.ValueOf([]int{1, 2, 3}))
+		assert.False(t, ok)
+		assert.Contains(t, msg, "index")
+	})
+
+	t.Run("slice of structs", func(t *testing.T) {
+		type Item struct {
+			Id   int    `json:"id"`
+			Name string `json:"name"`
+		}
+		jsonArr := gjson.Parse(`[{"id": 1, "name": "a"}, {"id": 2, "name": "b"}]`)
+		ok, _ := compareSlice(jsonArr, reflect.ValueOf([]Item{{Id: 1, Name: "a"}, {Id: 2, Name: "b"}}))
+		assert.True(t, ok)
+	})
+}
+
+func TestCompareMap(t *testing.T) {
+	t.Run("match map", func(t *testing.T) {
+		jsonObj := gjson.Parse(`{"a": 1, "b": 2}`)
+		ok, _ := compareMap(jsonObj, reflect.ValueOf(map[string]int{"a": 1, "b": 2}))
+		assert.True(t, ok)
+	})
+
+	t.Run("key not found", func(t *testing.T) {
+		jsonObj := gjson.Parse(`{"a": 1}`)
+		ok, msg := compareMap(jsonObj, reflect.ValueOf(map[string]int{"a": 1, "c": 3}))
+		assert.False(t, ok)
+		assert.Contains(t, msg, "not found")
+	})
+
+	t.Run("value mismatch", func(t *testing.T) {
+		jsonObj := gjson.Parse(`{"a": 1, "b": 99}`)
+		ok, msg := compareMap(jsonObj, reflect.ValueOf(map[string]int{"a": 1, "b": 2}))
+		assert.False(t, ok)
+		assert.Contains(t, msg, "b")
+	})
+
+	t.Run("not object", func(t *testing.T) {
+		jsonObj := gjson.Parse(`[1, 2]`)
+		ok, msg := compareMap(jsonObj, reflect.ValueOf(map[string]int{"a": 1}))
+		assert.False(t, ok)
+		assert.Contains(t, msg, "object")
+	})
+}
+
+func TestCompareModeConstants(t *testing.T) {
+	assert.Equal(t, CompareMode(0), ModePartial)
+	assert.Equal(t, CompareMode(1), ModeExact)
+}
+
 func TestCompareObjectPartial_SimpleStruct(t *testing.T) {
 	type Person struct {
 		Name string `json:"name"`

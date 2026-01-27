@@ -10,17 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type TestModel struct {
-	ID        int64          `db:"id"`
-	Name      string         `db:"name"`
-	Email     sql.NullString `db:"email"`
-	Status    int16          `db:"status_id"`
-	IsActive  bool           `db:"is_active"`
-	IsDeleted sql.NullBool   `db:"is_deleted"`
-	Score     sql.NullInt64  `db:"score"`
-	Data      json.RawMessage `db:"data"`
-}
-
 func TestGetFieldValueByColumnName_Found(t *testing.T) {
 	model := TestModel{ID: 123, Name: "test"}
 	result, err := getFieldValueByColumnName(model, "id")
@@ -595,4 +584,232 @@ func TestGetDBColumnName_WithoutTag(t *testing.T) {
 	name := getDBColumnName(field)
 
 	assert.Equal(t, "ID", name)
+}
+
+func TestGetDBColumnName_WithDashTag(t *testing.T) {
+	type DashTagModel struct {
+		ID int64 `db:"-"`
+	}
+	field, _ := reflect.TypeOf(DashTagModel{}).FieldByName("ID")
+	name := getDBColumnName(field)
+
+	assert.Equal(t, "ID", name)
+}
+
+func TestGetFieldValueByColumnName_NotStruct(t *testing.T) {
+	_, err := getFieldValueByColumnName("not a struct", "id")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a struct")
+}
+
+func TestGetFieldValueByColumnName_WhitespaceColumnName(t *testing.T) {
+	model := TestModel{ID: 123}
+	result, err := getFieldValueByColumnName(model, "  id  ")
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(123), result)
+}
+
+type TestModelWithJSON struct {
+	ID   int64  `db:"id"`
+	Data []byte `db:"data"`
+	Info string `db:"info"`
+}
+
+func TestMakeColumnJSONEqualsExpectation_ByteSlice(t *testing.T) {
+	exp := makeColumnJSONEqualsExpectation[TestModelWithJSON]("data", map[string]interface{}{"key": "value"})
+	model := TestModelWithJSON{Data: []byte(`{"key": "value"}`)}
+
+	result := exp.Check(nil, model)
+
+	assert.True(t, result.Ok)
+}
+
+func TestMakeColumnJSONEqualsExpectation_ByteSlice_InvalidJSON(t *testing.T) {
+	exp := makeColumnJSONEqualsExpectation[TestModelWithJSON]("data", map[string]interface{}{"key": "value"})
+	model := TestModelWithJSON{Data: []byte(`not json`)}
+
+	result := exp.Check(nil, model)
+
+	assert.False(t, result.Ok)
+	assert.Contains(t, result.Reason, "unmarshal")
+}
+
+func TestMakeColumnJSONEqualsExpectation_String(t *testing.T) {
+	exp := makeColumnJSONEqualsExpectation[TestModelWithJSON]("info", map[string]interface{}{"key": "value"})
+	model := TestModelWithJSON{Info: `{"key": "value"}`}
+
+	result := exp.Check(nil, model)
+
+	assert.True(t, result.Ok)
+}
+
+func TestMakeColumnJSONEqualsExpectation_String_InvalidJSON(t *testing.T) {
+	exp := makeColumnJSONEqualsExpectation[TestModelWithJSON]("info", map[string]interface{}{"key": "value"})
+	model := TestModelWithJSON{Info: `not json`}
+
+	result := exp.Check(nil, model)
+
+	assert.False(t, result.Ok)
+	assert.Contains(t, result.Reason, "unmarshal")
+}
+
+func TestMakeColumnJSONEqualsExpectation_WrongType(t *testing.T) {
+	exp := makeColumnJSONEqualsExpectation[TestModel]("id", map[string]interface{}{"key": "value"})
+	model := TestModel{ID: 123}
+
+	result := exp.Check(nil, model)
+
+	assert.False(t, result.Ok)
+	assert.Contains(t, result.Reason, "not a JSON type")
+}
+
+func TestMakeColumnJSONEqualsExpectation_NoRows(t *testing.T) {
+	exp := makeColumnJSONEqualsExpectation[TestModel]("data", map[string]interface{}{"key": "value"})
+	var model TestModel
+
+	result := exp.Check(sql.ErrNoRows, model)
+
+	assert.False(t, result.Ok)
+	assert.True(t, result.Retryable)
+	assert.Contains(t, result.Reason, "no rows")
+}
+
+func TestMakeColumnJSONEqualsExpectation_OtherError(t *testing.T) {
+	exp := makeColumnJSONEqualsExpectation[TestModel]("data", map[string]interface{}{"key": "value"})
+	var model TestModel
+
+	result := exp.Check(sql.ErrConnDone, model)
+
+	assert.False(t, result.Ok)
+	assert.False(t, result.Retryable)
+	assert.Contains(t, result.Reason, "query failed")
+}
+
+func TestMakeColumnJSONEqualsExpectation_ColumnNotFound(t *testing.T) {
+	exp := makeColumnJSONEqualsExpectation[TestModel]("nonexistent", map[string]interface{}{"key": "value"})
+	model := TestModel{ID: 123}
+
+	result := exp.Check(nil, model)
+
+	assert.False(t, result.Ok)
+	assert.Contains(t, result.Reason, "Failed to get field")
+}
+
+func TestMakeRowExpectation_OtherError(t *testing.T) {
+	expected := TestModel{ID: 123}
+	exp := makeRowExpectation(expected)
+	var actual TestModel
+
+	result := exp.Check(sql.ErrConnDone, actual)
+
+	assert.False(t, result.Ok)
+	assert.False(t, result.Retryable)
+}
+
+func TestMakeRowPartialExpectation_NoRows(t *testing.T) {
+	expected := TestModel{ID: 123}
+	exp := makeRowPartialExpectation(expected)
+	var actual TestModel
+
+	result := exp.Check(sql.ErrNoRows, actual)
+
+	assert.False(t, result.Ok)
+	assert.True(t, result.Retryable)
+}
+
+func TestMakeRowPartialExpectation_OtherError(t *testing.T) {
+	expected := TestModel{ID: 123}
+	exp := makeRowPartialExpectation(expected)
+	var actual TestModel
+
+	result := exp.Check(sql.ErrConnDone, actual)
+
+	assert.False(t, result.Ok)
+	assert.False(t, result.Retryable)
+}
+
+func TestMakeCountAllExpectation_WithError(t *testing.T) {
+	exp := makeCountAllExpectation[TestModel](3)
+
+	result := exp.Check(sql.ErrConnDone, nil)
+
+	assert.False(t, result.Ok)
+	assert.True(t, result.Retryable)
+}
+
+func TestMakeNotEmptyAllExpectation_WithError(t *testing.T) {
+	exp := makeNotEmptyAllExpectation[TestModel]()
+
+	result := exp.Check(sql.ErrConnDone, nil)
+
+	assert.False(t, result.Ok)
+	assert.True(t, result.Retryable)
+}
+
+type PointerModel struct {
+	ID   *int64  `db:"id"`
+	Name *string `db:"name"`
+}
+
+func TestCompareStructsExact_WithPointers_BothNil(t *testing.T) {
+	var expected *TestModel
+	var actual *TestModel
+
+	ok, msg := compareStructsExact(expected, actual)
+
+	assert.True(t, ok, "Expected match for nil pointers, got: %s", msg)
+}
+
+func TestCompareStructsExact_WithPointers_ExpectedNil(t *testing.T) {
+	var expected *TestModel
+	actual := &TestModel{ID: 123}
+
+	ok, _ := compareStructsExact(expected, actual)
+
+	assert.False(t, ok)
+}
+
+func TestCompareStructsExact_WithPointers_ActualNil(t *testing.T) {
+	expected := &TestModel{ID: 123}
+	var actual *TestModel
+
+	ok, msg := compareStructsExact(expected, actual)
+
+	assert.False(t, ok)
+	assert.Contains(t, msg, "nil")
+}
+
+func TestCompareStructsPartial_WithPointers_ExpectedNil(t *testing.T) {
+	var expected *TestModel
+	actual := &TestModel{ID: 123}
+
+	ok, _ := compareStructsPartial(expected, actual)
+
+	assert.True(t, ok)
+}
+
+func TestCompareStructsPartial_WithPointers_ActualNil(t *testing.T) {
+	expected := &TestModel{ID: 123}
+	var actual *TestModel
+
+	ok, msg := compareStructsPartial(expected, actual)
+
+	assert.False(t, ok)
+	assert.Contains(t, msg, "nil")
+}
+
+func TestCompareStructsExact_NonStruct(t *testing.T) {
+	ok, msg := compareStructsExact("not struct", "also not struct")
+
+	assert.False(t, ok)
+	assert.Contains(t, msg, "struct types")
+}
+
+func TestCompareStructsPartial_NonStruct(t *testing.T) {
+	ok, msg := compareStructsPartial("not struct", "also not struct")
+
+	assert.False(t, ok)
+	assert.Contains(t, msg, "struct types")
 }

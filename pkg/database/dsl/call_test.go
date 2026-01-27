@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"database/sql"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -234,4 +236,74 @@ func TestExtractTableFromKeyword_MultipleFrom(t *testing.T) {
 	query := "SELECT * FROM users WHERE name = 'FROM'"
 	result := extractTableFromKeyword(query, "SELECT * FROM USERS WHERE NAME = 'FROM'", "FROM")
 	assert.Equal(t, "users", result)
+}
+
+func TestQuery_SQL_SetsFields(t *testing.T) {
+	q := &Query[TestModel]{}
+
+	result := q.SQL("SELECT * FROM users WHERE id = ?", 123, "active")
+
+	assert.Same(t, q, result)
+	assert.Equal(t, "SELECT * FROM users WHERE id = ?", q.sql)
+	assert.Equal(t, []any{123, "active"}, q.args)
+}
+
+func TestQuery_SQL_NoArgs(t *testing.T) {
+	q := &Query[TestModel]{}
+
+	q.SQL("SELECT * FROM users")
+
+	assert.Equal(t, "SELECT * FROM users", q.sql)
+	assert.Empty(t, q.args)
+}
+
+func TestQuery_StepName(t *testing.T) {
+	q := &Query[TestModel]{sql: "SELECT * FROM users WHERE id = ?"}
+
+	name := q.stepName()
+
+	assert.Equal(t, "SELECT users", name)
+}
+
+func TestQuery_StepName_WithSchema(t *testing.T) {
+	q := &Query[TestModel]{sql: "SELECT * FROM public.orders"}
+
+	name := q.stepName()
+
+	assert.Equal(t, "SELECT orders", name)
+}
+
+func TestQuery_StepName_NoFrom(t *testing.T) {
+	q := &Query[TestModel]{sql: "SELECT 1"}
+
+	name := q.stepName()
+
+	assert.Equal(t, "SELECT query", name)
+}
+
+func TestQuery_StepNameAll(t *testing.T) {
+	q := &Query[TestModel]{sql: "SELECT * FROM products"}
+
+	name := q.stepNameAll()
+
+	assert.Equal(t, "SELECT products (all)", name)
+}
+
+func TestQuery_StepNameAll_WithCTE(t *testing.T) {
+	q := &Query[TestModel]{sql: "WITH cte AS (SELECT 1) SELECT * FROM items"}
+
+	name := q.stepNameAll()
+
+	assert.Equal(t, "SELECT items (all)", name)
+}
+
+type TestModel struct {
+	ID        int64           `db:"id"`
+	Name      string          `db:"name"`
+	Email     sql.NullString  `db:"email"`
+	Status    int16           `db:"status_id"`
+	IsActive  bool            `db:"is_active"`
+	IsDeleted sql.NullBool    `db:"is_deleted"`
+	Score     sql.NullInt64   `db:"score"`
+	Data      json.RawMessage `db:"data"`
 }

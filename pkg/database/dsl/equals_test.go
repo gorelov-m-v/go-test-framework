@@ -356,3 +356,122 @@ func TestEqualsLoose_EmptyVsNonEmpty(t *testing.T) {
 	equal, _, _ := equalsLoose("", "non-empty")
 	assert.False(t, equal)
 }
+
+func TestToComparableNumber_SqlNullInt32_Pointer_Valid(t *testing.T) {
+	val := &sql.NullInt32{Int32: 32, Valid: true}
+	result, ok := toComparableNumber(val)
+	assert.True(t, ok)
+	assert.Equal(t, float64(32), result)
+}
+
+func TestToComparableNumber_SqlNullInt32_Pointer_Nil(t *testing.T) {
+	var val *sql.NullInt32
+	result, ok := toComparableNumber(val)
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), result)
+}
+
+func TestToComparableNumber_SqlNullInt32_Invalid(t *testing.T) {
+	result, ok := toComparableNumber(sql.NullInt32{Int32: 32, Valid: false})
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), result)
+}
+
+func TestToComparableNumber_SqlNullInt16_Pointer_Valid(t *testing.T) {
+	val := &sql.NullInt16{Int16: 16, Valid: true}
+	result, ok := toComparableNumber(val)
+	assert.True(t, ok)
+	assert.Equal(t, float64(16), result)
+}
+
+func TestToComparableNumber_SqlNullInt16_Pointer_Nil(t *testing.T) {
+	var val *sql.NullInt16
+	result, ok := toComparableNumber(val)
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), result)
+}
+
+func TestToComparableNumber_SqlNullInt16_Invalid(t *testing.T) {
+	result, ok := toComparableNumber(sql.NullInt16{Int16: 16, Valid: false})
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), result)
+}
+
+func TestToComparableNumber_SqlNullByte_Pointer_Valid(t *testing.T) {
+	val := &sql.NullByte{Byte: 255, Valid: true}
+	result, ok := toComparableNumber(val)
+	assert.True(t, ok)
+	assert.Equal(t, float64(255), result)
+}
+
+func TestToComparableNumber_SqlNullByte_Pointer_Nil(t *testing.T) {
+	var val *sql.NullByte
+	result, ok := toComparableNumber(val)
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), result)
+}
+
+func TestToComparableNumber_SqlNullByte_Invalid(t *testing.T) {
+	result, ok := toComparableNumber(sql.NullByte{Byte: 255, Valid: false})
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), result)
+}
+
+func TestToComparableNumber_SqlNullFloat64_Pointer_Valid(t *testing.T) {
+	val := &sql.NullFloat64{Float64: 3.14, Valid: true}
+	result, ok := toComparableNumber(val)
+	assert.True(t, ok)
+	assert.Equal(t, float64(3.14), result)
+}
+
+func TestToComparableNumber_SqlNullFloat64_Pointer_Nil(t *testing.T) {
+	var val *sql.NullFloat64
+	result, ok := toComparableNumber(val)
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), result)
+}
+
+func TestToComparableString_ReflectPointerToString(t *testing.T) {
+	type StringAlias string
+	s := StringAlias("alias")
+	result, ok := toComparableString(&s)
+	assert.True(t, ok)
+	assert.Equal(t, "alias", result)
+}
+
+func TestToComparableString_SqlNullString_Pointer_Invalid(t *testing.T) {
+	val := &sql.NullString{String: "invalid", Valid: false}
+	result, ok := toComparableString(val)
+	assert.False(t, ok)
+	assert.Equal(t, "", result)
+}
+
+func TestEqualsLoose_ActualIsNullType(t *testing.T) {
+	equal, _, msg := equalsLoose("expected", sql.NullString{Valid: false})
+	assert.False(t, equal)
+	assert.Contains(t, msg, "NULL")
+}
+
+func TestEqualsLoose_BothBoolOneFalse(t *testing.T) {
+	equal, retryable, _ := equalsLoose(true, false)
+	assert.False(t, equal)
+	assert.True(t, retryable)
+}
+
+func TestEqualsLoose_StringTypeMismatchWithNumber(t *testing.T) {
+	equal, retryable, _ := equalsLoose("string", 123)
+	assert.False(t, equal)
+	assert.False(t, retryable)
+}
+
+func TestEqualsLoose_ComparableTypes(t *testing.T) {
+	type MyInt int
+	equal, _, _ := equalsLoose(MyInt(42), MyInt(42))
+	assert.True(t, equal)
+}
+
+func TestEqualsLoose_ComparableTypesNotEqual(t *testing.T) {
+	type MyInt int
+	equal, _, _ := equalsLoose(MyInt(42), MyInt(43))
+	assert.False(t, equal)
+}

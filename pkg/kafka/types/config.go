@@ -21,6 +21,10 @@ type Config struct {
 
 	UniqueDuplicateWindowMs int64 `mapstructure:"uniqueDuplicateWindowMs"`
 
+	// WarmupTimeout is the maximum time to wait for consumer to join group and be ready.
+	// Set to 0 to disable warmup. Default: 60s
+	WarmupTimeout time.Duration `mapstructure:"warmupTimeout"`
+
 	Version string `mapstructure:"version"`
 
 	SaramaConfig map[string]interface{} `mapstructure:"saramaConfig"`
@@ -32,6 +36,7 @@ func DefaultConfig() Config {
 		FindMessageTimeout:       30 * time.Second,
 		FindMessageSleepInterval: 200 * time.Millisecond,
 		UniqueDuplicateWindowMs:  5000,
+		WarmupTimeout:            60 * time.Second,
 		Version:                  "2.6.0",
 	}
 }
@@ -50,6 +55,9 @@ func (c Config) Merge() Config {
 	}
 	if c.UniqueDuplicateWindowMs == 0 {
 		c.UniqueDuplicateWindowMs = def.UniqueDuplicateWindowMs
+	}
+	if c.WarmupTimeout == 0 {
+		c.WarmupTimeout = def.WarmupTimeout
 	}
 	if c.Version == "" {
 		c.Version = def.Version

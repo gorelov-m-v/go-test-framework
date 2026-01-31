@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/kafka/consumer"
@@ -49,6 +50,16 @@ func New(cfg types.Config, asyncConfig config.AsyncConfig) (*Client, error) {
 		defaultTimeout:     cfg.FindMessageTimeout,
 		uniqueWindow:       time.Duration(cfg.UniqueDuplicateWindowMs) * time.Millisecond,
 		AsyncConfig:        asyncConfig,
+	}
+
+	// Warmup: wait for consumer to join group and be ready
+	if cfg.WarmupTimeout > 0 {
+		log.Printf("[Kafka] Waiting for consumer to be ready (timeout: %v)...", cfg.WarmupTimeout)
+		if err := backgroundConsumer.WaitReady(cfg.WarmupTimeout); err != nil {
+			log.Printf("[Kafka] Warning: consumer warmup failed: %v", err)
+		} else {
+			log.Println("[Kafka] Consumer is ready")
+		}
 	}
 
 	return client, nil

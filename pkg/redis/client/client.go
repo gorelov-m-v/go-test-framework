@@ -41,10 +41,7 @@ func New(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 
-	asyncCfg := cfg.AsyncConfig
-	if asyncCfg.Timeout == 0 {
-		asyncCfg = config.DefaultAsyncConfig()
-	}
+	asyncCfg := cfg.AsyncConfig.WithDefaults()
 
 	return &Client{
 		rdb:         rdb,

@@ -87,13 +87,15 @@ func (q *Query[T]) Send() T {
 	q.validate()
 
 	q.sCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
-		attachQuery(stepCtx, q.sql, q.args)
-
-		result, err, summary := q.execute(stepCtx, q.expectations)
+		result, duration, err, summary := q.execute(stepCtx, q.expectations)
 		q.scannedResult = result
 		q.lastError = err
 
-		q.attachResults(stepCtx, summary)
+		rowCount := 0
+		if err == nil {
+			rowCount = 1
+		}
+		attachSQLReport(stepCtx, q.client, q.sql, q.args, q.scannedResult, rowCount, duration, err, summary)
 		q.assertResults(stepCtx, err)
 	})
 
@@ -103,19 +105,6 @@ func (q *Query[T]) Send() T {
 func (q *Query[T]) stepName() string {
 	tableName := extractTableName(q.sql)
 	return fmt.Sprintf("SELECT %s", tableName)
-}
-
-func (q *Query[T]) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	polling.AttachIfAsync(stepCtx, summary)
-
-	if q.lastError != nil {
-		if errors.Is(q.lastError, sql.ErrNoRows) {
-			stepCtx.Logf("Query returned no rows")
-		}
-		attachResult(stepCtx, q.client, nil, q.lastError)
-	} else {
-		attachResult(stepCtx, q.client, q.scannedResult, nil)
-	}
 }
 
 func (q *Query[T]) assertResults(stepCtx provider.StepCtx, err error) {
@@ -144,13 +133,11 @@ func (q *Query[T]) SendAll() []T {
 	q.validate()
 
 	q.sCtx.WithNewStep(q.stepNameAll(), func(stepCtx provider.StepCtx) {
-		attachQuery(stepCtx, q.sql, q.args)
-
-		results, err, summary := q.executeAll(stepCtx)
+		results, duration, err, summary := q.executeAll(stepCtx)
 		q.scannedResults = results
 		q.lastError = err
 
-		q.attachResultsAll(stepCtx, summary)
+		attachSQLReport(stepCtx, q.client, q.sql, q.args, q.scannedResults, len(q.scannedResults), duration, err, summary)
 		q.assertResultsAll(stepCtx, err)
 	})
 
@@ -160,16 +147,6 @@ func (q *Query[T]) SendAll() []T {
 func (q *Query[T]) stepNameAll() string {
 	tableName := extractTableName(q.sql)
 	return fmt.Sprintf("SELECT %s (all)", tableName)
-}
-
-func (q *Query[T]) attachResultsAll(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	polling.AttachIfAsync(stepCtx, summary)
-
-	if q.lastError != nil {
-		attachResult(stepCtx, q.client, nil, q.lastError)
-	} else {
-		attachResult(stepCtx, q.client, q.scannedResults, nil)
-	}
 }
 
 func (q *Query[T]) assertResultsAll(stepCtx provider.StepCtx, err error) {

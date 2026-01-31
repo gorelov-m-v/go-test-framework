@@ -11,13 +11,13 @@ import (
 
 func TestNew(t *testing.T) {
 	tests := []struct {
-		name           string
-		cfg            Config
-		wantTimeout    time.Duration
-		wantBaseURL    string
-		wantValidator  bool
-		wantMaskCount  int
-		wantErr        bool
+		name          string
+		cfg           Config
+		wantTimeout   time.Duration
+		wantBaseURL   string
+		wantValidator bool
+		wantMaskCount int
+		wantErr       bool
 	}{
 		{
 			name: "default timeout",

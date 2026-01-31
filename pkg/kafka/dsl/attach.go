@@ -2,106 +2,77 @@ package dsl
 
 import (
 	"encoding/json"
-	"fmt"
-	"time"
 
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
+
+	"github.com/gorelov-m-v/go-test-framework/internal/allure"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 )
 
-func attachFoundMessage(stepCtx provider.StepCtx, message interface{}) {
-	if message == nil {
-		return
+var kafkaReporter = allure.NewDefaultReporter()
+
+func attachKafkaReport[T any](
+	stepCtx provider.StepCtx,
+	q *Query[T],
+	pollingSummary polling.PollingSummary,
+) {
+	searchDTO := allure.KafkaSearchDTO{
+		Topic:   q.topicName,
+		Filters: q.filters,
+		Timeout: q.client.GetDefaultTimeout(),
+		Unique:  q.unique,
 	}
 
-	jsonData, err := json.MarshalIndent(message, "", "  ")
-	if err != nil {
-		stepCtx.WithAttachments(
-			allure.NewAttachment("Kafka Message Found", allure.Text, []byte(fmt.Sprintf("%+v", message))),
-		)
-		return
+	resultDTO := buildKafkaResultDTO(q)
+
+	report := allure.KafkaReportDTO{
+		Search:  searchDTO,
+		Result:  resultDTO,
+		Polling: allure.ToPollingSummaryDTO(pollingSummary),
 	}
 
-	stepCtx.WithAttachments(
-		allure.NewAttachment("Kafka Message Found", allure.JSON, jsonData),
-	)
+	kafkaReporter.AttachKafkaReport(stepCtx, report)
 }
 
-func attachAllFoundMessages(stepCtx provider.StepCtx, messages [][]byte) {
-	if len(messages) == 0 {
-		return
-	}
-
-	var allMessages []map[string]interface{}
-	for _, msgBytes := range messages {
-		var msgMap map[string]interface{}
-		if err := json.Unmarshal(msgBytes, &msgMap); err == nil {
-			allMessages = append(allMessages, msgMap)
+func buildKafkaResultDTO[T any](q *Query[T]) allure.KafkaResultDTO {
+	if !q.found {
+		return allure.KafkaResultDTO{
+			Found: false,
 		}
 	}
 
-	jsonData, err := json.MarshalIndent(allMessages, "", "  ")
-	if err != nil {
-		stepCtx.WithAttachments(
-			allure.NewAttachment(
-				fmt.Sprintf("Kafka Messages Found (%d)", len(messages)),
-				allure.Text,
-				[]byte(fmt.Sprintf("%+v", allMessages)),
-			),
-		)
-		return
+	if q.expectedCount > 0 && len(q.allMatchingMsgs) > 0 {
+		return allure.KafkaResultDTO{
+			Found:      true,
+			MatchCount: len(q.allMatchingMsgs),
+			Message:    parseMessagesToAny(q.allMatchingMsgs),
+		}
 	}
 
-	stepCtx.WithAttachments(
-		allure.NewAttachment(
-			fmt.Sprintf("Kafka Messages Found (%d)", len(messages)),
-			allure.JSON,
-			jsonData,
-		),
-	)
+	var msgAny any
+	if err := json.Unmarshal(q.messageBytes, &msgAny); err != nil {
+		msgAny = string(q.messageBytes)
+	}
+
+	return allure.KafkaResultDTO{
+		Found:      true,
+		MatchCount: 1,
+		Message:    msgAny,
+		RawMessage: q.messageBytes,
+	}
 }
 
-func attachSearchInfoByTopic(
-	stepCtx provider.StepCtx,
-	topicName string,
-	filters map[string]string,
-	timeout time.Duration,
-	unique bool,
-) {
-	info := map[string]interface{}{
-		"topic":   topicName,
-		"filters": filters,
-		"timeout": timeout.String(),
-		"unique":  unique,
+func parseMessagesToAny(messages [][]byte) any {
+	if len(messages) == 0 {
+		return nil
 	}
 
-	jsonData, err := json.MarshalIndent(info, "", "  ")
-	if err != nil {
-		return
+	var parsed []any
+	for _, msgBytes := range messages {
+		var msgMap map[string]interface{}
+		if err := json.Unmarshal(msgBytes, &msgMap); err == nil {
+			parsed = append(parsed, msgMap)
+		}
 	}
-
-	stepCtx.WithAttachments(
-		allure.NewAttachment("Kafka Search Info", allure.Text, jsonData),
-	)
-}
-
-func attachNotFoundMessageByTopic(
-	stepCtx provider.StepCtx,
-	topicName string,
-	filters map[string]string,
-) {
-	info := map[string]interface{}{
-		"topic":   topicName,
-		"filters": filters,
-		"status":  "NOT_FOUND",
-	}
-
-	jsonData, err := json.MarshalIndent(info, "", "  ")
-	if err != nil {
-		return
-	}
-
-	stepCtx.WithAttachments(
-		allure.NewAttachment("Kafka Message Not Found", allure.Text, jsonData),
-	)
+	return parsed
 }

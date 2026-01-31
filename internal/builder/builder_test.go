@@ -612,8 +612,8 @@ func TestInjectGRPCClient_Success(t *testing.T) {
 
 func TestInjectGRPCClient_WithAsyncConfig(t *testing.T) {
 	v := newTestViper(map[string]interface{}{
-		"grpc.test.target":     "localhost:9090",
-		"grpc.test.insecure":   true,
+		"grpc.test.target":        "localhost:9090",
+		"grpc.test.insecure":      true,
 		"grpc_dsl.async.enabled":  true,
 		"grpc_dsl.async.timeout":  "5s",
 		"grpc_dsl.async.interval": "100ms",

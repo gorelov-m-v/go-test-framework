@@ -36,3 +36,21 @@ func ReportAll[T any](
 		exp.Report(stepCtx, mode, err, value, checkRes)
 	}
 }
+
+// AddExpectation appends an expectation to the slice, validating that Send() hasn't been called yet.
+// Returns true if added successfully, false if already sent (and breaks the test).
+func AddExpectation[T any](
+	sCtx provider.StepCtx,
+	sent bool,
+	expectations *[]*Expectation[T],
+	exp *Expectation[T],
+	dslName string,
+) bool {
+	if sent {
+		sCtx.Break(dslName + " DSL Error: Expectations must be added before Send().")
+		sCtx.BrokenNow()
+		return false
+	}
+	*expectations = append(*expectations, exp)
+	return true
+}

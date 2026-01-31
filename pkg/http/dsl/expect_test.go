@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
 )
 
@@ -207,7 +208,7 @@ func TestExpectFieldTrue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyFieldTrueExpectation(tt.path)
+			exp := jsonSource.FieldTrue(tt.path)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -265,7 +266,7 @@ func TestExpectFieldFalse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyFieldFalseExpectation(tt.path)
+			exp := jsonSource.FieldFalse(tt.path)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -331,7 +332,7 @@ func TestExpectFieldIsNull(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyFieldIsNullExpectation(tt.path)
+			exp := jsonSource.FieldIsNull(tt.path)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -399,7 +400,7 @@ func TestExpectFieldIsNotNull(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyFieldIsNotNullExpectation(tt.path)
+			exp := jsonSource.FieldIsNotNull(tt.path)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -529,7 +530,7 @@ func TestExpectFieldValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyFieldValueExpectation(tt.path, tt.expected)
+			exp := jsonSource.FieldEquals(tt.path, tt.expected)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -640,7 +641,7 @@ func TestExpectFieldNotEmpty(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyFieldNotEmptyExpectation(tt.path)
+			exp := jsonSource.FieldNotEmpty(tt.path)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -735,7 +736,7 @@ func TestExpectArrayContains(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeArrayContainsExpectation(tt.path, tt.expected)
+			exp := jsonSource.ArrayContains(tt.path, tt.expected)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -756,7 +757,7 @@ func TestExpectArrayContains_WithStruct(t *testing.T) {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
-	exp := makeArrayContainsExpectation("items", Item{ID: 2})
+	exp := jsonSource.ArrayContains("items", Item{ID: 2})
 	resp := &client.Response[any]{
 		RawBody: []byte(`{"items": [{"id": 1, "name": "first"}, {"id": 2, "name": "second"}]}`),
 	}
@@ -845,7 +846,7 @@ func TestExpectArrayContainsExact(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeArrayContainsExactExpectation(tt.path, tt.expected)
+			exp := jsonSource.ArrayContainsExact(tt.path, tt.expected)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -901,7 +902,7 @@ func TestExpectArrayContainsExact_WithStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeArrayContainsExactExpectation("items", tt.expected)
+			exp := jsonSource.ArrayContainsExact("items", tt.expected)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -999,7 +1000,7 @@ func TestExpectResponseBody(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyExpectation(tt.expected)
+			exp := jsonSource.BodyEquals(tt.expected)
 			var resp *client.Response[any]
 			if tt.err == nil {
 				resp = &client.Response[any]{RawBody: []byte(tt.json)}
@@ -1053,7 +1054,7 @@ func TestExpectResponseBody_NestedStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyExpectation(tt.expected)
+			exp := jsonSource.BodyEquals(tt.expected)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -1150,7 +1151,7 @@ func TestExpectResponseBodyPartial(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyPartialExpectation(tt.expected)
+			exp := jsonSource.BodyPartial(tt.expected)
 			var resp *client.Response[any]
 			if tt.err == nil {
 				resp = &client.Response[any]{RawBody: []byte(tt.json)}
@@ -1204,7 +1205,7 @@ func TestExpectResponseBodyPartial_NestedStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp := makeResponseBodyPartialExpectation(tt.expected)
+			exp := jsonSource.BodyPartial(tt.expected)
 			resp := &client.Response[any]{RawBody: []byte(tt.json)}
 
 			result := exp.Check(nil, resp)
@@ -1225,7 +1226,7 @@ func TestExpectResponseBodyPartial_FieldMissing(t *testing.T) {
 		ID    int    `json:"id"`
 		Email string `json:"email"`
 	}
-	exp := makeResponseBodyPartialExpectation(User{ID: 1, Email: "test@test.com"})
+	exp := jsonSource.BodyPartial(User{ID: 1, Email: "test@test.com"})
 	resp := &client.Response[any]{
 		RawBody: []byte(`{"id": 1, "name": "John"}`),
 	}
@@ -1267,7 +1268,7 @@ func TestValidateJSONPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateJSONPath(tt.path)
+			err := expect.ValidateJSONPath(tt.path)
 
 			if tt.wantErr {
 				assert.Error(t, err)

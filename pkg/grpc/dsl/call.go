@@ -79,12 +79,7 @@ func (c *Call[TReq, TResp]) Metadata(key, value string) *Call[TReq, TResp] {
 }
 
 func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Response[any]]) {
-	if c.sent {
-		c.sCtx.Break("gRPC DSL Error: Expectations must be added before Send(). Call ExpectNoError(), ExpectFieldValue(), etc. before Send().")
-		c.sCtx.BrokenNow()
-		return
-	}
-	c.expectations = append(c.expectations, exp)
+	expect.AddExpectation(c.sCtx, c.sent, &c.expectations, exp, "gRPC")
 }
 
 // Send executes the gRPC call and validates all expectations.
@@ -94,13 +89,11 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validate()
 
 	c.sCtx.WithNewStep(c.stepName(), func(stepCtx provider.StepCtx) {
-		attachRequest(stepCtx, c)
-
 		resp, err, summary := c.execute(stepCtx, c.expectations)
 		c.resp = resp
 		c.sent = true
 
-		c.attachResults(stepCtx, summary)
+		attachGRPCReport(stepCtx, c, c.resp, summary)
 		c.assertResults(stepCtx, err)
 	})
 
@@ -109,11 +102,6 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 
 func (c *Call[TReq, TResp]) stepName() string {
 	return fmt.Sprintf("gRPC %s", c.fullMethod)
-}
-
-func (c *Call[TReq, TResp]) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	polling.AttachIfAsync(stepCtx, summary)
-	attachResponse(stepCtx, c.resp)
 }
 
 func (c *Call[TReq, TResp]) assertResults(stepCtx provider.StepCtx, err error) {
@@ -127,17 +115,7 @@ func (c *Call[TReq, TResp]) assertNoExpectations(stepCtx provider.StepCtx, mode 
 }
 
 func (c *Call[TReq, TResp]) convertToAny() *client.Response[any] {
-	respAny := &client.Response[any]{
-		Metadata: c.resp.Metadata,
-		Duration: c.resp.Duration,
-		Error:    c.resp.Error,
-		RawBody:  c.resp.RawBody,
-	}
-	if c.resp.Body != nil {
-		var bodyAny any = c.resp.Body
-		respAny.Body = &bodyAny
-	}
-	return respAny
+	return c.resp.ToAny()
 }
 
 func (c *Call[TReq, TResp]) validate() {

@@ -18,39 +18,29 @@ func (c *Call[TReq, TResp]) execute(
 	expectations []*expect.Expectation[*client.Response[any]],
 ) (*client.Response[TResp], error, polling.PollingSummary) {
 	return retry.ExecuteDSL(retry.DSLConfig[*client.Response[TResp], *client.Response[any]]{
-		Ctx:          c.ctx,
-		StepCtx:      stepCtx,
-		AsyncConfig:  c.client.AsyncConfig,
-		Expectations: expectations,
-
-		Executor: func(ctx context.Context) (*client.Response[TResp], error) {
-			return client.Invoke[TReq, TResp](ctx, c.client, c.fullMethod, c.body, c.metadata)
-		},
-
-		Convert: func(resp *client.Response[TResp]) *client.Response[any] {
-			respAny := &client.Response[any]{
-				Metadata: resp.Metadata,
-				Duration: resp.Duration,
-				Error:    resp.Error,
-				RawBody:  resp.RawBody,
-			}
-			if resp.Body != nil {
-				var bodyAny any = resp.Body
-				respAny.Body = &bodyAny
-			}
-			return respAny
-		},
-
-		PostProcess: func(resp *client.Response[TResp], err error, summary *polling.PollingSummary) {
-			retry.PostProcessSummary(resp, err, summary)
-		},
-
-		NilResultFactory: func(err error) *client.Response[TResp] {
-			errMsg := errors.New(constants.ErrNilResponse)
-			if err != nil {
-				errMsg = err
-			}
-			return &client.Response[TResp]{Error: errMsg}
-		},
+		Ctx:              c.ctx,
+		StepCtx:          stepCtx,
+		AsyncConfig:      c.client.AsyncConfig,
+		Expectations:     expectations,
+		Executor:         c.doRequest,
+		Convert:          func(resp *client.Response[TResp]) *client.Response[any] { return resp.ToAny() },
+		PostProcess:      postProcessGRPC[TResp],
+		NilResultFactory: newGRPCErrorResponse[TResp],
 	})
+}
+
+func (c *Call[TReq, TResp]) doRequest(ctx context.Context) (*client.Response[TResp], error) {
+	return client.Invoke[TReq, TResp](ctx, c.client, c.fullMethod, c.body, c.metadata)
+}
+
+func postProcessGRPC[TResp any](resp *client.Response[TResp], err error, summary *polling.PollingSummary) {
+	retry.PostProcessSummary(resp, err, summary)
+}
+
+func newGRPCErrorResponse[TResp any](err error) *client.Response[TResp] {
+	errMsg := errors.New(constants.ErrNilResponse)
+	if err != nil {
+		errMsg = err
+	}
+	return &client.Response[TResp]{Error: errMsg}
 }

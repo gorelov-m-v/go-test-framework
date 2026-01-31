@@ -7,6 +7,7 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/tidwall/gjson"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/jsonutil"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 )
 
@@ -212,15 +213,14 @@ func checkJSONField[T any](cfg JSONFieldExpectationConfig[T], err error, result 
 		}, false
 	}
 
-	if !gjson.ValidBytes(jsonBytes) {
+	jsonRes, fieldErr := jsonutil.GetField(jsonBytes, cfg.Path)
+	if fieldErr != nil {
 		return gjson.Result{}, polling.CheckResult{
 			Ok:        false,
 			Retryable: true,
-			Reason:    "Invalid JSON",
+			Reason:    fmt.Sprintf("Invalid JSON: %v", fieldErr),
 		}, false
 	}
-
-	jsonRes := gjson.GetBytes(jsonBytes, cfg.Path)
 	if !jsonRes.Exists() {
 		return gjson.Result{}, polling.CheckResult{
 			Ok:        false,
@@ -370,7 +370,7 @@ func BuildBytesJSONFieldNullCheck(cfg BytesJSONFieldNullCheckConfig) *Expectatio
 			result := gjson.GetBytes(msgBytes, cfg.Path)
 
 			if cfg.ExpectedNull {
-				if result.Exists() && result.Type != gjson.Null {
+				if result.Exists() && !jsonutil.IsNull(result) {
 					return polling.CheckResult{
 						Ok:        false,
 						Retryable: false,
@@ -380,7 +380,7 @@ func BuildBytesJSONFieldNullCheck(cfg BytesJSONFieldNullCheckConfig) *Expectatio
 				return polling.CheckResult{Ok: true}
 			}
 
-			if !result.Exists() || result.Type == gjson.Null {
+			if !result.Exists() || jsonutil.IsNull(result) {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
@@ -423,7 +423,8 @@ func BuildFullObjectExpectation[T any](cfg FullObjectExpectationConfig[T]) *Expe
 				}
 			}
 
-			if !gjson.ValidBytes(jsonBytes) {
+			jsonRes, parseErr := jsonutil.Parse(jsonBytes)
+			if parseErr != nil {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: cfg.Retryable,
@@ -431,7 +432,6 @@ func BuildFullObjectExpectation[T any](cfg FullObjectExpectationConfig[T]) *Expe
 				}
 			}
 
-			jsonRes := gjson.ParseBytes(jsonBytes)
 			ok, msg := cfg.Compare(jsonRes, cfg.Expected)
 			if !ok {
 				return polling.CheckResult{
@@ -464,7 +464,8 @@ func BuildBytesObjectExpectation(cfg BytesObjectExpectationConfig) *Expectation[
 				}
 			}
 
-			if !gjson.ValidBytes(msgBytes) {
+			jsonRes, parseErr := jsonutil.Parse(msgBytes)
+			if parseErr != nil {
 				return polling.CheckResult{
 					Ok:        false,
 					Retryable: false,
@@ -472,7 +473,6 @@ func BuildBytesObjectExpectation(cfg BytesObjectExpectationConfig) *Expectation[
 				}
 			}
 
-			jsonRes := gjson.ParseBytes(msgBytes)
 			ok, msg := cfg.Compare(jsonRes, cfg.Expected)
 			if !ok {
 				return polling.CheckResult{

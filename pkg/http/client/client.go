@@ -38,10 +38,7 @@ func New(cfg Config) (*Client, error) {
 
 	maskHeaders := parseMaskHeaders(cfg.MaskHeaders)
 
-	asyncCfg := cfg.AsyncConfig
-	if asyncCfg.Timeout == 0 {
-		asyncCfg = config.DefaultAsyncConfig()
-	}
+	asyncCfg := cfg.AsyncConfig.WithDefaults()
 
 	var contractValidator *contract.Validator
 	if cfg.ContractSpec != "" {
@@ -83,6 +80,14 @@ func (c *Client) ShouldMaskHeader(name string) bool {
 		return false
 	}
 	return c.maskHeaders[strings.ToLower(strings.TrimSpace(name))]
+}
+
+func (c *Client) GetBaseURL() string {
+	return c.BaseURL
+}
+
+func (c *Client) BuildEffectiveURL(path string, pathParams, queryParams map[string]string) (string, error) {
+	return BuildEffectiveURL(c.BaseURL, path, pathParams, queryParams)
 }
 
 func (c *Client) Do(ctx context.Context, req *Request[any]) (*Response[any], error) {

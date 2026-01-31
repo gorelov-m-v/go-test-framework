@@ -725,3 +725,242 @@ func (s *RegisterNegativeSuite) BeforeAll(t provider.T) {
 
 **Key Principle:**
 > Test cases should be **self-contained with immutable data**. Data is captured at BeforeAll time and each test case operates on its own copy.
+
+---
+
+## Framework Internal Architecture
+
+This section documents the internal structure for contributors and maintainers.
+
+### Directory Structure
+
+```
+internal/
+├── allure/              # Centralized Allure reporting
+│   ├── reporter.go      # Reporter struct with MaskingConfig
+│   ├── config.go        # Masking configuration
+│   ├── builder.go       # ReportBuilder for text formatting
+│   ├── report.go        # Combined report methods (HTTP, gRPC, Redis, Kafka)
+│   ├── http.go          # HTTP-specific formatting helpers
+│   ├── httpdto.go       # HTTP DTO structures
+│   ├── sql.go           # SQL combined report method
+│   ├── sqldto.go        # SQL DTO structures
+│   ├── grpc.go          # gRPC-specific formatting helpers
+│   ├── grpcdto.go       # gRPC DTO structures
+│   ├── redis.go         # Redis-specific formatting helpers
+│   ├── redisdto.go      # Redis DTO structures
+│   ├── kafkadto.go      # Kafka DTO structures
+│   └── utils.go         # CleanResult, field name extraction
+│
+├── expect/              # Expectation infrastructure
+│   ├── expect.go        # Expectation[T] struct
+│   ├── precheck.go      # Unified preCheck builders
+│   ├── validation.go    # Value validation checks
+│   ├── builders.go      # Expectation builder helpers
+│   ├── checks.go        # Common check functions
+│   └── assert.go        # AssertExpectations orchestration
+│
+├── retry/               # Retry execution infrastructure
+│   ├── executor.go      # ExecuteWithRetry, ExecuteSingle
+│   ├── dsl.go           # DSLConfig, ExecuteDSL, ExecuteDSLSimple
+│   └── postprocess.go   # PostProcessSummary, PostProcessNetworkError
+│
+├── polling/             # Async step infrastructure
+│   └── polling.go       # RetryContext, AssertionMode, GetStepMode
+│
+├── validation/          # DSL input validation
+│   └── validator.go     # Fluent validator for DSL inputs
+│
+└── jsonutil/            # JSON comparison utilities
+    └── jsonutil.go      # Type-aware JSON comparison
+```
+
+### Allure Reporting Pattern
+
+All DSLs use **combined reports** - one attachment per DSL call containing Request, Response/Result, and Polling sections:
+
+```go
+// In pkg/*/dsl/attach.go - builds combined report DTO
+var grpcReporter = allure.NewDefaultReporter()
+
+func attachGRPCReport[TReq, TResp any](
+    stepCtx provider.StepCtx,
+    c *Call[TReq, TResp],
+    resp *client.Response[TResp],
+    pollingSummary polling.PollingSummary,
+) {
+    report := allure.GRPCReportDTO{
+        Request:  buildGRPCRequestDTO(c),
+        Response: buildGRPCResponseDTO(resp),
+    }
+    if pollingSummary.Attempts > 0 {
+        report.Polling = &allure.PollingSummaryDTO{...}
+    }
+    grpcReporter.AttachGRPCReport(stepCtx, report)
+}
+```
+
+**Combined report format (hybrid text+JSON):**
+```
+═══════════════════════════════════════════════════════════════
+gRPC /user.UserService/GetUser → OK
+═══════════════════════════════════════════════════════════════
+
+REQUEST
+───────────────────────────────────────────────────────────────
+Target: localhost:9090
+Method: /user.UserService/GetUser
+
+Metadata:
+  x-request-id: 123
+  authorization: Bearer ***MASKED***
+
+Body:
+{
+  "id": "456"
+}
+
+RESPONSE [OK]
+───────────────────────────────────────────────────────────────
+Status: OK (0)
+Duration: 45.2ms
+
+Body:
+{
+  "name": "John"
+}
+
+POLLING (success)
+───────────────────────────────────────────────────────────────
+Attempts: 3
+Elapsed: 1.2s
+Success: true
+```
+
+### Expectation PreCheck Pattern
+
+All DSLs use `internal/expect/precheck.go` for common validation:
+
+```go
+// In pkg/*/dsl/expect.go
+var httpPreCheckConfig = expect.PreCheckConfig[*client.Response[any]]{
+    IsNil:           func(r *client.Response[any]) bool { return r == nil },
+    GetNetworkError: func(r *client.Response[any]) string { return r.NetworkError },
+    EmptyBodyCheck:  func(r *client.Response[any]) bool { return len(r.RawBody) == 0 },
+}
+
+var preCheck = expect.BuildPreCheck(httpPreCheckConfig)
+var preCheckWithBody = expect.BuildPreCheckWithBody(httpPreCheckConfig)
+
+// Usage in expectation
+func makeFieldValueExpectation(path string, expected any) *expect.Expectation[*client.Response[any]] {
+    return expect.New(
+        fmt.Sprintf("Expect field '%s' = %v", path, expected),
+        func(err error, resp *client.Response[any]) polling.CheckResult {
+            if res, ok := preCheckWithBody(err, resp); !ok {
+                return res  // Returns early if nil/network error/empty body
+            }
+            // Actual check logic...
+        },
+        reporter,
+    )
+}
+```
+
+### DSL Validation Pattern
+
+All DSLs use `internal/validation/` for input validation:
+
+```go
+func (c *Call[TReq, TResp]) validate() {
+    v := validation.New(c.sCtx, "HTTP")
+    v.RequireNotNil(c.client, "HTTP client")
+    v.RequireNotEmptyWithHint(c.req.Method, "HTTP method", "Use .GET(), .POST()...")
+    v.RequireNotEmptyWithHint(c.req.Path, "HTTP path", "Provide path in .GET(\"/api\").")
+}
+```
+
+### Adding a New DSL
+
+When adding a new DSL (e.g., MongoDB), follow these steps:
+
+1. **Create client package:** `pkg/mongodb/client/`
+   - `client.go` - connection, configuration
+   - Response/Result types
+
+2. **Create DSL package:** `pkg/mongodb/dsl/`
+   - `query.go` - Query struct with fluent methods
+   - `expect.go` - Expectation methods
+   - `attach.go` - Thin wrapper calling `internal/allure/`
+   - `retry.go` - Async execution logic
+
+3. **Add Allure reporter:** `internal/allure/`
+   - `mongodbdto.go` - DTO structures
+   - `mongodb.go` - Reporter methods
+
+4. **Add preCheck config:** In `pkg/mongodb/dsl/expect.go`
+   ```go
+   var mongoPreCheckConfig = expect.PreCheckConfig[*client.Result]{
+       IsNil: func(r *client.Result) bool { return r == nil },
+       // ...
+   }
+   var preCheck = expect.BuildPreCheck(mongoPreCheckConfig)
+   ```
+
+5. **Add DI injection:** `internal/builder/`
+
+### Retry Execution Pattern
+
+All DSLs use `internal/retry/` with named helper functions for readability:
+
+```go
+// In pkg/http/dsl/retry.go
+func (c *Call[TReq, TResp]) execute(
+    stepCtx provider.StepCtx,
+    expectations []*expect.Expectation[*client.Response[any]],
+) (*client.Response[TResp], error, polling.PollingSummary) {
+    return retry.ExecuteDSL(retry.DSLConfig[*client.Response[TResp], *client.Response[any]]{
+        Ctx:              c.ctx,
+        StepCtx:          stepCtx,
+        AsyncConfig:      c.client.AsyncConfig,
+        Expectations:     expectations,
+        Executor:         c.doRequest,           // Named method
+        Convert:          convertHTTPResponse,   // Named function
+        PostProcess:      postProcessHTTP,       // Named function
+        NilResultFactory: newHTTPErrorResponse,  // Named function
+    })
+}
+
+// Each function is separate - easy to test and understand
+func (c *Call[TReq, TResp]) doRequest(ctx context.Context) (*client.Response[TResp], error) {
+    return client.DoTyped[TReq, TResp](ctx, c.client, c.req)
+}
+
+func convertHTTPResponse[TResp any](resp *client.Response[TResp]) *client.Response[any] {
+    return &client.Response[any]{
+        StatusCode:   resp.StatusCode,
+        Headers:      resp.Headers,
+        RawBody:      resp.RawBody,
+        Error:        resp.Error,
+        Duration:     resp.Duration,
+        NetworkError: resp.NetworkError,
+    }
+}
+```
+
+**DSLConfig fields:**
+- `Executor` - Function that performs the actual operation
+- `Convert` - Converts typed result to `any` for expectations (when TResult != TExpect)
+- `PostProcess` - Captures errors into PollingSummary for reporting
+- `NilResultFactory` - Creates error response when result is nil
+- `Checker` - Custom checker (used by Kafka instead of expectations)
+
+### Key Design Principles
+
+1. **Combined reports** - One attachment per DSL call (Request + Response + Polling)
+2. **Centralized logic in internal/** - Single source of truth for patterns
+3. **PreCheck unification** - All DSLs use `expect.BuildPreCheck()` for common validation
+4. **Named functions in retry.go** - No inline closures, easy to test
+5. **Hybrid report format** - Text for metadata, JSON for body/data
+6. **MaskingConfig** - Centralized sensitive data masking
+7. **Public AsyncConfig** - All clients expose `AsyncConfig` as public field

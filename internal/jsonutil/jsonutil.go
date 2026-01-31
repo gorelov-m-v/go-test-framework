@@ -17,6 +17,59 @@ const (
 	ModeExact
 )
 
+// ValidateBytes checks if bytes are valid JSON.
+func ValidateBytes(raw []byte) error {
+	if !gjson.ValidBytes(raw) {
+		return fmt.Errorf("invalid JSON")
+	}
+	return nil
+}
+
+// ValidateString checks if string is valid JSON.
+func ValidateString(s string) error {
+	if !gjson.Valid(s) {
+		return fmt.Errorf("invalid JSON")
+	}
+	return nil
+}
+
+// GetField validates JSON bytes and returns field at the given GJSON path.
+func GetField(raw []byte, path string) (gjson.Result, error) {
+	if err := ValidateBytes(raw); err != nil {
+		return gjson.Result{}, err
+	}
+	return gjson.GetBytes(raw, path), nil
+}
+
+// GetFieldFromString validates JSON string and returns field at the given GJSON path.
+func GetFieldFromString(s string, path string) (gjson.Result, error) {
+	if err := ValidateString(s); err != nil {
+		return gjson.Result{}, err
+	}
+	return gjson.Get(s, path), nil
+}
+
+// Parse validates and parses JSON bytes into gjson.Result.
+func Parse(raw []byte) (gjson.Result, error) {
+	if err := ValidateBytes(raw); err != nil {
+		return gjson.Result{}, err
+	}
+	return gjson.ParseBytes(raw), nil
+}
+
+// ParseString validates and parses JSON string into gjson.Result.
+func ParseString(s string) (gjson.Result, error) {
+	if err := ValidateString(s); err != nil {
+		return gjson.Result{}, err
+	}
+	return gjson.Parse(s), nil
+}
+
+// IsNull checks if the gjson.Result is null.
+func IsNull(res gjson.Result) bool {
+	return res.Type == gjson.Null
+}
+
 func IsEmpty(res gjson.Result) bool {
 	if !res.Exists() {
 		return true

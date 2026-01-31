@@ -19,35 +19,35 @@ type mockStepCtx struct {
 	mode polling.StepMode
 }
 
-func (m *mockStepCtx) StepMode() polling.StepMode                                               { return m.mode }
-func (m *mockStepCtx) Step(step *allure.Step)                                                   {}
-func (m *mockStepCtx) NewStep(stepName string, parameters ...*allure.Parameter)                 {}
+func (m *mockStepCtx) StepMode() polling.StepMode                               { return m.mode }
+func (m *mockStepCtx) Step(step *allure.Step)                                   {}
+func (m *mockStepCtx) NewStep(stepName string, parameters ...*allure.Parameter) {}
 func (m *mockStepCtx) WithNewStep(stepName string, step func(sCtx provider.StepCtx), params ...*allure.Parameter) {
 }
 func (m *mockStepCtx) WithNewAsyncStep(stepName string, step func(sCtx provider.StepCtx), params ...*allure.Parameter) {
 }
-func (m *mockStepCtx) WithParameters(parameters ...*allure.Parameter)                  {}
-func (m *mockStepCtx) WithNewParameters(kv ...interface{})                             {}
-func (m *mockStepCtx) WithAttachments(attachment ...*allure.Attachment)                {}
+func (m *mockStepCtx) WithParameters(parameters ...*allure.Parameter)   {}
+func (m *mockStepCtx) WithNewParameters(kv ...interface{})              {}
+func (m *mockStepCtx) WithAttachments(attachment ...*allure.Attachment) {}
 func (m *mockStepCtx) WithNewAttachment(name string, mimeType allure.MimeType, content []byte) {
 }
-func (m *mockStepCtx) Assert() provider.Asserts                           { return nil }
-func (m *mockStepCtx) Require() provider.Asserts                          { return nil }
-func (m *mockStepCtx) LogStep(args ...interface{})                        {}
-func (m *mockStepCtx) LogfStep(format string, args ...interface{})        {}
-func (m *mockStepCtx) WithStatusDetails(message, trace string)            {}
-func (m *mockStepCtx) CurrentStep() *allure.Step                          { return nil }
-func (m *mockStepCtx) Broken()                                            {}
-func (m *mockStepCtx) BrokenNow()                                         {}
-func (m *mockStepCtx) Fail()                                              {}
-func (m *mockStepCtx) FailNow()                                           {}
-func (m *mockStepCtx) Log(args ...interface{})                            {}
-func (m *mockStepCtx) Logf(format string, args ...interface{})            {}
-func (m *mockStepCtx) Error(args ...interface{})                          {}
-func (m *mockStepCtx) Errorf(format string, args ...interface{})          {}
-func (m *mockStepCtx) Break(args ...interface{})                          {}
-func (m *mockStepCtx) Breakf(format string, args ...interface{})          {}
-func (m *mockStepCtx) Name() string                                       { return "mock" }
+func (m *mockStepCtx) Assert() provider.Asserts                    { return nil }
+func (m *mockStepCtx) Require() provider.Asserts                   { return nil }
+func (m *mockStepCtx) LogStep(args ...interface{})                 {}
+func (m *mockStepCtx) LogfStep(format string, args ...interface{}) {}
+func (m *mockStepCtx) WithStatusDetails(message, trace string)     {}
+func (m *mockStepCtx) CurrentStep() *allure.Step                   { return nil }
+func (m *mockStepCtx) Broken()                                     {}
+func (m *mockStepCtx) BrokenNow()                                  {}
+func (m *mockStepCtx) Fail()                                       {}
+func (m *mockStepCtx) FailNow()                                    {}
+func (m *mockStepCtx) Log(args ...interface{})                     {}
+func (m *mockStepCtx) Logf(format string, args ...interface{})     {}
+func (m *mockStepCtx) Error(args ...interface{})                   {}
+func (m *mockStepCtx) Errorf(format string, args ...interface{})   {}
+func (m *mockStepCtx) Break(args ...interface{})                   {}
+func (m *mockStepCtx) Breakf(format string, args ...interface{})   {}
+func (m *mockStepCtx) Name() string                                { return "mock" }
 
 var _ polling.StepModeProvider = (*mockStepCtx)(nil)
 

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/tidwall/gjson"
+
+	"github.com/gorelov-m-v/go-test-framework/internal/jsonutil"
 )
 
 // With adds a filter to match messages where the JSON field at key equals value.
@@ -55,7 +57,7 @@ func (q *Query[T]) matchesFilter(jsonValue []byte) bool {
 		return true
 	}
 
-	if !gjson.ValidBytes(jsonValue) {
+	if err := jsonutil.ValidateBytes(jsonValue); err != nil {
 		return false
 	}
 

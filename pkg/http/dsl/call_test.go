@@ -22,33 +22,33 @@ type mockStepCtx struct {
 	steps           []string
 }
 
-func (m *mockStepCtx) Step(step *allure.Step)                                            {}
-func (m *mockStepCtx) NewStep(stepName string, parameters ...*allure.Parameter)          {}
+func (m *mockStepCtx) Step(step *allure.Step)                                   {}
+func (m *mockStepCtx) NewStep(stepName string, parameters ...*allure.Parameter) {}
 func (m *mockStepCtx) WithNewStep(stepName string, step func(sCtx provider.StepCtx), params ...*allure.Parameter) {
 	m.steps = append(m.steps, stepName)
 	step(m)
 }
 func (m *mockStepCtx) WithNewAsyncStep(stepName string, step func(sCtx provider.StepCtx), params ...*allure.Parameter) {
 }
-func (m *mockStepCtx) WithParameters(parameters ...*allure.Parameter)      {}
-func (m *mockStepCtx) WithNewParameters(kv ...interface{})                 {}
-func (m *mockStepCtx) WithAttachments(attachment ...*allure.Attachment)    {}
+func (m *mockStepCtx) WithParameters(parameters ...*allure.Parameter)   {}
+func (m *mockStepCtx) WithNewParameters(kv ...interface{})              {}
+func (m *mockStepCtx) WithAttachments(attachment ...*allure.Attachment) {}
 func (m *mockStepCtx) WithNewAttachment(name string, mimeType allure.MimeType, content []byte) {
 }
-func (m *mockStepCtx) Assert() provider.Asserts  { return &mockAsserts{} }
-func (m *mockStepCtx) Require() provider.Asserts { return &mockAsserts{} }
-func (m *mockStepCtx) LogStep(args ...interface{})                         {}
-func (m *mockStepCtx) LogfStep(format string, args ...interface{})         {}
-func (m *mockStepCtx) WithStatusDetails(message, trace string)             {}
-func (m *mockStepCtx) CurrentStep() *allure.Step                           { return nil }
-func (m *mockStepCtx) Broken()                                             { m.brokenCalled = true }
-func (m *mockStepCtx) BrokenNow()                                          { m.brokenNowCalled = true }
-func (m *mockStepCtx) Fail()                                               {}
-func (m *mockStepCtx) FailNow()                                            {}
-func (m *mockStepCtx) Log(args ...interface{})                             {}
-func (m *mockStepCtx) Logf(format string, args ...interface{})             {}
-func (m *mockStepCtx) Error(args ...interface{})                           {}
-func (m *mockStepCtx) Errorf(format string, args ...interface{})           {}
+func (m *mockStepCtx) Assert() provider.Asserts                    { return &mockAsserts{} }
+func (m *mockStepCtx) Require() provider.Asserts                   { return &mockAsserts{} }
+func (m *mockStepCtx) LogStep(args ...interface{})                 {}
+func (m *mockStepCtx) LogfStep(format string, args ...interface{}) {}
+func (m *mockStepCtx) WithStatusDetails(message, trace string)     {}
+func (m *mockStepCtx) CurrentStep() *allure.Step                   { return nil }
+func (m *mockStepCtx) Broken()                                     { m.brokenCalled = true }
+func (m *mockStepCtx) BrokenNow()                                  { m.brokenNowCalled = true }
+func (m *mockStepCtx) Fail()                                       {}
+func (m *mockStepCtx) FailNow()                                    {}
+func (m *mockStepCtx) Log(args ...interface{})                     {}
+func (m *mockStepCtx) Logf(format string, args ...interface{})     {}
+func (m *mockStepCtx) Error(args ...interface{})                   {}
+func (m *mockStepCtx) Errorf(format string, args ...interface{})   {}
 func (m *mockStepCtx) Break(args ...interface{}) {
 	m.brokenCalled = true
 	if len(args) > 0 {
@@ -60,27 +60,27 @@ func (m *mockStepCtx) Name() string                              { return "mock"
 
 type mockAsserts struct{}
 
-func (m *mockAsserts) Exactly(expected, actual interface{}, msgAndArgs ...interface{})          {}
-func (m *mockAsserts) Same(expected, actual interface{}, msgAndArgs ...interface{})             {}
-func (m *mockAsserts) NotSame(expected, actual interface{}, msgAndArgs ...interface{})          {}
-func (m *mockAsserts) Equal(expected, actual interface{}, msgAndArgs ...interface{})            {}
-func (m *mockAsserts) NotEqual(expected, actual interface{}, msgAndArgs ...interface{})         {}
-func (m *mockAsserts) EqualValues(expected, actual interface{}, msgAndArgs ...interface{})      {}
-func (m *mockAsserts) NotEqualValues(expected, actual interface{}, msgAndArgs ...interface{})   {}
-func (m *mockAsserts) Error(err error, msgAndArgs ...interface{})                               {}
-func (m *mockAsserts) NoError(err error, msgAndArgs ...interface{})                             {}
-func (m *mockAsserts) EqualError(theError error, errString string, msgAndArgs ...interface{})   {}
-func (m *mockAsserts) ErrorIs(err, target error, msgAndArgs ...interface{})                     {}
-func (m *mockAsserts) ErrorAs(err error, target interface{}, msgAndArgs ...interface{})         {}
-func (m *mockAsserts) NotNil(object interface{}, msgAndArgs ...interface{})                     {}
-func (m *mockAsserts) Nil(object interface{}, msgAndArgs ...interface{})                        {}
-func (m *mockAsserts) Len(object interface{}, length int, msgAndArgs ...interface{})            {}
-func (m *mockAsserts) NotContains(s, contains interface{}, msgAndArgs ...interface{})           {}
-func (m *mockAsserts) Contains(s, contains interface{}, msgAndArgs ...interface{})              {}
-func (m *mockAsserts) Greater(e1, e2 interface{}, msgAndArgs ...interface{})                    {}
-func (m *mockAsserts) GreaterOrEqual(e1, e2 interface{}, msgAndArgs ...interface{})             {}
-func (m *mockAsserts) Less(e1, e2 interface{}, msgAndArgs ...interface{})                       {}
-func (m *mockAsserts) LessOrEqual(e1, e2 interface{}, msgAndArgs ...interface{})                {}
+func (m *mockAsserts) Exactly(expected, actual interface{}, msgAndArgs ...interface{})        {}
+func (m *mockAsserts) Same(expected, actual interface{}, msgAndArgs ...interface{})           {}
+func (m *mockAsserts) NotSame(expected, actual interface{}, msgAndArgs ...interface{})        {}
+func (m *mockAsserts) Equal(expected, actual interface{}, msgAndArgs ...interface{})          {}
+func (m *mockAsserts) NotEqual(expected, actual interface{}, msgAndArgs ...interface{})       {}
+func (m *mockAsserts) EqualValues(expected, actual interface{}, msgAndArgs ...interface{})    {}
+func (m *mockAsserts) NotEqualValues(expected, actual interface{}, msgAndArgs ...interface{}) {}
+func (m *mockAsserts) Error(err error, msgAndArgs ...interface{})                             {}
+func (m *mockAsserts) NoError(err error, msgAndArgs ...interface{})                           {}
+func (m *mockAsserts) EqualError(theError error, errString string, msgAndArgs ...interface{}) {}
+func (m *mockAsserts) ErrorIs(err, target error, msgAndArgs ...interface{})                   {}
+func (m *mockAsserts) ErrorAs(err error, target interface{}, msgAndArgs ...interface{})       {}
+func (m *mockAsserts) NotNil(object interface{}, msgAndArgs ...interface{})                   {}
+func (m *mockAsserts) Nil(object interface{}, msgAndArgs ...interface{})                      {}
+func (m *mockAsserts) Len(object interface{}, length int, msgAndArgs ...interface{})          {}
+func (m *mockAsserts) NotContains(s, contains interface{}, msgAndArgs ...interface{})         {}
+func (m *mockAsserts) Contains(s, contains interface{}, msgAndArgs ...interface{})            {}
+func (m *mockAsserts) Greater(e1, e2 interface{}, msgAndArgs ...interface{})                  {}
+func (m *mockAsserts) GreaterOrEqual(e1, e2 interface{}, msgAndArgs ...interface{})           {}
+func (m *mockAsserts) Less(e1, e2 interface{}, msgAndArgs ...interface{})                     {}
+func (m *mockAsserts) LessOrEqual(e1, e2 interface{}, msgAndArgs ...interface{})              {}
 func (m *mockAsserts) Implements(interfaceObject, object interface{}, msgAndArgs ...interface{}) {
 }
 func (m *mockAsserts) Empty(object interface{}, msgAndArgs ...interface{})    {}
@@ -93,15 +93,15 @@ func (m *mockAsserts) Subset(list, subset interface{}, msgAndArgs ...interface{}
 func (m *mockAsserts) NotSubset(list, subset interface{}, msgAndArgs ...interface{})   {}
 func (m *mockAsserts) IsType(expectedType, object interface{}, msgAndArgs ...interface{}) {
 }
-func (m *mockAsserts) True(value bool, msgAndArgs ...interface{})                      {}
-func (m *mockAsserts) False(value bool, msgAndArgs ...interface{})                     {}
-func (m *mockAsserts) Regexp(rx, str interface{}, msgAndArgs ...interface{})           {}
+func (m *mockAsserts) True(value bool, msgAndArgs ...interface{})            {}
+func (m *mockAsserts) False(value bool, msgAndArgs ...interface{})           {}
+func (m *mockAsserts) Regexp(rx, str interface{}, msgAndArgs ...interface{}) {}
 func (m *mockAsserts) ElementsMatch(listA, listB interface{}, msgAndArgs ...interface{}) {
 }
 func (m *mockAsserts) DirExists(path string, msgAndArgs ...interface{}) {}
 func (m *mockAsserts) Condition(condition assert.Comparison, msgAndArgs ...interface{}) {
 }
-func (m *mockAsserts) Zero(i interface{}, msgAndArgs ...interface{}) {}
+func (m *mockAsserts) Zero(i interface{}, msgAndArgs ...interface{})    {}
 func (m *mockAsserts) NotZero(i interface{}, msgAndArgs ...interface{}) {}
 func (m *mockAsserts) InDelta(expected, actual interface{}, delta float64, msgAndArgs ...interface{}) {
 }

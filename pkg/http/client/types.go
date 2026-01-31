@@ -3,6 +3,9 @@ package client
 import (
 	"net/http"
 	"time"
+
+	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 )
 
 type Request[T any] struct {
@@ -32,6 +35,36 @@ func (r *Response[V]) GetNetworkError() string {
 		return ""
 	}
 	return r.NetworkError
+}
+
+func ResponsePreCheckConfig() expect.PreCheckConfig[*Response[any]] {
+	return expect.PreCheckConfig[*Response[any]]{
+		IsNil:           func(r *Response[any]) bool { return r == nil },
+		GetNetworkError: func(r *Response[any]) string { return r.NetworkError },
+		EmptyBodyCheck:  func(r *Response[any]) bool { return len(r.RawBody) == 0 },
+	}
+}
+
+func BuildPreCheck() func(error, *Response[any]) (polling.CheckResult, bool) {
+	return expect.BuildPreCheck(ResponsePreCheckConfig())
+}
+
+func BuildPreCheckWithBody() func(error, *Response[any]) (polling.CheckResult, bool) {
+	return expect.BuildPreCheckWithBody(ResponsePreCheckConfig())
+}
+
+func (r *Response[V]) ToAny() *Response[any] {
+	if r == nil {
+		return nil
+	}
+	return &Response[any]{
+		StatusCode:   r.StatusCode,
+		Headers:      r.Headers,
+		RawBody:      r.RawBody,
+		Error:        r.Error,
+		Duration:     r.Duration,
+		NetworkError: r.NetworkError,
+	}
 }
 
 type ErrorResponse struct {

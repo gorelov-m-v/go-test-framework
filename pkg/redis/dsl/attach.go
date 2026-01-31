@@ -1,79 +1,43 @@
 package dsl
 
 import (
-	"encoding/json"
-
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/allure"
+	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
 
-type redisRequestDTO struct {
-	Server string `json:"server"`
-	Key    string `json:"key"`
-}
+var redisReporter = allure.NewDefaultReporter()
 
-type redisResultDTO struct {
-	Key      string `json:"key"`
-	Exists   bool   `json:"exists"`
-	Value    string `json:"value,omitempty"`
-	TTL      string `json:"ttl,omitempty"`
-	Duration string `json:"duration"`
-	Error    string `json:"error,omitempty"`
-}
-
-func attachRequest(stepCtx provider.StepCtx, q *Query) {
-	dto := redisRequestDTO{
+func attachRedisReport(
+	stepCtx provider.StepCtx,
+	q *Query,
+	result *client.Result,
+	pollingSummary polling.PollingSummary,
+) {
+	reqDTO := allure.RedisRequestDTO{
 		Server: q.client.Addr(),
 		Key:    q.key,
 	}
 
-	jsonBytes, err := json.MarshalIndent(dto, "", "  ")
-	if err != nil {
-		stepCtx.Logf("Failed to marshal Redis request: %v", err)
-		return
-	}
-
-	stepCtx.WithAttachments(allure.NewAttachment("Redis Query", allure.JSON, jsonBytes))
-}
-
-func attachResult(stepCtx provider.StepCtx, result *client.Result) {
-	if result == nil {
-		return
-	}
-
-	dto := redisResultDTO{
-		Key:      result.Key,
-		Exists:   result.Exists,
-		Duration: result.Duration.String(),
-	}
-
-	if result.Exists {
-		dto.Value = result.Value
-		if result.TTL >= 0 {
-			dto.TTL = result.TTL.String()
-		} else if result.TTL == -1 {
-			dto.TTL = "no expiration"
+	resultDTO := allure.RedisResultDTO{}
+	if result != nil {
+		resultDTO = allure.RedisResultDTO{
+			Key:      result.Key,
+			Exists:   result.Exists,
+			Value:    result.Value,
+			TTL:      result.TTL,
+			Duration: result.Duration,
+			Error:    result.Error,
 		}
 	}
 
-	if result.Error != nil {
-		dto.Error = result.Error.Error()
+	report := allure.RedisReportDTO{
+		Request: reqDTO,
+		Result:  resultDTO,
+		Polling: allure.ToPollingSummaryDTO(pollingSummary),
 	}
 
-	jsonBytes, err := json.MarshalIndent(dto, "", "  ")
-	if err != nil {
-		stepCtx.Logf("Failed to marshal Redis result: %v", err)
-		return
-	}
-
-	attachmentName := "Redis Result"
-	if result.Exists {
-		attachmentName = "Redis Result [Found]"
-	} else {
-		attachmentName = "Redis Result [Not Found]"
-	}
-
-	stepCtx.WithAttachments(allure.NewAttachment(attachmentName, allure.JSON, jsonBytes))
+	redisReporter.AttachRedisReport(stepCtx, report)
 }

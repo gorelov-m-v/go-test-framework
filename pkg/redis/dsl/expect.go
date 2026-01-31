@@ -5,100 +5,64 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tidwall/gjson"
-
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/internal/jsonutil"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
 
-// ExpectExists checks that the Redis key exists.
+var preCheck = client.BuildPreCheck()
+var preCheckKeyExists = client.BuildKeyExistsPreCheck(preCheck)
+
+var jsonSource = &expect.JSONExpectationSource[*client.Result]{
+	GetJSON: func(result *client.Result) ([]byte, error) {
+		if err := jsonutil.ValidateString(result.Value); err != nil {
+			return nil, fmt.Errorf("value is not valid JSON")
+		}
+		return []byte(result.Value), nil
+	},
+	PreCheck:         preCheck,
+	PreCheckWithBody: preCheckKeyExists,
+}
+
 func (q *Query) ExpectExists() *Query {
 	q.addExpectation(makeExistsExpectation())
 	return q
 }
 
-// ExpectNotExists checks that the Redis key does not exist.
 func (q *Query) ExpectNotExists() *Query {
 	q.addExpectation(makeNotExistsExpectation())
 	return q
 }
 
-// ExpectValueEquals checks that the key's string value equals the expected value.
 func (q *Query) ExpectValueEquals(expected string) *Query {
 	q.addExpectation(makeValueExpectation(expected))
 	return q
 }
 
-// ExpectValueNotEmpty checks that the key's string value is not empty.
 func (q *Query) ExpectValueNotEmpty() *Query {
 	q.addExpectation(makeValueNotEmptyExpectation())
 	return q
 }
 
-// ExpectFieldEquals checks that a JSON field at the given GJSON path equals the expected value.
-// The key's value must be valid JSON.
 func (q *Query) ExpectFieldEquals(path string, expected any) *Query {
-	q.addExpectation(makeJSONFieldExpectation(path, expected))
+	q.addExpectation(jsonSource.FieldEquals(path, expected))
 	return q
 }
 
-// ExpectFieldNotEmpty checks that a JSON field at the given GJSON path is not empty.
-// The key's value must be valid JSON.
 func (q *Query) ExpectFieldNotEmpty(path string) *Query {
-	q.addExpectation(makeJSONFieldNotEmptyExpectation(path))
+	q.addExpectation(jsonSource.FieldNotEmpty(path))
 	return q
 }
 
-// ExpectTTL checks that the key's TTL is within the specified range.
 func (q *Query) ExpectTTL(minTTL, maxTTL time.Duration) *Query {
 	q.addExpectation(makeTTLExpectation(minTTL, maxTTL))
 	return q
 }
 
-// ExpectNoTTL checks that the key is persistent (no TTL set).
 func (q *Query) ExpectNoTTL() *Query {
 	q.addExpectation(makeNoTTLExpectation())
 	return q
-}
-
-func preCheck(err error, result *client.Result) (polling.CheckResult, bool) {
-	if err != nil {
-		return polling.CheckResult{
-			Ok:        false,
-			Retryable: true,
-			Reason:    fmt.Sprintf("Query failed: %v", err),
-		}, false
-	}
-	if result == nil {
-		return polling.CheckResult{
-			Ok:        false,
-			Retryable: true,
-			Reason:    "Result is nil",
-		}, false
-	}
-	if result.Error != nil {
-		return polling.CheckResult{
-			Ok:        false,
-			Retryable: true,
-			Reason:    fmt.Sprintf("Redis error: %v", result.Error),
-		}, false
-	}
-	return polling.CheckResult{}, true
-}
-
-func preCheckKeyExists(err error, result *client.Result) (polling.CheckResult, bool) {
-	if res, ok := preCheck(err, result); !ok {
-		return res, false
-	}
-	if !result.Exists {
-		return polling.CheckResult{
-			Ok:        false,
-			Retryable: true,
-			Reason:    fmt.Sprintf("Key '%s' does not exist", result.Key),
-		}, false
-	}
-	return polling.CheckResult{}, true
 }
 
 func makeExistsExpectation() *expect.Expectation[*client.Result] {
@@ -176,38 +140,6 @@ func makeValueNotEmptyExpectation() *expect.Expectation[*client.Result] {
 		},
 		expect.StandardReport[*client.Result](name),
 	)
-}
-
-func makeJSONFieldExpectation(path string, expected any) *expect.Expectation[*client.Result] {
-	name := fmt.Sprintf("Expect: JSON field '%s' = %v", path, expected)
-	return expect.BuildJSONFieldExpectation(expect.JSONFieldExpectationConfig[*client.Result]{
-		Path:       path,
-		ExpectName: name,
-		GetJSON: func(result *client.Result) ([]byte, error) {
-			if !gjson.Valid(result.Value) {
-				return nil, fmt.Errorf("value is not valid JSON")
-			}
-			return []byte(result.Value), nil
-		},
-		PreCheck: preCheckKeyExists,
-		Check:    expect.JSONCheckEquals(expected),
-	})
-}
-
-func makeJSONFieldNotEmptyExpectation(path string) *expect.Expectation[*client.Result] {
-	name := fmt.Sprintf("Expect: JSON field '%s' not empty", path)
-	return expect.BuildJSONFieldExpectation(expect.JSONFieldExpectationConfig[*client.Result]{
-		Path:       path,
-		ExpectName: name,
-		GetJSON: func(result *client.Result) ([]byte, error) {
-			if !gjson.Valid(result.Value) {
-				return nil, fmt.Errorf("value is not valid JSON")
-			}
-			return []byte(result.Value), nil
-		},
-		PreCheck: preCheckKeyExists,
-		Check:    expect.JSONCheckNotEmpty(),
-	})
 }
 
 func makeTTLExpectation(minTTL, maxTTL time.Duration) *expect.Expectation[*client.Result] {

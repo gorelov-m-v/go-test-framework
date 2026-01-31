@@ -7,10 +7,10 @@ import (
 
 func TestToBool(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   any
-		want    bool
-		wantOK  bool
+		name   string
+		input  any
+		want   bool
+		wantOK bool
 	}{
 		{"bool true", true, true, true},
 		{"bool false", false, false, true},

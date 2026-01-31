@@ -8,13 +8,25 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
+type StepBreaker interface {
+	Break(args ...interface{})
+	BrokenNow()
+}
+
 type Validator struct {
-	sCtx    provider.StepCtx
+	sCtx    StepBreaker
 	dslName string
 	failed  bool
 }
 
 func New(sCtx provider.StepCtx, dslName string) *Validator {
+	return &Validator{
+		sCtx:    sCtx,
+		dslName: dslName,
+	}
+}
+
+func NewWithBreaker(sCtx StepBreaker, dslName string) *Validator {
 	return &Validator{
 		sCtx:    sCtx,
 		dslName: dslName,

@@ -502,7 +502,7 @@ func TestQuery_BuildChecker_WithExpectations(t *testing.T) {
 		expectations: make([]*expect.Expectation[[]byte], 0),
 	}
 
-	q.expectations = append(q.expectations, makeFieldValueExpectation("id", 123))
+	q.expectations = append(q.expectations, bytesSource.FieldEquals("id", 123))
 
 	checker := q.buildChecker()
 	results := checker([]byte(`{"id": 123}`), nil)
@@ -516,7 +516,7 @@ func TestQuery_BuildChecker_WithFailingExpectation(t *testing.T) {
 		expectations: make([]*expect.Expectation[[]byte], 0),
 	}
 
-	q.expectations = append(q.expectations, makeFieldValueExpectation("id", 999))
+	q.expectations = append(q.expectations, bytesSource.FieldEquals("id", 999))
 
 	checker := q.buildChecker()
 	results := checker([]byte(`{"id": 123}`), nil)
@@ -531,8 +531,8 @@ func TestQuery_BuildChecker_MultipleExpectations(t *testing.T) {
 		expectations: make([]*expect.Expectation[[]byte], 0),
 	}
 
-	q.expectations = append(q.expectations, makeFieldValueExpectation("id", 123))
-	q.expectations = append(q.expectations, makeFieldValueExpectation("name", "test"))
+	q.expectations = append(q.expectations, bytesSource.FieldEquals("id", 123))
+	q.expectations = append(q.expectations, bytesSource.FieldEquals("name", "test"))
 
 	checker := q.buildChecker()
 	results := checker([]byte(`{"id": 123, "name": "test"}`), nil)

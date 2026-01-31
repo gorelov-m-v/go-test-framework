@@ -108,7 +108,13 @@ func buildCheckerFromConfig[TResult any, TExpect any](cfg DSLConfig[TResult, TEx
 		var zeroResult TResult
 		if _, ok := any(zeroResult).(TExpect); !ok {
 			var zeroExpect TExpect
-			panic(fmt.Sprintf("retry.DSLConfig: TResult (%T) != TExpect (%T) but Convert function not provided", zeroResult, zeroExpect))
+			cfg.StepCtx.Break(fmt.Sprintf(
+				"DSL Configuration Error: TResult (%T) != TExpect (%T) but Convert function not provided. "+
+					"This is a framework bug - please report it.",
+				zeroResult, zeroExpect,
+			))
+			cfg.StepCtx.BrokenNow()
+			return nil
 		}
 	}
 

@@ -46,10 +46,25 @@ func Load(specPath string) (*openapi3.T, error) {
 	return spec, nil
 }
 
+// MustLoad loads OpenAPI spec or panics on error.
+// Use ONLY in init() or package-level var initialization.
+// For runtime loading, use Load() which returns an error.
+//
+// Example:
+//
+//	var spec = contract.MustLoad("openapi/api.yaml") // OK: package-level
+//
+//	func init() {
+//	    spec = contract.MustLoad("openapi/api.yaml") // OK: init()
+//	}
+//
+//	func handler() {
+//	    spec := contract.MustLoad("openapi/api.yaml") // BAD: use Load() instead
+//	}
 func MustLoad(specPath string) *openapi3.T {
 	spec, err := Load(specPath)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("contract.MustLoad: %w (use Load() for runtime loading)", err))
 	}
 	return spec
 }

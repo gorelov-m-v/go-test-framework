@@ -2,7 +2,6 @@ package allure
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -12,64 +11,83 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
-func (r *Reporter) AttachSQLQuery(sCtx provider.StepCtx, query string, args []any) {
+func (r *Reporter) AttachSQLReport(sCtx provider.StepCtx, db *dbclient.Client, report SQLReportDTO) {
 	builder := NewReportBuilder()
-	builder.WriteLine("SQL Query:")
-	builder.WriteLine("%s", query)
-	builder.WriteSection("Arguments")
 
-	if len(args) == 0 {
-		builder.WriteLine("  (none)")
-	} else {
-		for i, arg := range args {
-			argStr := fmt.Sprintf("%v", arg)
-
-			if strArg, ok := arg.(string); ok {
-				if r.Config.ShouldMaskValue(strArg) {
-					argStr = r.Config.MaskValue
-				}
-			}
-
-			builder.WriteLine("  [%d] %s", i+1, argStr)
+	title := "SQL Query"
+	if report.Result.Found {
+		title = fmt.Sprintf("SQL Query → %d row(s)", report.Result.RowCount)
+	} else if report.Result.Error != nil {
+		if errors.Is(report.Result.Error, sql.ErrNoRows) {
+			title = "SQL Query → No Rows"
+		} else {
+			title = "SQL Query → Error"
 		}
+	}
+	builder.WriteHeader(title)
+
+	r.writeSQLRequestSection(builder, report.Request)
+	r.writeSQLResultSection(builder, db, report.Result)
+
+	if report.Polling != nil && report.Polling.Attempts > 0 {
+		r.writePollingSection(builder, report.Polling)
 	}
 
 	sCtx.WithNewAttachment("SQL Query", allure.Text, builder.Bytes())
 }
 
-func (r *Reporter) AttachSQLResult(sCtx provider.StepCtx, db *dbclient.Client, result any, err error) {
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			r.attachJSON(sCtx, "SQL Result", map[string]string{
-				"status": "no rows found",
-			})
+func (r *Reporter) writeSQLRequestSection(builder *ReportBuilder, req SQLRequestDTO) {
+	builder.WriteSectionHeader("QUERY")
+	builder.WriteLine("%s", req.Query)
+
+	if len(req.Args) > 0 {
+		builder.WriteSection("Arguments")
+		for i, arg := range req.Args {
+			argStr := fmt.Sprintf("%v", arg)
+			if strArg, ok := arg.(string); ok {
+				if r.Config.ShouldMaskValue(strArg) {
+					argStr = r.Config.MaskValue
+				}
+			}
+			builder.WriteLine("  [%d] %s", i+1, argStr)
+		}
+	}
+}
+
+func (r *Reporter) writeSQLResultSection(builder *ReportBuilder, db *dbclient.Client, result SQLResultDTO) {
+	status := "Found"
+	if !result.Found {
+		status = "Not Found"
+	}
+	if result.Error != nil && !errors.Is(result.Error, sql.ErrNoRows) {
+		status = "Error"
+	}
+	builder.WriteSectionHeader(fmt.Sprintf("RESULT [%s]", status))
+
+	if result.Duration > 0 {
+		builder.WriteLine("Duration: %v", result.Duration)
+	}
+
+	if result.Error != nil {
+		if errors.Is(result.Error, sql.ErrNoRows) {
+			builder.WriteLine("Status: No rows found")
 		} else {
-			r.attachJSON(sCtx, "SQL Error", map[string]string{
-				"error": err.Error(),
-			})
+			builder.WriteSection("Error")
+			builder.WriteLine("%s", result.Error.Error())
 		}
 		return
 	}
 
-	if result == nil {
-		return
+	if result.RowCount > 0 {
+		builder.WriteLine("Rows: %d", result.RowCount)
 	}
 
-	cleanData := CleanResult(result)
-	maskedData := maskSQLResult(db, cleanData)
-	r.attachJSON(sCtx, "SQL Result", maskedData)
-}
-
-func (r *Reporter) attachJSON(sCtx provider.StepCtx, name string, content any) {
-	bytes, err := json.MarshalIndent(content, "", "  ")
-	if err != nil {
-		errJSON, _ := json.MarshalIndent(map[string]string{
-			"marshal_error": err.Error(),
-		}, "", "  ")
-		sCtx.WithNewAttachment(name+" (Marshal Error)", allure.JSON, errJSON)
-		return
+	if result.Data != nil {
+		cleanData := CleanResult(result.Data)
+		maskedData := maskSQLResult(db, cleanData)
+		builder.WriteSection("Data")
+		builder.WriteJSONOrError(maskedData)
 	}
-	sCtx.WithNewAttachment(name, allure.JSON, bytes)
 }
 
 func maskSQLResult(db *dbclient.Client, data any) any {

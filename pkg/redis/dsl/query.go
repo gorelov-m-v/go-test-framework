@@ -29,8 +29,8 @@ type Query struct {
 	client *client.Client
 	ctx    context.Context
 
-	stepName string
-	key      string
+	customStepName string
+	key            string
 
 	result *client.Result
 	sent   bool
@@ -55,7 +55,7 @@ func NewQuery(sCtx provider.StepCtx, redisClient *client.Client) *Query {
 
 // StepName overrides the default step name in Allure report.
 func (q *Query) StepName(name string) *Query {
-	q.stepName = strings.TrimSpace(name)
+	q.customStepName = strings.TrimSpace(name)
 	return q
 }
 
@@ -74,12 +74,7 @@ func (q *Query) Key(key string) *Query {
 }
 
 func (q *Query) addExpectation(exp *expect.Expectation[*client.Result]) {
-	if q.sent {
-		q.sCtx.Break("Redis DSL Error: Expectations must be added before Send(). Call ExpectExists(), ExpectValue(), etc. before Send().")
-		q.sCtx.BrokenNow()
-		return
-	}
-	q.expectations = append(q.expectations, exp)
+	expect.AddExpectation(q.sCtx, q.sent, &q.expectations, exp, "Redis")
 }
 
 // Send executes the Redis query and validates all expectations.
@@ -88,30 +83,23 @@ func (q *Query) addExpectation(exp *expect.Expectation[*client.Result]) {
 func (q *Query) Send() *client.Result {
 	q.validate()
 
-	q.sCtx.WithNewStep(q.getStepName(), func(stepCtx provider.StepCtx) {
-		attachRequest(stepCtx, q)
-
+	q.sCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
 		result, err, summary := q.execute(stepCtx, q.expectations)
 		q.result = result
 		q.sent = true
 
-		q.attachResults(stepCtx, summary)
+		attachRedisReport(stepCtx, q, q.result, summary)
 		q.assertResults(stepCtx, err)
 	})
 
 	return q.result
 }
 
-func (q *Query) getStepName() string {
-	if q.stepName != "" {
-		return q.stepName
+func (q *Query) stepName() string {
+	if q.customStepName != "" {
+		return q.customStepName
 	}
 	return fmt.Sprintf("Redis GET %s", q.key)
-}
-
-func (q *Query) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	polling.AttachIfAsync(stepCtx, summary)
-	attachResult(stepCtx, q.result)
 }
 
 func (q *Query) assertResults(stepCtx provider.StepCtx, err error) {

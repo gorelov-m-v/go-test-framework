@@ -15,7 +15,7 @@ type Client struct {
 	backgroundConsumer BackgroundConsumerInterface
 	defaultTimeout     time.Duration
 	uniqueWindow       time.Duration
-	asyncConfig        config.AsyncConfig
+	AsyncConfig        config.AsyncConfig
 }
 
 func New(cfg types.Config, asyncConfig config.AsyncConfig) (*Client, error) {
@@ -48,7 +48,7 @@ func New(cfg types.Config, asyncConfig config.AsyncConfig) (*Client, error) {
 		backgroundConsumer: backgroundConsumer,
 		defaultTimeout:     cfg.FindMessageTimeout,
 		uniqueWindow:       time.Duration(cfg.UniqueDuplicateWindowMs) * time.Millisecond,
-		asyncConfig:        asyncConfig,
+		AsyncConfig:        asyncConfig,
 	}
 
 	return client, nil
@@ -70,7 +70,7 @@ func (c *Client) GetUniqueWindow() time.Duration {
 }
 
 func (c *Client) GetAsyncConfig() config.AsyncConfig {
-	return c.asyncConfig
+	return c.AsyncConfig
 }
 
 func (c *Client) GetBackgroundConsumer() BackgroundConsumerInterface {

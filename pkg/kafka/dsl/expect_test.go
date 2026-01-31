@@ -8,8 +8,8 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 )
 
-func TestMakeFieldValueExpectation_Success(t *testing.T) {
-	exp := makeFieldValueExpectation("user.id", 123)
+func TestFieldEquals_Success(t *testing.T) {
+	exp := bytesSource.FieldEquals("user.id", 123)
 	jsonData := []byte(`{"user": {"id": 123, "name": "John"}}`)
 
 	result := exp.Check(nil, jsonData)
@@ -18,8 +18,8 @@ func TestMakeFieldValueExpectation_Success(t *testing.T) {
 	assert.Empty(t, result.Reason)
 }
 
-func TestMakeFieldValueExpectation_Failure(t *testing.T) {
-	exp := makeFieldValueExpectation("user.id", 456)
+func TestFieldEquals_Failure(t *testing.T) {
+	exp := bytesSource.FieldEquals("user.id", 456)
 	jsonData := []byte(`{"user": {"id": 123, "name": "John"}}`)
 
 	result := exp.Check(nil, jsonData)
@@ -28,8 +28,8 @@ func TestMakeFieldValueExpectation_Failure(t *testing.T) {
 	assert.NotEmpty(t, result.Reason)
 }
 
-func TestMakeFieldValueExpectation_PathNotExists(t *testing.T) {
-	exp := makeFieldValueExpectation("nonexistent.path", "value")
+func TestFieldEquals_PathNotExists(t *testing.T) {
+	exp := bytesSource.FieldEquals("nonexistent.path", "value")
 	jsonData := []byte(`{"user": {"id": 123}}`)
 
 	result := exp.Check(nil, jsonData)
@@ -37,8 +37,8 @@ func TestMakeFieldValueExpectation_PathNotExists(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldValueExpectation_StringValue(t *testing.T) {
-	exp := makeFieldValueExpectation("name", "John")
+func TestFieldEquals_StringValue(t *testing.T) {
+	exp := bytesSource.FieldEquals("name", "John")
 	jsonData := []byte(`{"name": "John"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -46,8 +46,8 @@ func TestMakeFieldValueExpectation_StringValue(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldValueExpectation_BoolValue(t *testing.T) {
-	exp := makeFieldValueExpectation("active", true)
+func TestFieldEquals_BoolValue(t *testing.T) {
+	exp := bytesSource.FieldEquals("active", true)
 	jsonData := []byte(`{"active": true}`)
 
 	result := exp.Check(nil, jsonData)
@@ -55,8 +55,8 @@ func TestMakeFieldValueExpectation_BoolValue(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldValueExpectation_FloatValue(t *testing.T) {
-	exp := makeFieldValueExpectation("price", 19.99)
+func TestFieldEquals_FloatValue(t *testing.T) {
+	exp := bytesSource.FieldEquals("price", 19.99)
 	jsonData := []byte(`{"price": 19.99}`)
 
 	result := exp.Check(nil, jsonData)
@@ -64,8 +64,8 @@ func TestMakeFieldValueExpectation_FloatValue(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldValueExpectation_NestedPath(t *testing.T) {
-	exp := makeFieldValueExpectation("data.items.0.name", "first")
+func TestFieldEquals_NestedPath(t *testing.T) {
+	exp := bytesSource.FieldEquals("data.items.0.name", "first")
 	jsonData := []byte(`{"data": {"items": [{"name": "first"}, {"name": "second"}]}}`)
 
 	result := exp.Check(nil, jsonData)
@@ -73,8 +73,8 @@ func TestMakeFieldValueExpectation_NestedPath(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldNotEmptyExpectation_Success(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("name")
+func TestFieldNotEmpty_Success(t *testing.T) {
+	exp := bytesSource.FieldNotEmpty("name")
 	jsonData := []byte(`{"name": "John"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -82,8 +82,8 @@ func TestMakeFieldNotEmptyExpectation_Success(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldNotEmptyExpectation_EmptyString(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("name")
+func TestFieldNotEmpty_EmptyString(t *testing.T) {
+	exp := bytesSource.FieldNotEmpty("name")
 	jsonData := []byte(`{"name": ""}`)
 
 	result := exp.Check(nil, jsonData)
@@ -91,8 +91,8 @@ func TestMakeFieldNotEmptyExpectation_EmptyString(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldNotEmptyExpectation_NullValue(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("name")
+func TestFieldNotEmpty_NullValue(t *testing.T) {
+	exp := bytesSource.FieldNotEmpty("name")
 	jsonData := []byte(`{"name": null}`)
 
 	result := exp.Check(nil, jsonData)
@@ -100,8 +100,8 @@ func TestMakeFieldNotEmptyExpectation_NullValue(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldNotEmptyExpectation_NonEmptyArray(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("items")
+func TestFieldNotEmpty_NonEmptyArray(t *testing.T) {
+	exp := bytesSource.FieldNotEmpty("items")
 	jsonData := []byte(`{"items": [1, 2, 3]}`)
 
 	result := exp.Check(nil, jsonData)
@@ -109,8 +109,8 @@ func TestMakeFieldNotEmptyExpectation_NonEmptyArray(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldNotEmptyExpectation_EmptyArray(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("items")
+func TestFieldNotEmpty_EmptyArray(t *testing.T) {
+	exp := bytesSource.FieldNotEmpty("items")
 	jsonData := []byte(`{"items": []}`)
 
 	result := exp.Check(nil, jsonData)
@@ -118,8 +118,8 @@ func TestMakeFieldNotEmptyExpectation_EmptyArray(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldNotEmptyExpectation_Zero(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("count")
+func TestFieldNotEmpty_Zero(t *testing.T) {
+	exp := bytesSource.FieldNotEmpty("count")
 	jsonData := []byte(`{"count": 0}`)
 
 	result := exp.Check(nil, jsonData)
@@ -127,8 +127,8 @@ func TestMakeFieldNotEmptyExpectation_Zero(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldNotEmptyExpectation_NonZeroNumber(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("count")
+func TestFieldNotEmpty_NonZeroNumber(t *testing.T) {
+	exp := bytesSource.FieldNotEmpty("count")
 	jsonData := []byte(`{"count": 42}`)
 
 	result := exp.Check(nil, jsonData)
@@ -136,8 +136,8 @@ func TestMakeFieldNotEmptyExpectation_NonZeroNumber(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldEmptyExpectation_EmptyString(t *testing.T) {
-	exp := makeFieldEmptyExpectation("name")
+func TestFieldEmpty_EmptyString(t *testing.T) {
+	exp := bytesSource.FieldEmpty("name")
 	jsonData := []byte(`{"name": ""}`)
 
 	result := exp.Check(nil, jsonData)
@@ -145,8 +145,8 @@ func TestMakeFieldEmptyExpectation_EmptyString(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldEmptyExpectation_NonEmptyString(t *testing.T) {
-	exp := makeFieldEmptyExpectation("name")
+func TestFieldEmpty_NonEmptyString(t *testing.T) {
+	exp := bytesSource.FieldEmpty("name")
 	jsonData := []byte(`{"name": "John"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -154,8 +154,8 @@ func TestMakeFieldEmptyExpectation_NonEmptyString(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldEmptyExpectation_EmptyArray(t *testing.T) {
-	exp := makeFieldEmptyExpectation("items")
+func TestFieldEmpty_EmptyArray(t *testing.T) {
+	exp := bytesSource.FieldEmpty("items")
 	jsonData := []byte(`{"items": []}`)
 
 	result := exp.Check(nil, jsonData)
@@ -163,8 +163,8 @@ func TestMakeFieldEmptyExpectation_EmptyArray(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldEmptyExpectation_FieldNotExists(t *testing.T) {
-	exp := makeFieldEmptyExpectation("nonexistent")
+func TestFieldEmpty_FieldNotExists(t *testing.T) {
+	exp := bytesSource.FieldEmpty("nonexistent")
 	jsonData := []byte(`{"name": "John"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -172,8 +172,8 @@ func TestMakeFieldEmptyExpectation_FieldNotExists(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldIsNullExpectation_Success(t *testing.T) {
-	exp := makeFieldIsNullExpectation("value")
+func TestFieldIsNull_Success(t *testing.T) {
+	exp := bytesSource.FieldIsNull("value")
 	jsonData := []byte(`{"value": null}`)
 
 	result := exp.Check(nil, jsonData)
@@ -181,8 +181,8 @@ func TestMakeFieldIsNullExpectation_Success(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldIsNullExpectation_NotNull(t *testing.T) {
-	exp := makeFieldIsNullExpectation("value")
+func TestFieldIsNull_NotNull(t *testing.T) {
+	exp := bytesSource.FieldIsNull("value")
 	jsonData := []byte(`{"value": "something"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -190,8 +190,8 @@ func TestMakeFieldIsNullExpectation_NotNull(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldIsNotNullExpectation_Success(t *testing.T) {
-	exp := makeFieldIsNotNullExpectation("value")
+func TestFieldIsNotNull_Success(t *testing.T) {
+	exp := bytesSource.FieldIsNotNull("value")
 	jsonData := []byte(`{"value": "something"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -199,8 +199,8 @@ func TestMakeFieldIsNotNullExpectation_Success(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldIsNotNullExpectation_IsNull(t *testing.T) {
-	exp := makeFieldIsNotNullExpectation("value")
+func TestFieldIsNotNull_IsNull(t *testing.T) {
+	exp := bytesSource.FieldIsNotNull("value")
 	jsonData := []byte(`{"value": null}`)
 
 	result := exp.Check(nil, jsonData)
@@ -208,8 +208,8 @@ func TestMakeFieldIsNotNullExpectation_IsNull(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldTrueExpectation_Success(t *testing.T) {
-	exp := makeFieldTrueExpectation("active")
+func TestFieldTrue_Success(t *testing.T) {
+	exp := bytesSource.FieldTrue("active")
 	jsonData := []byte(`{"active": true}`)
 
 	result := exp.Check(nil, jsonData)
@@ -217,8 +217,8 @@ func TestMakeFieldTrueExpectation_Success(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldTrueExpectation_False(t *testing.T) {
-	exp := makeFieldTrueExpectation("active")
+func TestFieldTrue_False(t *testing.T) {
+	exp := bytesSource.FieldTrue("active")
 	jsonData := []byte(`{"active": false}`)
 
 	result := exp.Check(nil, jsonData)
@@ -226,8 +226,8 @@ func TestMakeFieldTrueExpectation_False(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldTrueExpectation_NotBoolean(t *testing.T) {
-	exp := makeFieldTrueExpectation("active")
+func TestFieldTrue_NotBoolean(t *testing.T) {
+	exp := bytesSource.FieldTrue("active")
 	jsonData := []byte(`{"active": "yes"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -235,8 +235,8 @@ func TestMakeFieldTrueExpectation_NotBoolean(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldFalseExpectation_Success(t *testing.T) {
-	exp := makeFieldFalseExpectation("deleted")
+func TestFieldFalse_Success(t *testing.T) {
+	exp := bytesSource.FieldFalse("deleted")
 	jsonData := []byte(`{"deleted": false}`)
 
 	result := exp.Check(nil, jsonData)
@@ -244,8 +244,8 @@ func TestMakeFieldFalseExpectation_Success(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldFalseExpectation_True(t *testing.T) {
-	exp := makeFieldFalseExpectation("deleted")
+func TestFieldFalse_True(t *testing.T) {
+	exp := bytesSource.FieldFalse("deleted")
 	jsonData := []byte(`{"deleted": true}`)
 
 	result := exp.Check(nil, jsonData)
@@ -253,12 +253,12 @@ func TestMakeFieldFalseExpectation_True(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeMessageExpectation_ExactMatch(t *testing.T) {
+func TestBodyEquals_ExactMatch(t *testing.T) {
 	expected := map[string]interface{}{
 		"id":   float64(123),
 		"name": "test",
 	}
-	exp := makeMessageExpectation(expected)
+	exp := bytesSource.BodyEquals(expected)
 	jsonData := []byte(`{"id": 123, "name": "test"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -266,12 +266,12 @@ func TestMakeMessageExpectation_ExactMatch(t *testing.T) {
 	assert.True(t, result.Ok, "Result reason: %s", result.Reason)
 }
 
-func TestMakeMessageExpectation_ExtraFieldAllowed(t *testing.T) {
+func TestBodyEquals_ExtraFieldAllowed(t *testing.T) {
 	expected := map[string]interface{}{
 		"id":   float64(123),
 		"name": "test",
 	}
-	exp := makeMessageExpectation(expected)
+	exp := bytesSource.BodyEquals(expected)
 	jsonData := []byte(`{"id": 123, "name": "test", "extra": "field"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -279,13 +279,13 @@ func TestMakeMessageExpectation_ExtraFieldAllowed(t *testing.T) {
 	assert.True(t, result.Ok, "Result reason: %s", result.Reason)
 }
 
-func TestMakeMessageExpectation_ExactMatchWithAllFields(t *testing.T) {
+func TestBodyEquals_ExactMatchWithAllFields(t *testing.T) {
 	expected := map[string]interface{}{
 		"id":    float64(123),
 		"name":  "test",
 		"extra": "field",
 	}
-	exp := makeMessageExpectation(expected)
+	exp := bytesSource.BodyEquals(expected)
 	jsonData := []byte(`{"id": 123, "name": "test", "extra": "field"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -293,13 +293,13 @@ func TestMakeMessageExpectation_ExactMatchWithAllFields(t *testing.T) {
 	assert.True(t, result.Ok, "Result reason: %s", result.Reason)
 }
 
-func TestMakeMessageExpectation_MissingField(t *testing.T) {
+func TestBodyEquals_MissingField(t *testing.T) {
 	expected := map[string]interface{}{
 		"id":    float64(123),
 		"name":  "test",
 		"extra": "required",
 	}
-	exp := makeMessageExpectation(expected)
+	exp := bytesSource.BodyEquals(expected)
 	jsonData := []byte(`{"id": 123, "name": "test"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -307,11 +307,11 @@ func TestMakeMessageExpectation_MissingField(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeMessagePartialExpectation_Match(t *testing.T) {
+func TestBodyPartial_Match(t *testing.T) {
 	expected := map[string]interface{}{
 		"id": float64(123),
 	}
-	exp := makeMessagePartialExpectation(expected)
+	exp := bytesSource.BodyPartial(expected)
 	jsonData := []byte(`{"id": 123, "name": "test", "extra": "field"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -319,11 +319,11 @@ func TestMakeMessagePartialExpectation_Match(t *testing.T) {
 	assert.True(t, result.Ok, "Result reason: %s", result.Reason)
 }
 
-func TestMakeMessagePartialExpectation_Mismatch(t *testing.T) {
+func TestBodyPartial_Mismatch(t *testing.T) {
 	expected := map[string]interface{}{
 		"id": float64(456),
 	}
-	exp := makeMessagePartialExpectation(expected)
+	exp := bytesSource.BodyPartial(expected)
 	jsonData := []byte(`{"id": 123, "name": "test"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -331,13 +331,13 @@ func TestMakeMessagePartialExpectation_Mismatch(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeMessagePartialExpectation_NestedMatch(t *testing.T) {
+func TestBodyPartial_NestedMatch(t *testing.T) {
 	expected := map[string]interface{}{
 		"user": map[string]interface{}{
 			"id": float64(123),
 		},
 	}
-	exp := makeMessagePartialExpectation(expected)
+	exp := bytesSource.BodyPartial(expected)
 	jsonData := []byte(`{"user": {"id": 123, "name": "John"}, "timestamp": 12345}`)
 
 	result := exp.Check(nil, jsonData)
@@ -345,13 +345,13 @@ func TestMakeMessagePartialExpectation_NestedMatch(t *testing.T) {
 	assert.True(t, result.Ok, "Result reason: %s", result.Reason)
 }
 
-func TestMakeMessageExpectation_WithStruct(t *testing.T) {
+func TestBodyEquals_WithStruct(t *testing.T) {
 	type TestStruct struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
 	expected := TestStruct{ID: 123, Name: "test"}
-	exp := makeMessageExpectation(expected)
+	exp := bytesSource.BodyEquals(expected)
 	jsonData := []byte(`{"id": 123, "name": "test"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -359,12 +359,12 @@ func TestMakeMessageExpectation_WithStruct(t *testing.T) {
 	assert.True(t, result.Ok, "Result reason: %s", result.Reason)
 }
 
-func TestMakeMessagePartialExpectation_WithStruct(t *testing.T) {
+func TestBodyPartial_WithStruct(t *testing.T) {
 	type TestStruct struct {
 		ID int `json:"id"`
 	}
 	expected := TestStruct{ID: 123}
-	exp := makeMessagePartialExpectation(expected)
+	exp := bytesSource.BodyPartial(expected)
 	jsonData := []byte(`{"id": 123, "name": "test", "extra": true}`)
 
 	result := exp.Check(nil, jsonData)
@@ -373,7 +373,7 @@ func TestMakeMessagePartialExpectation_WithStruct(t *testing.T) {
 }
 
 func TestExpectation_CheckResultRetryable(t *testing.T) {
-	exp := makeFieldValueExpectation("id", 456)
+	exp := bytesSource.FieldEquals("id", 456)
 	jsonData := []byte(`{"id": 123}`)
 
 	result := exp.Check(nil, jsonData)
@@ -383,14 +383,14 @@ func TestExpectation_CheckResultRetryable(t *testing.T) {
 }
 
 func TestExpectation_Name(t *testing.T) {
-	exp := makeFieldValueExpectation("user.id", 123)
+	exp := bytesSource.FieldEquals("user.id", 123)
 
 	assert.Contains(t, exp.Name, "user.id")
 	assert.Contains(t, exp.Name, "123")
 }
 
 func TestExpectation_CheckWithError(t *testing.T) {
-	exp := makeFieldValueExpectation("id", 123)
+	exp := bytesSource.FieldEquals("id", 123)
 	jsonData := []byte(`{"id": 123}`)
 	testErr := polling.CheckResult{Ok: false, Reason: "test error"}
 
@@ -399,7 +399,7 @@ func TestExpectation_CheckWithError(t *testing.T) {
 	assert.NotEqual(t, testErr.Reason, result.Reason)
 }
 
-func TestMakeFieldValueExpectation_NumericTypeConversion(t *testing.T) {
+func TestFieldEquals_NumericTypeConversion(t *testing.T) {
 	testCases := []struct {
 		name     string
 		expected interface{}
@@ -414,15 +414,15 @@ func TestMakeFieldValueExpectation_NumericTypeConversion(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			exp := makeFieldValueExpectation("val", tc.expected)
+			exp := bytesSource.FieldEquals("val", tc.expected)
 			result := exp.Check(nil, []byte(tc.json))
 			assert.Equal(t, tc.wantOk, result.Ok, "Reason: %s", result.Reason)
 		})
 	}
 }
 
-func TestMakeFieldValueExpectation_ArrayAccess(t *testing.T) {
-	exp := makeFieldValueExpectation("items.1.name", "second")
+func TestFieldEquals_ArrayAccess(t *testing.T) {
+	exp := bytesSource.FieldEquals("items.1.name", "second")
 	jsonData := []byte(`{"items": [{"name": "first"}, {"name": "second"}]}`)
 
 	result := exp.Check(nil, jsonData)
@@ -430,8 +430,8 @@ func TestMakeFieldValueExpectation_ArrayAccess(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldValueExpectation_ArrayLength(t *testing.T) {
-	exp := makeFieldValueExpectation("items.#", float64(3))
+func TestFieldEquals_ArrayLength(t *testing.T) {
+	exp := bytesSource.FieldEquals("items.#", float64(3))
 	jsonData := []byte(`{"items": ["a", "b", "c"]}`)
 
 	result := exp.Check(nil, jsonData)
@@ -439,8 +439,8 @@ func TestMakeFieldValueExpectation_ArrayLength(t *testing.T) {
 	assert.True(t, result.Ok, "Result reason: %s", result.Reason)
 }
 
-func TestMakeFieldIsNullExpectation_PathNotExists(t *testing.T) {
-	exp := makeFieldIsNullExpectation("nonexistent")
+func TestFieldIsNull_PathNotExists(t *testing.T) {
+	exp := bytesSource.FieldIsNull("nonexistent")
 	jsonData := []byte(`{"name": "John"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -448,8 +448,8 @@ func TestMakeFieldIsNullExpectation_PathNotExists(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldIsNotNullExpectation_PathNotExists(t *testing.T) {
-	exp := makeFieldIsNotNullExpectation("nonexistent")
+func TestFieldIsNotNull_PathNotExists(t *testing.T) {
+	exp := bytesSource.FieldIsNotNull("nonexistent")
 	jsonData := []byte(`{"name": "John"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -457,8 +457,8 @@ func TestMakeFieldIsNotNullExpectation_PathNotExists(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldNotEmptyExpectation_PathNotExists(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("nonexistent")
+func TestFieldNotEmpty_PathNotExists(t *testing.T) {
+	exp := bytesSource.FieldNotEmpty("nonexistent")
 	jsonData := []byte(`{"name": "John"}`)
 
 	result := exp.Check(nil, jsonData)
@@ -467,7 +467,7 @@ func TestMakeFieldNotEmptyExpectation_PathNotExists(t *testing.T) {
 }
 
 func TestExpectation_InvalidJSON(t *testing.T) {
-	exp := makeFieldValueExpectation("id", 123)
+	exp := bytesSource.FieldEquals("id", 123)
 	jsonData := []byte(`not valid json`)
 
 	result := exp.Check(nil, jsonData)
@@ -476,7 +476,7 @@ func TestExpectation_InvalidJSON(t *testing.T) {
 }
 
 func TestExpectation_EmptyJSON(t *testing.T) {
-	exp := makeFieldValueExpectation("id", 123)
+	exp := bytesSource.FieldEquals("id", 123)
 	jsonData := []byte(`{}`)
 
 	result := exp.Check(nil, jsonData)

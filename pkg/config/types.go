@@ -29,3 +29,12 @@ func DefaultAsyncConfig() AsyncConfig {
 		Jitter: 0.2,
 	}
 }
+
+// WithDefaults returns the config with default values applied if not set.
+// Use this when initializing clients to ensure valid async configuration.
+func (ac AsyncConfig) WithDefaults() AsyncConfig {
+	if ac.Timeout == 0 {
+		return DefaultAsyncConfig()
+	}
+	return ac
+}

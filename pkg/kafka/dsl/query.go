@@ -132,7 +132,7 @@ func (q *Query[T]) Send() *Result[T] {
 		q.messageBytes, q.found, err, summary = q.execute(stepCtx)
 		q.lastError = err
 
-		q.attachResults(stepCtx, summary)
+		attachKafkaReport(stepCtx, q, summary)
 
 		if !q.found {
 			q.handleNotFound(stepCtx, summary)
@@ -149,32 +149,6 @@ func (q *Query[T]) Send() *Result[T] {
 
 func (q *Query[T]) stepName() string {
 	return fmt.Sprintf("Kafka: Consume from '%s'", q.topicName)
-}
-
-func (q *Query[T]) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	polling.AttachIfAsync(stepCtx, summary)
-	attachSearchInfoByTopic(stepCtx, q.topicName, q.filters, q.client.GetDefaultTimeout(), q.unique)
-	q.attachMessage(stepCtx)
-}
-
-func (q *Query[T]) attachMessage(stepCtx provider.StepCtx) {
-	if !q.found {
-		attachNotFoundMessageByTopic(stepCtx, q.topicName, q.filters)
-		return
-	}
-
-	if q.expectedCount > 0 && len(q.allMatchingMsgs) > 0 {
-		attachAllFoundMessages(stepCtx, q.allMatchingMsgs)
-		return
-	}
-
-	var msgMap map[string]interface{}
-	if err := json.Unmarshal(q.messageBytes, &msgMap); err != nil {
-		stepCtx.Logf("Failed to parse message as JSON: %v", err)
-		attachFoundMessage(stepCtx, string(q.messageBytes))
-	} else {
-		attachFoundMessage(stepCtx, msgMap)
-	}
 }
 
 func (q *Query[T]) handleNotFound(stepCtx provider.StepCtx, summary polling.PollingSummary) {

@@ -855,3 +855,184 @@ func TestCompareObjectExact_PointerString(t *testing.T) {
 	ok, msg := CompareObjectExact(jsonObj, expected)
 	assert.True(t, ok, "Should match *string fields: %s", msg)
 }
+
+func TestValidateBytes(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   []byte
+		wantErr bool
+	}{
+		{"valid JSON object", []byte(`{"key": "value"}`), false},
+		{"valid JSON array", []byte(`[1, 2, 3]`), false},
+		{"valid JSON string", []byte(`"hello"`), false},
+		{"valid JSON number", []byte(`42`), false},
+		{"valid JSON null", []byte(`null`), false},
+		{"empty bytes", []byte(``), true},
+		{"invalid JSON", []byte(`{invalid}`), true},
+		{"truncated JSON", []byte(`{"key":`), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateBytes(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateString(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid JSON object", `{"key": "value"}`, false},
+		{"valid JSON array", `[1, 2, 3]`, false},
+		{"empty string", ``, true},
+		{"invalid JSON", `{invalid}`, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateString(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestGetField(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     []byte
+		path      string
+		wantValue string
+		wantErr   bool
+	}{
+		{"simple field", []byte(`{"name": "John"}`), "name", "John", false},
+		{"nested field", []byte(`{"user": {"name": "John"}}`), "user.name", "John", false},
+		{"array index", []byte(`{"items": [1, 2, 3]}`), "items.1", "2", false},
+		{"non-existent field", []byte(`{"a": 1}`), "b", "", false},
+		{"invalid JSON", []byte(`{invalid}`), "a", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := GetField(tt.input, tt.path)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tt.wantValue != "" {
+					assert.Equal(t, tt.wantValue, result.String())
+				}
+			}
+		})
+	}
+}
+
+func TestGetFieldFromString(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		path      string
+		wantValue string
+		wantErr   bool
+	}{
+		{"simple field", `{"name": "John"}`, "name", "John", false},
+		{"nested field", `{"user": {"name": "John"}}`, "user.name", "John", false},
+		{"invalid JSON", `{invalid}`, "a", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := GetFieldFromString(tt.input, tt.path)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tt.wantValue != "" {
+					assert.Equal(t, tt.wantValue, result.String())
+				}
+			}
+		})
+	}
+}
+
+func TestParse(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   []byte
+		wantErr bool
+	}{
+		{"valid JSON object", []byte(`{"key": "value"}`), false},
+		{"valid JSON array", []byte(`[1, 2, 3]`), false},
+		{"invalid JSON", []byte(`{invalid}`), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Parse(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.True(t, result.Exists())
+			}
+		})
+	}
+}
+
+func TestParseString(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid JSON object", `{"key": "value"}`, false},
+		{"valid JSON array", `[1, 2, 3]`, false},
+		{"invalid JSON", `{invalid}`, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ParseString(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.True(t, result.Exists())
+			}
+		})
+	}
+}
+
+func TestIsNull(t *testing.T) {
+	tests := []struct {
+		name   string
+		json   string
+		path   string
+		expect bool
+	}{
+		{"null value", `{"a": null}`, "a", true},
+		{"string value", `{"a": "hello"}`, "a", false},
+		{"number value", `{"a": 42}`, "a", false},
+		{"empty string", `{"a": ""}`, "a", false},
+		{"boolean false", `{"a": false}`, "a", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := gjson.Get(tt.json, tt.path)
+			got := IsNull(res)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}

@@ -51,7 +51,7 @@ func TestPreCheckWithBody_NilBody(t *testing.T) {
 	result, ok := preCheckWithBody(nil, resp)
 
 	assert.False(t, ok)
-	assert.Contains(t, result.Reason, "nil")
+	assert.Contains(t, result.Reason, "body")
 }
 
 func TestPreCheckWithBody_Error(t *testing.T) {
@@ -219,8 +219,8 @@ func TestGetResponseJSON_NilBody(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestMakeFieldValueExpectation_Success(t *testing.T) {
-	exp := makeFieldValueExpectation("name", "John")
+func TestFieldEquals_Success(t *testing.T) {
+	exp := jsonSource.FieldEquals("name", "John")
 	body := map[string]string{"name": "John"}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -230,8 +230,8 @@ func TestMakeFieldValueExpectation_Success(t *testing.T) {
 	assert.True(t, result.Ok, "Reason: %s", result.Reason)
 }
 
-func TestMakeFieldValueExpectation_Mismatch(t *testing.T) {
-	exp := makeFieldValueExpectation("name", "John")
+func TestFieldEquals_Mismatch(t *testing.T) {
+	exp := jsonSource.FieldEquals("name", "John")
 	body := map[string]string{"name": "Jane"}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -241,8 +241,8 @@ func TestMakeFieldValueExpectation_Mismatch(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldValueExpectation_PathNotExists(t *testing.T) {
-	exp := makeFieldValueExpectation("nonexistent", "value")
+func TestFieldEquals_PathNotExists(t *testing.T) {
+	exp := jsonSource.FieldEquals("nonexistent", "value")
 	body := map[string]string{"name": "John"}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -252,8 +252,8 @@ func TestMakeFieldValueExpectation_PathNotExists(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldValueExpectation_NestedPath(t *testing.T) {
-	exp := makeFieldValueExpectation("user.name", "John")
+func TestFieldEquals_NestedPath(t *testing.T) {
+	exp := jsonSource.FieldEquals("user.name", "John")
 	body := map[string]interface{}{"user": map[string]string{"name": "John"}}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -263,8 +263,8 @@ func TestMakeFieldValueExpectation_NestedPath(t *testing.T) {
 	assert.True(t, result.Ok, "Reason: %s", result.Reason)
 }
 
-func TestMakeFieldValueExpectation_IntValue(t *testing.T) {
-	exp := makeFieldValueExpectation("count", 42)
+func TestFieldEquals_IntValue(t *testing.T) {
+	exp := jsonSource.FieldEquals("count", 42)
 	body := map[string]int{"count": 42}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -274,8 +274,8 @@ func TestMakeFieldValueExpectation_IntValue(t *testing.T) {
 	assert.True(t, result.Ok, "Reason: %s", result.Reason)
 }
 
-func TestMakeFieldValueExpectation_BoolValue(t *testing.T) {
-	exp := makeFieldValueExpectation("active", true)
+func TestFieldEquals_BoolValue(t *testing.T) {
+	exp := jsonSource.FieldEquals("active", true)
 	body := map[string]bool{"active": true}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -285,8 +285,8 @@ func TestMakeFieldValueExpectation_BoolValue(t *testing.T) {
 	assert.True(t, result.Ok, "Reason: %s", result.Reason)
 }
 
-func TestMakeFieldNotEmptyExpectation_Success(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("name")
+func TestFieldNotEmpty_Success(t *testing.T) {
+	exp := jsonSource.FieldNotEmpty("name")
 	body := map[string]string{"name": "John"}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -296,8 +296,8 @@ func TestMakeFieldNotEmptyExpectation_Success(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldNotEmptyExpectation_Empty(t *testing.T) {
-	exp := makeFieldNotEmptyExpectation("name")
+func TestFieldNotEmpty_Empty(t *testing.T) {
+	exp := jsonSource.FieldNotEmpty("name")
 	body := map[string]string{"name": ""}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -402,8 +402,8 @@ func TestExpectation_Names(t *testing.T) {
 		{"NoError", makeNoErrorExpectation(), "No error"},
 		{"Error", makeErrorExpectation(), "Error"},
 		{"StatusCode", makeStatusCodeExpectation(codes.OK), "OK"},
-		{"FieldValue", makeFieldValueExpectation("path", "val"), "path"},
-		{"FieldNotEmpty", makeFieldNotEmptyExpectation("field"), "field"},
+		{"FieldEquals", jsonSource.FieldEquals("path", "val"), "path"},
+		{"FieldNotEmpty", jsonSource.FieldNotEmpty("field"), "field"},
 		{"FieldExists", makeFieldExistsExpectation("field"), "field"},
 		{"Metadata", makeMetadataExpectation("key", "val"), "key"},
 	}
@@ -415,8 +415,8 @@ func TestExpectation_Names(t *testing.T) {
 	}
 }
 
-func TestMakeFieldValueExpectation_ArrayAccess(t *testing.T) {
-	exp := makeFieldValueExpectation("items.0", "first")
+func TestFieldEquals_ArrayAccess(t *testing.T) {
+	exp := jsonSource.FieldEquals("items.0", "first")
 	body := map[string]interface{}{"items": []string{"first", "second"}}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -426,8 +426,8 @@ func TestMakeFieldValueExpectation_ArrayAccess(t *testing.T) {
 	assert.True(t, result.Ok, "Reason: %s", result.Reason)
 }
 
-func TestMakeFieldValueExpectation_FloatValue(t *testing.T) {
-	exp := makeFieldValueExpectation("price", 19.99)
+func TestFieldEquals_FloatValue(t *testing.T) {
+	exp := jsonSource.FieldEquals("price", 19.99)
 	body := map[string]float64{"price": 19.99}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}

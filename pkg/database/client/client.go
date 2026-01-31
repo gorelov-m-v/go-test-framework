@@ -72,10 +72,7 @@ func New(cfg Config) (*Client, error) {
 		}
 	}
 
-	asyncCfg := cfg.AsyncConfig
-	if asyncCfg.Timeout == 0 {
-		asyncCfg = config.DefaultAsyncConfig()
-	}
+	asyncCfg := cfg.AsyncConfig.WithDefaults()
 
 	return &Client{DB: db, AsyncConfig: asyncCfg, maskColumns: maskColumns, schemas: cfg.Schemas}, nil
 }

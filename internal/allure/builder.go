@@ -67,3 +67,16 @@ func (b *ReportBuilder) WriteMap(m map[string]string) {
 		b.WriteKeyValue(k, v)
 	}
 }
+
+func (b *ReportBuilder) WriteHeader(title string) {
+	line := "═══════════════════════════════════════════════════════════════"
+	b.buf.WriteString(line + "\n")
+	b.buf.WriteString(title + "\n")
+	b.buf.WriteString(line + "\n\n")
+}
+
+func (b *ReportBuilder) WriteSectionHeader(title string) {
+	line := "───────────────────────────────────────────────────────────────"
+	b.buf.WriteString("\n" + title + "\n")
+	b.buf.WriteString(line + "\n")
+}

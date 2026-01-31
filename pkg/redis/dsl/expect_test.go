@@ -39,7 +39,7 @@ func TestPreCheck_ResultError(t *testing.T) {
 	checkResult, ok := preCheck(nil, result)
 
 	assert.False(t, ok)
-	assert.Contains(t, checkResult.Reason, "Redis error")
+	assert.Contains(t, checkResult.Reason, "error")
 }
 
 func TestPreCheckKeyExists_Success(t *testing.T) {
@@ -180,8 +180,8 @@ func TestMakeValueNotEmptyExpectation_NotExists(t *testing.T) {
 	assert.False(t, checkResult.Ok)
 }
 
-func TestMakeJSONFieldExpectation_Success(t *testing.T) {
-	exp := makeJSONFieldExpectation("name", "John")
+func TestJSONFieldEquals_Success(t *testing.T) {
+	exp := jsonSource.FieldEquals("name", "John")
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -193,8 +193,8 @@ func TestMakeJSONFieldExpectation_Success(t *testing.T) {
 	assert.True(t, checkResult.Ok, "Reason: %s", checkResult.Reason)
 }
 
-func TestMakeJSONFieldExpectation_Mismatch(t *testing.T) {
-	exp := makeJSONFieldExpectation("name", "John")
+func TestJSONFieldEquals_Mismatch(t *testing.T) {
+	exp := jsonSource.FieldEquals("name", "John")
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -206,8 +206,8 @@ func TestMakeJSONFieldExpectation_Mismatch(t *testing.T) {
 	assert.False(t, checkResult.Ok)
 }
 
-func TestMakeJSONFieldExpectation_PathNotExists(t *testing.T) {
-	exp := makeJSONFieldExpectation("nonexistent", "value")
+func TestJSONFieldEquals_PathNotExists(t *testing.T) {
+	exp := jsonSource.FieldEquals("nonexistent", "value")
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -219,8 +219,8 @@ func TestMakeJSONFieldExpectation_PathNotExists(t *testing.T) {
 	assert.False(t, checkResult.Ok)
 }
 
-func TestMakeJSONFieldExpectation_InvalidJSON(t *testing.T) {
-	exp := makeJSONFieldExpectation("name", "John")
+func TestJSONFieldEquals_InvalidJSON(t *testing.T) {
+	exp := jsonSource.FieldEquals("name", "John")
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -232,8 +232,8 @@ func TestMakeJSONFieldExpectation_InvalidJSON(t *testing.T) {
 	assert.False(t, checkResult.Ok)
 }
 
-func TestMakeJSONFieldExpectation_NestedPath(t *testing.T) {
-	exp := makeJSONFieldExpectation("user.name", "John")
+func TestJSONFieldEquals_NestedPath(t *testing.T) {
+	exp := jsonSource.FieldEquals("user.name", "John")
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -245,8 +245,8 @@ func TestMakeJSONFieldExpectation_NestedPath(t *testing.T) {
 	assert.True(t, checkResult.Ok, "Reason: %s", checkResult.Reason)
 }
 
-func TestMakeJSONFieldExpectation_IntValue(t *testing.T) {
-	exp := makeJSONFieldExpectation("age", 30)
+func TestJSONFieldEquals_IntValue(t *testing.T) {
+	exp := jsonSource.FieldEquals("age", 30)
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -258,8 +258,8 @@ func TestMakeJSONFieldExpectation_IntValue(t *testing.T) {
 	assert.True(t, checkResult.Ok, "Reason: %s", checkResult.Reason)
 }
 
-func TestMakeJSONFieldExpectation_BoolValue(t *testing.T) {
-	exp := makeJSONFieldExpectation("active", true)
+func TestJSONFieldEquals_BoolValue(t *testing.T) {
+	exp := jsonSource.FieldEquals("active", true)
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -271,8 +271,8 @@ func TestMakeJSONFieldExpectation_BoolValue(t *testing.T) {
 	assert.True(t, checkResult.Ok, "Reason: %s", checkResult.Reason)
 }
 
-func TestMakeJSONFieldExpectation_ArrayAccess(t *testing.T) {
-	exp := makeJSONFieldExpectation("items.0", "first")
+func TestJSONFieldEquals_ArrayAccess(t *testing.T) {
+	exp := jsonSource.FieldEquals("items.0", "first")
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -284,8 +284,8 @@ func TestMakeJSONFieldExpectation_ArrayAccess(t *testing.T) {
 	assert.True(t, checkResult.Ok, "Reason: %s", checkResult.Reason)
 }
 
-func TestMakeJSONFieldNotEmptyExpectation_Success(t *testing.T) {
-	exp := makeJSONFieldNotEmptyExpectation("name")
+func TestJSONFieldNotEmpty_Success(t *testing.T) {
+	exp := jsonSource.FieldNotEmpty("name")
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -297,8 +297,8 @@ func TestMakeJSONFieldNotEmptyExpectation_Success(t *testing.T) {
 	assert.True(t, checkResult.Ok)
 }
 
-func TestMakeJSONFieldNotEmptyExpectation_Empty(t *testing.T) {
-	exp := makeJSONFieldNotEmptyExpectation("name")
+func TestJSONFieldNotEmpty_Empty(t *testing.T) {
+	exp := jsonSource.FieldNotEmpty("name")
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -310,8 +310,8 @@ func TestMakeJSONFieldNotEmptyExpectation_Empty(t *testing.T) {
 	assert.False(t, checkResult.Ok)
 }
 
-func TestMakeJSONFieldNotEmptyExpectation_Null(t *testing.T) {
-	exp := makeJSONFieldNotEmptyExpectation("name")
+func TestJSONFieldNotEmpty_Null(t *testing.T) {
+	exp := jsonSource.FieldNotEmpty("name")
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,
@@ -444,8 +444,8 @@ func TestExpectation_Names(t *testing.T) {
 		{"NotExists", makeNotExistsExpectation(), "not exists"},
 		{"Value", makeValueExpectation("test"), "test"},
 		{"ValueNotEmpty", makeValueNotEmptyExpectation(), "not empty"},
-		{"JSONField", makeJSONFieldExpectation("path", "val"), "path"},
-		{"JSONFieldNotEmpty", makeJSONFieldNotEmptyExpectation("field"), "field"},
+		{"JSONFieldEquals", jsonSource.FieldEquals("path", "val"), "path"},
+		{"JSONFieldNotEmpty", jsonSource.FieldNotEmpty("field"), "field"},
 		{"TTL", makeTTLExpectation(1*time.Second, 10*time.Second), "TTL"},
 		{"NoTTL", makeNoTTLExpectation(), "No TTL"},
 	}
@@ -457,8 +457,8 @@ func TestExpectation_Names(t *testing.T) {
 	}
 }
 
-func TestMakeJSONFieldExpectation_FloatValue(t *testing.T) {
-	exp := makeJSONFieldExpectation("price", 19.99)
+func TestJSONFieldEquals_FloatValue(t *testing.T) {
+	exp := jsonSource.FieldEquals("price", 19.99)
 	result := &client.Result{
 		Key:    "test",
 		Exists: true,

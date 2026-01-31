@@ -13,14 +13,10 @@ func (q *Query[T]) execute(stepCtx provider.StepCtx) ([]byte, bool, error, polli
 	result, err, summary := retry.ExecuteDSL(retry.DSLConfig[[]byte, []byte]{
 		Ctx:          q.ctx,
 		StepCtx:      stepCtx,
-		AsyncConfig:  q.client.GetAsyncConfig(),
+		AsyncConfig:  q.client.AsyncConfig,
 		Expectations: q.expectations,
-
-		Executor: func(ctx context.Context) ([]byte, error) {
-			return q.doSearch()
-		},
-
-		Checker: q.buildChecker(),
+		Executor:     q.executeSearch,
+		Checker:      q.buildChecker(),
 	})
 
 	if err != nil {
@@ -28,6 +24,10 @@ func (q *Query[T]) execute(stepCtx provider.StepCtx) ([]byte, bool, error, polli
 	}
 
 	return result, true, nil, summary
+}
+
+func (q *Query[T]) executeSearch(ctx context.Context) ([]byte, error) {
+	return q.doSearch()
 }
 
 func (q *Query[T]) buildChecker() retry.Checker[[]byte] {

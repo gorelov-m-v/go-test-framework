@@ -126,12 +126,7 @@ func (c *Call[TReq, TResp]) RequestBodyMap(body map[string]interface{}) *Call[TR
 }
 
 func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Response[any]]) {
-	if c.sent {
-		c.sCtx.Break("HTTP DSL Error: Expectations must be added before Send(). Call ExpectResponseStatus(), ExpectResponseBodyNotEmpty(), etc. before Send().")
-		c.sCtx.BrokenNow()
-		return
-	}
-	c.expectations = append(c.expectations, exp)
+	expect.AddExpectation(c.sCtx, c.sent, &c.expectations, exp, "HTTP")
 }
 
 // Send executes the HTTP request and validates all expectations.
@@ -142,13 +137,11 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validateContractConfig()
 
 	c.sCtx.WithNewStep(c.stepName(), func(stepCtx provider.StepCtx) {
-		attachRequest(stepCtx, c.client, c.req)
-
 		resp, err, summary := c.execute(stepCtx, c.expectations)
 		c.resp = resp
 		c.sent = true
 
-		c.attachResults(stepCtx, summary)
+		attachHTTPReport(stepCtx, c.client, c.req, c.resp, summary)
 		c.assertResults(stepCtx, err)
 		c.performContractValidation(stepCtx, c.resp)
 	})
@@ -158,11 +151,6 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 
 func (c *Call[TReq, TResp]) stepName() string {
 	return fmt.Sprintf("%s %s", c.req.Method, c.req.Path)
-}
-
-func (c *Call[TReq, TResp]) attachResults(stepCtx provider.StepCtx, summary polling.PollingSummary) {
-	polling.AttachIfAsync(stepCtx, summary)
-	attachResponse(stepCtx, c.client, c.resp)
 }
 
 func (c *Call[TReq, TResp]) assertResults(stepCtx provider.StepCtx, err error) {
@@ -180,14 +168,7 @@ func (c *Call[TReq, TResp]) assertNoExpectations(stepCtx provider.StepCtx, mode 
 }
 
 func (c *Call[TReq, TResp]) convertToAny() *client.Response[any] {
-	return &client.Response[any]{
-		StatusCode:   c.resp.StatusCode,
-		Headers:      c.resp.Headers,
-		RawBody:      c.resp.RawBody,
-		Error:        c.resp.Error,
-		Duration:     c.resp.Duration,
-		NetworkError: c.resp.NetworkError,
-	}
+	return c.resp.ToAny()
 }
 
 func (c *Call[TReq, TResp]) validate() {

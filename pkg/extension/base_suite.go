@@ -10,18 +10,28 @@ import (
 
 type BaseSuite struct {
 	suite.Suite
-	tExt    *TExtension
-	asyncWg sync.WaitGroup
-	cleanup func(t provider.T)
+	tExt     *TExtension
+	asyncWg  sync.WaitGroup
+	cleanup  func(t provider.T)
+	currentT provider.T
 }
 
 func (s *BaseSuite) BeforeEach(t provider.T) {
 	s.tExt = nil
 	s.cleanup = nil
+	s.currentT = t
 }
 
 func (s *BaseSuite) Cleanup(fn func(t provider.T)) {
-	s.cleanup = fn
+	if s.currentT != nil {
+		t := s.currentT
+		t.Cleanup(func() {
+			s.asyncWg.Wait()
+			fn(t)
+		})
+	} else {
+		s.cleanup = fn
+	}
 }
 
 func (s *BaseSuite) T(t provider.T) *TExtension {

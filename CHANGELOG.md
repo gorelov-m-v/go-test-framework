@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-01-31
+
+### Added
+- Auto warmup Kafka consumer on client creation
+
+### Changed
+- `BaseSuite.Cleanup()` now uses `t.Cleanup()` internally — cleanup runs even if test fails before `s.Cleanup()` call
+
+## [1.2.0] - 2026-01-31
+
+### Added
+- `WaitReady()` method for Kafka consumer warmup
+
+## [1.1.0] - 2026-01-31
+
+### Changed
+- Unified DSL expectations across all DSLs
+- Improved unit test coverage for config and validation
+
 ## [1.0.0] - 2026-01-25
 
 ### Changed
@@ -123,7 +142,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic retry with exponential backoff
 - GJSON-based JSON path access
 
-[Unreleased]: https://github.com/gorelov-m-v/go-test-framework/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/gorelov-m-v/go-test-framework/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.9.3...v1.0.0
 [0.9.3]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.9.0...v0.9.3
 [0.9.0]: https://github.com/gorelov-m-v/go-test-framework/compare/v0.7.0...v0.9.0

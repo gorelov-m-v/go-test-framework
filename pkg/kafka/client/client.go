@@ -84,3 +84,12 @@ func (c *Client) GetBuffer() MessageBufferInterface {
 func (c *Client) GetTopicPrefix() string {
 	return c.config.TopicPrefix
 }
+
+// WaitReady blocks until the consumer has joined the group and is ready to consume.
+// This should be called before running tests to ensure Kafka messages can be received.
+func (c *Client) WaitReady(timeout time.Duration) error {
+	if c.backgroundConsumer == nil {
+		return nil
+	}
+	return c.backgroundConsumer.WaitReady(timeout)
+}

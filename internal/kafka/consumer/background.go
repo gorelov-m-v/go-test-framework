@@ -25,6 +25,8 @@ type BackgroundConsumer struct {
 	mu             sync.Mutex
 	topicPrefix    string
 	fullTopicNames []string
+	ready          chan struct{}
+	readyOnce      sync.Once
 }
 
 func NewBackgroundConsumer(
@@ -68,9 +70,23 @@ func NewBackgroundConsumer(
 		cancel:         cancel,
 		topicPrefix:    "",
 		fullTopicNames: fullTopicNames,
+		ready:          make(chan struct{}),
 	}
 
 	return bc, nil
+}
+
+// WaitReady blocks until the consumer has joined the group and is ready to consume,
+// or until the timeout expires. Returns nil if ready, error if timeout.
+func (bc *BackgroundConsumer) WaitReady(timeout time.Duration) error {
+	select {
+	case <-bc.ready:
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("kafka consumer not ready after %v", timeout)
+	case <-bc.ctx.Done():
+		return bc.ctx.Err()
+	}
 }
 
 func (bc *BackgroundConsumer) Start() error {
@@ -118,7 +134,9 @@ func (bc *BackgroundConsumer) consumeLoop() {
 	defer bc.wg.Done()
 
 	handler := &consumerGroupHandler{
-		buffer: bc.buffer,
+		buffer:    bc.buffer,
+		ready:     bc.ready,
+		readyOnce: &bc.readyOnce,
 	}
 
 	for {
@@ -148,10 +166,18 @@ func (bc *BackgroundConsumer) consumeLoop() {
 }
 
 type consumerGroupHandler struct {
-	buffer types.MessageBufferInterface
+	buffer    types.MessageBufferInterface
+	ready     chan struct{}
+	readyOnce *sync.Once
 }
 
 func (h *consumerGroupHandler) Setup(sarama.ConsumerGroupSession) error {
+	// Signal that consumer is ready (joined group, partitions assigned)
+	if h.readyOnce != nil {
+		h.readyOnce.Do(func() {
+			close(h.ready)
+		})
+	}
 	return nil
 }
 

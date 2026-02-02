@@ -307,8 +307,8 @@ func TestFieldNotEmpty_Empty(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldExistsExpectation_Success(t *testing.T) {
-	exp := makeFieldExistsExpectation("name")
+func TestFieldExists_Success(t *testing.T) {
+	exp := jsonSource.FieldExists("name")
 	body := map[string]string{"name": "John"}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -318,8 +318,8 @@ func TestMakeFieldExistsExpectation_Success(t *testing.T) {
 	assert.True(t, result.Ok)
 }
 
-func TestMakeFieldExistsExpectation_NotExists(t *testing.T) {
-	exp := makeFieldExistsExpectation("nonexistent")
+func TestFieldExists_NotExists(t *testing.T) {
+	exp := jsonSource.FieldExists("nonexistent")
 	body := map[string]string{"name": "John"}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -329,8 +329,8 @@ func TestMakeFieldExistsExpectation_NotExists(t *testing.T) {
 	assert.False(t, result.Ok)
 }
 
-func TestMakeFieldExistsExpectation_NestedPath(t *testing.T) {
-	exp := makeFieldExistsExpectation("user.name")
+func TestFieldExists_NestedPath(t *testing.T) {
+	exp := jsonSource.FieldExists("user.name")
 	body := map[string]interface{}{"user": map[string]string{"name": "John"}}
 	var bodyAny any = body
 	resp := &client.Response[any]{Body: &bodyAny}
@@ -404,7 +404,7 @@ func TestExpectation_Names(t *testing.T) {
 		{"StatusCode", makeStatusCodeExpectation(codes.OK), "OK"},
 		{"FieldEquals", jsonSource.FieldEquals("path", "val"), "path"},
 		{"FieldNotEmpty", jsonSource.FieldNotEmpty("field"), "field"},
-		{"FieldExists", makeFieldExistsExpectation("field"), "field"},
+		{"FieldExists", jsonSource.FieldExists("field"), "field"},
 		{"Metadata", makeMetadataExpectation("key", "val"), "key"},
 	}
 

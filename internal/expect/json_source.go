@@ -108,6 +108,50 @@ func (s *JSONExpectationSource[T]) FieldNotEmpty(path string) *Expectation[T] {
 	})
 }
 
+func (s *JSONExpectationSource[T]) FieldExists(path string) *Expectation[T] {
+	name := fmt.Sprintf("Expect JSON field '%s' exists", path)
+	return New(
+		name,
+		func(err error, result T) polling.CheckResult {
+			if pathErr := ValidateJSONPath(path); pathErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Invalid JSON path: %v", pathErr),
+				}
+			}
+			if res, ok := s.PreCheckWithBody(err, result); !ok {
+				return res
+			}
+			jsonBytes, jsonErr := s.GetJSON(result)
+			if jsonErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Cannot get JSON: %v", jsonErr),
+				}
+			}
+			jsonRes, parseErr := jsonutil.GetField(jsonBytes, path)
+			if parseErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    "Invalid JSON response body",
+				}
+			}
+			if !jsonRes.Exists() {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: true,
+					Reason:    fmt.Sprintf("Field '%s' does not exist", path),
+				}
+			}
+			return polling.CheckResult{Ok: true}
+		},
+		StandardReport[T](name),
+	)
+}
+
 func (s *JSONExpectationSource[T]) FieldIsNull(path string) *Expectation[T] {
 	name := fmt.Sprintf("Expect JSON field '%s' is null", path)
 	return BuildJSONFieldNullExpectation(JSONFieldNullExpectationConfig[T]{

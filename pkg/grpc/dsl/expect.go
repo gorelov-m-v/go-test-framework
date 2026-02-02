@@ -48,7 +48,7 @@ func (c *Call[TReq, TResp]) ExpectFieldNotEmpty(path string) *Call[TReq, TResp] 
 }
 
 func (c *Call[TReq, TResp]) ExpectFieldExists(path string) *Call[TReq, TResp] {
-	c.addExpectation(makeFieldExistsExpectation(path))
+	c.addExpectation(jsonSource.FieldExists(path))
 	return c
 }
 
@@ -154,43 +154,6 @@ func getResponseJSON(resp *client.Response[any]) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
 	}
 	return jsonBytes, nil
-}
-
-func makeFieldExistsExpectation(path string) *expect.Expectation[*client.Response[any]] {
-	name := fmt.Sprintf("Expect: Field '%s' exists", path)
-	return expect.New(
-		name,
-		func(err error, resp *client.Response[any]) polling.CheckResult {
-			if res, ok := preCheckWithBody(err, resp); !ok {
-				return res
-			}
-			jsonBytes, jsonErr := getResponseJSON(resp)
-			if jsonErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Cannot parse response: %v", jsonErr),
-				}
-			}
-			result, fieldErr := jsonutil.GetField(jsonBytes, path)
-			if fieldErr != nil {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: false,
-					Reason:    fmt.Sprintf("Invalid JSON: %v", fieldErr),
-				}
-			}
-			if !result.Exists() {
-				return polling.CheckResult{
-					Ok:        false,
-					Retryable: true,
-					Reason:    fmt.Sprintf("Field '%s' does not exist", path),
-				}
-			}
-			return polling.CheckResult{Ok: true}
-		},
-		expect.StandardReport[*client.Response[any]](name),
-	)
 }
 
 func makeMetadataExpectation(key, expectedValue string) *expect.Expectation[*client.Response[any]] {

@@ -159,7 +159,7 @@ func TestInjectHTTPClient_Success(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectHTTPClient(v, fieldValue, field, "http.testService", "TestEnv")
+	err := httpInjector.Inject(v, fieldValue, field, "http.testService", "TestEnv")
 
 	require.NoError(t, err)
 	assert.NotNil(t, env.Service.client)
@@ -177,7 +177,7 @@ func TestInjectHTTPClient_ConfigKeyNotFound(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectHTTPClient(v, fieldValue, field, "http.missing", "TestEnv")
+	err := httpInjector.Inject(v, fieldValue, field, "http.missing", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "config key 'http.missing' not found")
@@ -197,7 +197,7 @@ func TestInjectHTTPClient_UnexportedField(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectHTTPClient(v, fieldValue, field, "http.testService", "TestEnv")
+	err := httpInjector.Inject(v, fieldValue, field, "http.testService", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is not exported")
@@ -221,7 +221,7 @@ func TestInjectHTTPClient_NotImplementsHTTPSetter(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectHTTPClient(v, fieldValue, field, "http.testService", "TestEnv")
+	err := httpInjector.Inject(v, fieldValue, field, "http.testService", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not implement")
@@ -364,7 +364,7 @@ func TestMultipleHTTPClients(t *testing.T) {
 		fieldValue := envValue.Field(i)
 		configKey := field.Tag.Get("config")
 
-		err := injectHTTPClient(v, fieldValue, field, configKey, "TestEnv")
+		err := httpInjector.Inject(v, fieldValue, field, configKey, "TestEnv")
 		require.NoError(t, err, "Failed to inject field %s", field.Name)
 	}
 
@@ -397,7 +397,7 @@ func TestInjectDBClient_ConfigKeyNotFound(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectDBClient(v, fieldValue, field, "database.missing", "TestEnv")
+	err := dbInjector.Inject(v, fieldValue, field, "database.missing", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "config key 'database.missing' not found")
@@ -418,7 +418,7 @@ func TestInjectDBClient_UnexportedField(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectDBClient(v, fieldValue, field, "database.test", "TestEnv")
+	err := dbInjector.Inject(v, fieldValue, field, "database.test", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is not exported")
@@ -439,10 +439,10 @@ func TestInjectDBClient_InvalidConfig(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectDBClient(v, fieldValue, field, "database.test", "TestEnv")
+	err := dbInjector.Inject(v, fieldValue, field, "database.test", "TestEnv")
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create db client")
+	assert.Contains(t, err.Error(), "failed to create Database client")
 }
 
 type mockKafkaLink struct {
@@ -469,7 +469,7 @@ func TestInjectKafkaClient_ConfigKeyNotFound(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectKafkaClient(v, fieldValue, field, "kafka.missing", "TestEnv")
+	err := kafkaInjector.Inject(v, fieldValue, field, "kafka.missing", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "config key 'kafka.missing' not found")
@@ -489,7 +489,7 @@ func TestInjectKafkaClient_UnexportedField(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectKafkaClient(v, fieldValue, field, "kafka.test", "TestEnv")
+	err := kafkaInjector.Inject(v, fieldValue, field, "kafka.test", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is not exported")
@@ -510,10 +510,10 @@ func TestInjectKafkaClient_MissingTopics(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectKafkaClient(v, fieldValue, field, "kafka.test", "TestEnv")
+	err := kafkaInjector.Inject(v, fieldValue, field, "kafka.test", "TestEnv")
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create kafka client")
+	assert.Contains(t, err.Error(), "failed to create Kafka client")
 }
 
 type mockGRPCLink struct {
@@ -540,7 +540,7 @@ func TestInjectGRPCClient_ConfigKeyNotFound(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectGRPCClient(v, fieldValue, field, "grpc.missing", "TestEnv")
+	err := grpcInjector.Inject(v, fieldValue, field, "grpc.missing", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "config key 'grpc.missing' not found")
@@ -561,7 +561,7 @@ func TestInjectGRPCClient_UnexportedField(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectGRPCClient(v, fieldValue, field, "grpc.test", "TestEnv")
+	err := grpcInjector.Inject(v, fieldValue, field, "grpc.test", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is not exported")
@@ -582,7 +582,7 @@ func TestInjectGRPCClient_NotImplementsGRPCSetter(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectGRPCClient(v, fieldValue, field, "grpc.test", "TestEnv")
+	err := grpcInjector.Inject(v, fieldValue, field, "grpc.test", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not implement")
@@ -604,7 +604,7 @@ func TestInjectGRPCClient_Success(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectGRPCClient(v, fieldValue, field, "grpc.test", "TestEnv")
+	err := grpcInjector.Inject(v, fieldValue, field, "grpc.test", "TestEnv")
 
 	require.NoError(t, err)
 	assert.NotNil(t, env.GRPC.client)
@@ -628,7 +628,7 @@ func TestInjectGRPCClient_WithAsyncConfig(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectGRPCClient(v, fieldValue, field, "grpc.test", "TestEnv")
+	err := grpcInjector.Inject(v, fieldValue, field, "grpc.test", "TestEnv")
 
 	require.NoError(t, err)
 	assert.NotNil(t, env.GRPC.client)
@@ -658,7 +658,7 @@ func TestInjectRedisClient_ConfigKeyNotFound(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectRedisClient(v, fieldValue, field, "redis.missing", "TestEnv")
+	err := redisInjector.Inject(v, fieldValue, field, "redis.missing", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "config key 'redis.missing' not found")
@@ -678,7 +678,7 @@ func TestInjectRedisClient_UnexportedField(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectRedisClient(v, fieldValue, field, "redis.test", "TestEnv")
+	err := redisInjector.Inject(v, fieldValue, field, "redis.test", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is not exported")
@@ -698,7 +698,7 @@ func TestInjectRedisClient_ConnectionError(t *testing.T) {
 	field := envValue.Type().Field(0)
 	fieldValue := envValue.Field(0)
 
-	err := injectRedisClient(v, fieldValue, field, "redis.test", "TestEnv")
+	err := redisInjector.Inject(v, fieldValue, field, "redis.test", "TestEnv")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create Redis client")
@@ -726,13 +726,13 @@ func TestMixedEnvStruct_HTTPAndGRPC(t *testing.T) {
 		fieldValue := envValue.Field(i)
 
 		if configKey := field.Tag.Get(tagHTTPConfig); configKey != "" {
-			err := injectHTTPClient(v, fieldValue, field, configKey, "TestEnv")
+			err := httpInjector.Inject(v, fieldValue, field, configKey, "TestEnv")
 			require.NoError(t, err)
 			continue
 		}
 
 		if grpcKey := field.Tag.Get(tagGRPCConfig); grpcKey != "" {
-			err := injectGRPCClient(v, fieldValue, field, grpcKey, "TestEnv")
+			err := grpcInjector.Inject(v, fieldValue, field, grpcKey, "TestEnv")
 			require.NoError(t, err)
 			continue
 		}

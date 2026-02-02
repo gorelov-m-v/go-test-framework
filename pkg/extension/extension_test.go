@@ -562,3 +562,49 @@ func TestModeSwitch_SyncToAsync(t *testing.T) {
 	assert.Equal(t, AsyncMode, w.mode)
 	assert.Equal(t, innerCtx, w.StepCtx)
 }
+
+// =============================================================================
+// Note: provider.T interface contains a private method, making it impossible
+// to create a full mock outside of allure-go package. Tests for TExtension,
+// BaseSuite.T(), Step(), AsyncStep(), BeforeEach(), AfterEach(), and Cleanup()
+// methods require integration testing with allure-go framework.
+//
+// The tests below focus on what can be unit tested without provider.T mock.
+// =============================================================================
+
+// =============================================================================
+// BaseSuite internal behavior tests (without provider.T dependency)
+// =============================================================================
+
+func TestBaseSuite_CleanupField_SetAndCall(t *testing.T) {
+	s := &BaseSuite{}
+
+	assert.Nil(t, s.cleanup, "cleanup should be nil initially")
+
+	called := false
+	s.cleanup = func(t provider.T) {
+		called = true
+	}
+
+	assert.NotNil(t, s.cleanup)
+	s.cleanup(nil)
+	assert.True(t, called, "cleanup function should be called")
+}
+
+func TestBaseSuite_TExtField_SetAndReset(t *testing.T) {
+	s := &BaseSuite{}
+
+	assert.Nil(t, s.tExt, "tExt should be nil initially")
+
+	s.tExt = &TExtension{}
+	assert.NotNil(t, s.tExt)
+
+	s.tExt = nil
+	assert.Nil(t, s.tExt, "tExt should be nil after reset")
+}
+
+func TestBaseSuite_CurrentTField(t *testing.T) {
+	s := &BaseSuite{}
+
+	assert.Nil(t, s.currentT, "currentT should be nil initially")
+}

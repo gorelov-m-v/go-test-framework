@@ -53,42 +53,42 @@ func BuildEnv(envPtr any) error {
 		fieldValue := envValue.Field(i)
 
 		if configKey := field.Tag.Get(tagHTTPConfig); configKey != "" {
-			if err := injectHTTPClient(v, fieldValue, field, configKey, structName); err != nil {
+			if err := httpInjector.Inject(v, fieldValue, field, configKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if dbConfigKey := field.Tag.Get(tagDBConfig); dbConfigKey != "" {
-			if err := injectDBClient(v, fieldValue, field, dbConfigKey, structName); err != nil {
+		if configKey := field.Tag.Get(tagDBConfig); configKey != "" {
+			if err := dbInjector.Inject(v, fieldValue, field, configKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if asyncConfigKey := field.Tag.Get(tagAsyncConfig); asyncConfigKey != "" {
-			if err := injectAsyncConfig(v, fieldValue, field, asyncConfigKey, structName); err != nil {
+		if configKey := field.Tag.Get(tagAsyncConfig); configKey != "" {
+			if err := injectAsyncConfig(v, fieldValue, field, configKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if kafkaConfigKey := field.Tag.Get(tagKafkaConfig); kafkaConfigKey != "" {
-			if err := injectKafkaClient(v, fieldValue, field, kafkaConfigKey, structName); err != nil {
+		if configKey := field.Tag.Get(tagKafkaConfig); configKey != "" {
+			if err := kafkaInjector.Inject(v, fieldValue, field, configKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if grpcConfigKey := field.Tag.Get(tagGRPCConfig); grpcConfigKey != "" {
-			if err := injectGRPCClient(v, fieldValue, field, grpcConfigKey, structName); err != nil {
+		if configKey := field.Tag.Get(tagGRPCConfig); configKey != "" {
+			if err := grpcInjector.Inject(v, fieldValue, field, configKey, structName); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if redisConfigKey := field.Tag.Get(tagRedisConfig); redisConfigKey != "" {
-			if err := injectRedisClient(v, fieldValue, field, redisConfigKey, structName); err != nil {
+		if configKey := field.Tag.Get(tagRedisConfig); configKey != "" {
+			if err := redisInjector.Inject(v, fieldValue, field, configKey, structName); err != nil {
 				return err
 			}
 			continue

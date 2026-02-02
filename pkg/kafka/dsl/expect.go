@@ -2,26 +2,10 @@ package dsl
 
 import (
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
-	"github.com/gorelov-m-v/go-test-framework/internal/polling"
+	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/client"
 )
 
-var bytesPreCheck = func(err error, b []byte) (polling.CheckResult, bool) {
-	if err != nil {
-		return polling.CheckResult{
-			Ok:        false,
-			Retryable: true,
-			Reason:    "Error occurred",
-		}, false
-	}
-	if len(b) == 0 {
-		return polling.CheckResult{
-			Ok:        false,
-			Retryable: true,
-			Reason:    "Message bytes are empty",
-		}, false
-	}
-	return polling.CheckResult{}, true
-}
+var bytesPreCheck = client.BuildBytesPreCheck()
 
 var bytesSource = &expect.JSONExpectationSource[[]byte]{
 	GetJSON:          func(b []byte) ([]byte, error) { return b, nil },

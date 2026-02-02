@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	redisClient "github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
 )
 
 func TestWriteRedisTTL(t *testing.T) {
@@ -145,4 +147,32 @@ func TestRedisResultDTO(t *testing.T) {
 	assert.Equal(t, 5*time.Minute, dto.TTL)
 	assert.Equal(t, 10*time.Millisecond, dto.Duration)
 	assert.Nil(t, dto.Error)
+}
+
+func TestToRedisResultDTO(t *testing.T) {
+	t.Run("nil result", func(t *testing.T) {
+		dto := ToRedisResultDTO(nil)
+
+		assert.Equal(t, RedisResultDTO{}, dto)
+	})
+
+	t.Run("full result", func(t *testing.T) {
+		result := &redisClient.Result{
+			Key:      "session:abc",
+			Exists:   true,
+			Value:    `{"token": "xyz"}`,
+			TTL:      10 * time.Minute,
+			Duration: 5 * time.Millisecond,
+			Error:    nil,
+		}
+
+		dto := ToRedisResultDTO(result)
+
+		assert.Equal(t, "session:abc", dto.Key)
+		assert.True(t, dto.Exists)
+		assert.Equal(t, `{"token": "xyz"}`, dto.Value)
+		assert.Equal(t, 10*time.Minute, dto.TTL)
+		assert.Equal(t, 5*time.Millisecond, dto.Duration)
+		assert.Nil(t, dto.Error)
+	})
 }

@@ -7,30 +7,18 @@ import (
 )
 
 type Config struct {
-	AsyncConfig config.AsyncConfig `mapstructure:"async"`
-	BootstrapServers []string `mapstructure:"bootstrapServers"`
-
-	GroupID string `mapstructure:"groupId"`
-
-	Topics []string `mapstructure:"topics"`
-
-	TopicPrefix string `mapstructure:"topicPrefix"`
-
-	BufferSize int `mapstructure:"bufferSize"`
-
-	FindMessageTimeout time.Duration `mapstructure:"findMessageTimeout"`
-
-	FindMessageSleepInterval time.Duration `mapstructure:"findMessageSleepInterval"`
-
-	UniqueDuplicateWindowMs int64 `mapstructure:"uniqueDuplicateWindowMs"`
-
-	// WarmupTimeout is the maximum time to wait for consumer to join group and be ready.
-	// Set to 0 to disable warmup. Default: 60s
-	WarmupTimeout time.Duration `mapstructure:"warmupTimeout"`
-
-	Version string `mapstructure:"version"`
-
-	SaramaConfig map[string]interface{} `mapstructure:"saramaConfig"`
+	AsyncConfig              config.AsyncConfig     `mapstructure:"async" yaml:"async" json:"async"`
+	BootstrapServers         []string               `mapstructure:"bootstrapServers" yaml:"bootstrapServers" json:"bootstrapServers"`
+	GroupID                  string                 `mapstructure:"groupId" yaml:"groupId" json:"groupId"`
+	Topics                   []string               `mapstructure:"topics" yaml:"topics" json:"topics"`
+	TopicPrefix              string                 `mapstructure:"topicPrefix" yaml:"topicPrefix" json:"topicPrefix"`
+	BufferSize               int                    `mapstructure:"bufferSize" yaml:"bufferSize" json:"bufferSize"`
+	FindMessageTimeout       time.Duration          `mapstructure:"findMessageTimeout" yaml:"findMessageTimeout" json:"findMessageTimeout"`
+	FindMessageSleepInterval time.Duration          `mapstructure:"findMessageSleepInterval" yaml:"findMessageSleepInterval" json:"findMessageSleepInterval"`
+	UniqueDuplicateWindowMs  int64                  `mapstructure:"uniqueDuplicateWindowMs" yaml:"uniqueDuplicateWindowMs" json:"uniqueDuplicateWindowMs"`
+	WarmupTimeout            time.Duration          `mapstructure:"warmupTimeout" yaml:"warmupTimeout" json:"warmupTimeout"`
+	Version                  string                 `mapstructure:"version" yaml:"version" json:"version"`
+	SaramaConfig             map[string]interface{} `mapstructure:"saramaConfig" yaml:"saramaConfig" json:"saramaConfig"`
 }
 
 func DefaultConfig() Config {

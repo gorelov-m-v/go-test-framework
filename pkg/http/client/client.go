@@ -22,13 +22,13 @@ type Client struct {
 }
 
 type Config struct {
-	BaseURL          string
-	Timeout          time.Duration
-	DefaultHeaders   map[string]string
-	MaskHeaders      string             `mapstructure:"maskHeaders"`
-	ContractSpec     string             `mapstructure:"contractSpec"`
-	ContractBasePath string             `mapstructure:"contractBasePath"`
-	AsyncConfig      config.AsyncConfig `mapstructure:"asyncConfig"`
+	BaseURL          string                `mapstructure:"baseURL" yaml:"baseURL" json:"baseURL"`
+	Timeout          time.Duration         `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
+	DefaultHeaders   map[string]string     `mapstructure:"defaultHeaders" yaml:"defaultHeaders" json:"defaultHeaders"`
+	MaskHeaders      string                `mapstructure:"maskHeaders" yaml:"maskHeaders" json:"maskHeaders"`
+	ContractSpec     string                `mapstructure:"contractSpec" yaml:"contractSpec" json:"contractSpec"`
+	ContractBasePath string                `mapstructure:"contractBasePath" yaml:"contractBasePath" json:"contractBasePath"`
+	AsyncConfig      config.AsyncConfig    `mapstructure:"async" yaml:"async" json:"async"`
 }
 
 func New(cfg Config) (*Client, error) {
@@ -84,6 +84,10 @@ func (c *Client) ShouldMaskHeader(name string) bool {
 
 func (c *Client) GetBaseURL() string {
 	return c.BaseURL
+}
+
+func (c *Client) Close() error {
+	return nil
 }
 
 func (c *Client) BuildEffectiveURL(path string, pathParams, queryParams map[string]string) (string, error) {

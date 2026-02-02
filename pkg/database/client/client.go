@@ -14,14 +14,14 @@ import (
 )
 
 type Config struct {
-	Driver          string             `mapstructure:"driver"`
-	DSN             string             `mapstructure:"dsn"`
-	MaxOpenConns    int                `mapstructure:"maxOpenConns"`
-	MaxIdleConns    int                `mapstructure:"maxIdleConns"`
-	ConnMaxLifetime time.Duration      `mapstructure:"connMaxLifetime"`
-	MaskColumns     string             `mapstructure:"maskColumns"`
-	Schemas         map[string]string  `mapstructure:"schemas"`
-	AsyncConfig     config.AsyncConfig `mapstructure:"asyncConfig"`
+	Driver          string             `mapstructure:"driver" yaml:"driver" json:"driver"`
+	DSN             string             `mapstructure:"dsn" yaml:"dsn" json:"dsn"`
+	MaxOpenConns    int                `mapstructure:"maxOpenConns" yaml:"maxOpenConns" json:"maxOpenConns"`
+	MaxIdleConns    int                `mapstructure:"maxIdleConns" yaml:"maxIdleConns" json:"maxIdleConns"`
+	ConnMaxLifetime time.Duration      `mapstructure:"connMaxLifetime" yaml:"connMaxLifetime" json:"connMaxLifetime"`
+	MaskColumns     string             `mapstructure:"maskColumns" yaml:"maskColumns" json:"maskColumns"`
+	Schemas         map[string]string  `mapstructure:"schemas" yaml:"schemas" json:"schemas"`
+	AsyncConfig     config.AsyncConfig `mapstructure:"async" yaml:"async" json:"async"`
 }
 
 type Client struct {

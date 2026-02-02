@@ -633,7 +633,7 @@ func TestMakeColumnJSONEqualsExpectation_ByteSlice_InvalidJSON(t *testing.T) {
 	result := exp.Check(nil, model)
 
 	assert.False(t, result.Ok)
-	assert.Contains(t, result.Reason, "unmarshal")
+	assert.Contains(t, result.Reason, "parse")
 }
 
 func TestMakeColumnJSONEqualsExpectation_String(t *testing.T) {
@@ -652,7 +652,7 @@ func TestMakeColumnJSONEqualsExpectation_String_InvalidJSON(t *testing.T) {
 	result := exp.Check(nil, model)
 
 	assert.False(t, result.Ok)
-	assert.Contains(t, result.Reason, "unmarshal")
+	assert.Contains(t, result.Reason, "parse")
 }
 
 func TestMakeColumnJSONEqualsExpectation_WrongType(t *testing.T) {

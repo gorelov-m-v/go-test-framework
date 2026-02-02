@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx/reflectx"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
+	"github.com/gorelov-m-v/go-test-framework/internal/jsonutil"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/internal/typeconv"
 )
@@ -382,32 +383,14 @@ func makeColumnJSONEqualsExpectation[T any](columnName string, expected map[stri
 				}
 			}
 
-			var actualMap map[string]interface{}
+			var jsonBytes []byte
 			switch v := actualValue.(type) {
 			case json.RawMessage:
-				if err := json.Unmarshal(v, &actualMap); err != nil {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: false,
-						Reason:    fmt.Sprintf("Failed to unmarshal JSON: %v", err),
-					}
-				}
+				jsonBytes = v
 			case []byte:
-				if err := json.Unmarshal(v, &actualMap); err != nil {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: false,
-						Reason:    fmt.Sprintf("Failed to unmarshal JSON: %v", err),
-					}
-				}
+				jsonBytes = v
 			case string:
-				if err := json.Unmarshal([]byte(v), &actualMap); err != nil {
-					return polling.CheckResult{
-						Ok:        false,
-						Retryable: false,
-						Reason:    fmt.Sprintf("Failed to unmarshal JSON string: %v", err),
-					}
-				}
+				jsonBytes = []byte(v)
 			default:
 				return polling.CheckResult{
 					Ok:        false,
@@ -416,20 +399,30 @@ func makeColumnJSONEqualsExpectation[T any](columnName string, expected map[stri
 				}
 			}
 
+			parsed, parseErr := jsonutil.Parse(jsonBytes)
+			if parseErr != nil {
+				return polling.CheckResult{
+					Ok:        false,
+					Retryable: false,
+					Reason:    fmt.Sprintf("Failed to parse JSON: %v", parseErr),
+				}
+			}
+
 			for key, expectedVal := range expected {
-				actualVal, exists := actualMap[key]
-				if !exists {
+				field := parsed.Get(key)
+				if !field.Exists() {
 					return polling.CheckResult{
 						Ok:        false,
 						Retryable: true,
 						Reason:    fmt.Sprintf("Key '%s' not found in JSON", key),
 					}
 				}
-				if fmt.Sprintf("%v", expectedVal) != fmt.Sprintf("%v", actualVal) {
+				ok, msg := jsonutil.Compare(field, expectedVal)
+				if !ok {
 					return polling.CheckResult{
 						Ok:        false,
 						Retryable: true,
-						Reason:    fmt.Sprintf("Key '%s': expected '%v', got '%v'", key, expectedVal, actualVal),
+						Reason:    fmt.Sprintf("Key '%s': %s", key, msg),
 					}
 				}
 			}

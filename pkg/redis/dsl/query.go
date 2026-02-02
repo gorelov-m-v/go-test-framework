@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
@@ -25,6 +26,7 @@ import (
 type Query struct {
 	sCtx   provider.StepCtx
 	client *client.Client
+	ctx    context.Context
 
 	key string
 
@@ -45,6 +47,7 @@ func NewQuery(sCtx provider.StepCtx, redisClient *client.Client) *Query {
 	return &Query{
 		sCtx:   sCtx,
 		client: redisClient,
+		ctx:    context.Background(),
 	}
 }
 

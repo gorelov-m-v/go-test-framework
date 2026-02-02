@@ -18,7 +18,7 @@ func (q *Query) execute(
 	expectations []*expect.Expectation[*client.Result],
 ) (*client.Result, error, polling.PollingSummary) {
 	return retry.ExecuteDSLSimple(retry.DSLConfig[*client.Result, *client.Result]{
-		Ctx:              context.Background(),
+		Ctx:              q.ctx,
 		StepCtx:          stepCtx,
 		AsyncConfig:      q.client.AsyncConfig,
 		Expectations:     expectations,

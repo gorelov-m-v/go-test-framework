@@ -57,12 +57,11 @@ func (q *Query[T]) matchesFilter(jsonValue []byte) bool {
 		return true
 	}
 
-	if err := jsonutil.ValidateBytes(jsonValue); err != nil {
-		return false
-	}
-
 	for path, expectedValue := range q.filters {
-		result := gjson.GetBytes(jsonValue, path)
+		result, err := jsonutil.GetField(jsonValue, path)
+		if err != nil {
+			return false
+		}
 
 		if !result.Exists() {
 			return false
@@ -81,7 +80,10 @@ func (q *Query[T]) matchesFilter(jsonValue []byte) bool {
 	}
 
 	for path, expectedValue := range q.containsFilters {
-		result := gjson.GetBytes(jsonValue, path)
+		result, err := jsonutil.GetField(jsonValue, path)
+		if err != nil {
+			return false
+		}
 
 		if !result.Exists() {
 			return false

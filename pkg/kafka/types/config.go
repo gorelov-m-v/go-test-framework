@@ -2,9 +2,12 @@ package types
 
 import (
 	"time"
+
+	"github.com/gorelov-m-v/go-test-framework/pkg/config"
 )
 
 type Config struct {
+	AsyncConfig config.AsyncConfig `mapstructure:"async"`
 	BootstrapServers []string `mapstructure:"bootstrapServers"`
 
 	GroupID string `mapstructure:"groupId"`

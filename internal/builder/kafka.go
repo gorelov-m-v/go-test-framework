@@ -27,21 +27,20 @@ func injectKafkaClient(v *viper.Viper, fieldValue reflect.Value, field reflect.S
 		return fmt.Errorf("BuildEnv(%s): field '%s' tag kafka_config:\"%s\": failed to unmarshal config: %w", structName, field.Name, kafkaConfigKey, err)
 	}
 
-	var asyncCfg config.AsyncConfig
 	asyncKey := asyncKeyKafka
 	if v.IsSet(asyncKey) {
-		if err := v.UnmarshalKey(asyncKey, &asyncCfg); err != nil {
+		if err := v.UnmarshalKey(asyncKey, &kafkaCfg.AsyncConfig); err != nil {
 			return fmt.Errorf("BuildEnv(%s): field '%s' tag kafka_config:\"%s\": failed to unmarshal async config from '%s': %w", structName, field.Name, kafkaConfigKey, asyncKey, err)
 		}
 		debugLog("loaded async config from '%s' for Kafka", asyncKey)
 	} else {
-		asyncCfg = config.DefaultAsyncConfig()
+		kafkaCfg.AsyncConfig = config.DefaultAsyncConfig()
 		debugLog("using default async config for Kafka field '%s'", field.Name)
 	}
 
 	debugLog("injecting config '%s' into field '%s'", kafkaConfigKey, field.Name)
 
-	kafkaClient, err := kafkaclient.New(kafkaCfg, asyncCfg)
+	kafkaClient, err := kafkaclient.New(kafkaCfg)
 	if err != nil {
 		return fmt.Errorf("BuildEnv(%s): field '%s' tag kafka_config:\"%s\": failed to create kafka client: %w", structName, field.Name, kafkaConfigKey, err)
 	}

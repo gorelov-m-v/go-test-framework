@@ -1,9 +1,7 @@
 package dsl
 
 import (
-	"context"
 	"fmt"
-	"strings"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
@@ -27,10 +25,8 @@ import (
 type Query struct {
 	sCtx   provider.StepCtx
 	client *client.Client
-	ctx    context.Context
 
-	customStepName string
-	key            string
+	key string
 
 	result *client.Result
 	sent   bool
@@ -49,22 +45,7 @@ func NewQuery(sCtx provider.StepCtx, redisClient *client.Client) *Query {
 	return &Query{
 		sCtx:   sCtx,
 		client: redisClient,
-		ctx:    context.Background(),
 	}
-}
-
-// StepName overrides the default step name in Allure report.
-func (q *Query) StepName(name string) *Query {
-	q.customStepName = strings.TrimSpace(name)
-	return q
-}
-
-// Context sets a custom context for the query operation.
-func (q *Query) Context(ctx context.Context) *Query {
-	if ctx != nil {
-		q.ctx = ctx
-	}
-	return q
 }
 
 // Key sets the Redis key to query.
@@ -96,9 +77,6 @@ func (q *Query) Send() *client.Result {
 }
 
 func (q *Query) stepName() string {
-	if q.customStepName != "" {
-		return q.customStepName
-	}
 	return fmt.Sprintf("Redis GET %s", q.key)
 }
 

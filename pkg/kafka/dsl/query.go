@@ -108,12 +108,6 @@ func Consume[TTopic topic.TopicName](sCtx provider.StepCtx, kafkaClient *client.
 	return NewQuery[TTopic](sCtx, kafkaClient, fullTopicName)
 }
 
-// Context sets a custom context for the query operation.
-func (q *Query[T]) Context(ctx context.Context) *Query[T] {
-	q.ctx = ctx
-	return q
-}
-
 func (q *Query[T]) validate() {
 	v := validation.New(q.sCtx, "Kafka")
 	v.RequireNotNil(q.client, "Kafka client")

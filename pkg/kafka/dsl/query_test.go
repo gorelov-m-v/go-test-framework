@@ -1,7 +1,6 @@
 package dsl
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -435,20 +434,6 @@ func TestQuery_UniqueWithWindow_Chaining(t *testing.T) {
 	assert.True(t, q.unique)
 	assert.Equal(t, 10*time.Second, q.duplicateWindow)
 	assert.Equal(t, 1, q.expectedCount)
-}
-
-func TestQuery_Context(t *testing.T) {
-	q := &Query[any]{
-		ctx: context.Background(),
-	}
-
-	customCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	result := q.Context(customCtx)
-
-	assert.Same(t, q, result)
-	assert.Same(t, customCtx, q.ctx)
 }
 
 func TestQuery_StepName(t *testing.T) {

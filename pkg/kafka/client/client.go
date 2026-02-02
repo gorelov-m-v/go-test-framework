@@ -19,7 +19,7 @@ type Client struct {
 	AsyncConfig        config.AsyncConfig
 }
 
-func New(cfg types.Config, asyncConfig config.AsyncConfig) (*Client, error) {
+func New(cfg types.Config) (*Client, error) {
 	cfg = cfg.Merge()
 
 	if len(cfg.Topics) == 0 {
@@ -49,7 +49,7 @@ func New(cfg types.Config, asyncConfig config.AsyncConfig) (*Client, error) {
 		backgroundConsumer: backgroundConsumer,
 		defaultTimeout:     cfg.FindMessageTimeout,
 		uniqueWindow:       time.Duration(cfg.UniqueDuplicateWindowMs) * time.Millisecond,
-		AsyncConfig:        asyncConfig,
+		AsyncConfig:        cfg.AsyncConfig,
 	}
 
 	// Warmup: wait for consumer to join group and be ready
@@ -78,10 +78,6 @@ func (c *Client) GetDefaultTimeout() time.Duration {
 
 func (c *Client) GetUniqueWindow() time.Duration {
 	return c.uniqueWindow
-}
-
-func (c *Client) GetAsyncConfig() config.AsyncConfig {
-	return c.AsyncConfig
 }
 
 func (c *Client) GetBackgroundConsumer() BackgroundConsumerInterface {

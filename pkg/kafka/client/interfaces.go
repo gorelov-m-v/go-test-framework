@@ -6,5 +6,5 @@ type MessageBufferInterface = types.MessageBufferInterface
 type BackgroundConsumerInterface = types.BackgroundConsumerInterface
 
 type KafkaSetter interface {
-	SetKafka(client *Client)
+	SetKafka(c *Client)
 }

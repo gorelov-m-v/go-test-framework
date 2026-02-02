@@ -41,12 +41,6 @@ type ErrorGetter interface {
 	GetError() error
 }
 
-// NetworkErrorGetter is implemented by HTTP response types that may contain network errors.
-// Used by PostProcessNetworkError to detect network failures stored in the result.
-type NetworkErrorGetter interface {
-	GetNetworkError() string
-}
-
 // PostProcessSummary updates the polling summary if the result contains an error.
 // Call this after execution to ensure errors stored in the result are reflected in the summary.
 func PostProcessSummary[T ErrorGetter](result T, err error, summary *polling.PollingSummary) {
@@ -57,20 +51,6 @@ func PostProcessSummary[T ErrorGetter](result T, err error, summary *polling.Pol
 		summary.Success = false
 		if summary.LastError == "" {
 			summary.LastError = resultErr.Error()
-		}
-	}
-}
-
-// PostProcessNetworkError updates the polling summary if the result contains a network error.
-// Call this after HTTP execution to ensure network errors are reflected in the summary.
-func PostProcessNetworkError[T NetworkErrorGetter](result T, err error, summary *polling.PollingSummary) {
-	if err != nil {
-		return
-	}
-	if networkErr := result.GetNetworkError(); networkErr != "" {
-		summary.Success = false
-		if summary.LastError == "" {
-			summary.LastError = networkErr
 		}
 	}
 }

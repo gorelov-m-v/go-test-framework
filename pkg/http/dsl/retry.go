@@ -33,7 +33,7 @@ func (c *Call[TReq, TResp]) doRequest(ctx context.Context) (*client.Response[TRe
 }
 
 func postProcessHTTP[TResp any](resp *client.Response[TResp], err error, summary *polling.PollingSummary) {
-	retry.PostProcessNetworkError(resp, err, summary)
+	retry.PostProcessSummary(resp, err, summary)
 }
 
 func newHTTPErrorResponse[TResp any](err error) *client.Response[TResp] {

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -35,6 +36,16 @@ func (r *Response[V]) GetNetworkError() string {
 		return ""
 	}
 	return r.NetworkError
+}
+
+func (r *Response[V]) GetError() error {
+	if r == nil {
+		return nil
+	}
+	if r.NetworkError != "" {
+		return errors.New(r.NetworkError)
+	}
+	return nil
 }
 
 func ResponsePreCheckConfig() expect.PreCheckConfig[*Response[any]] {

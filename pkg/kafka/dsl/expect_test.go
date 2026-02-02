@@ -445,7 +445,36 @@ func TestFieldIsNull_PathNotExists(t *testing.T) {
 
 	result := exp.Check(nil, jsonData)
 
+	assert.False(t, result.Ok)
+	assert.True(t, result.Retryable)
+	assert.Contains(t, result.Reason, "does not exist")
+}
+
+func TestFieldIsNullOrMissing_PathNotExists(t *testing.T) {
+	exp := bytesSource.FieldIsNullOrMissing("nonexistent")
+	jsonData := []byte(`{"name": "John"}`)
+
+	result := exp.Check(nil, jsonData)
+
 	assert.True(t, result.Ok)
+}
+
+func TestFieldIsNullOrMissing_PathExistsAndNull(t *testing.T) {
+	exp := bytesSource.FieldIsNullOrMissing("value")
+	jsonData := []byte(`{"value": null}`)
+
+	result := exp.Check(nil, jsonData)
+
+	assert.True(t, result.Ok)
+}
+
+func TestFieldIsNullOrMissing_PathExistsNotNull(t *testing.T) {
+	exp := bytesSource.FieldIsNullOrMissing("value")
+	jsonData := []byte(`{"value": "test"}`)
+
+	result := exp.Check(nil, jsonData)
+
+	assert.False(t, result.Ok)
 }
 
 func TestFieldIsNotNull_PathNotExists(t *testing.T) {

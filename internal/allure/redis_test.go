@@ -122,6 +122,13 @@ func TestRedisRequestDTO(t *testing.T) {
 	assert.Equal(t, "user:123", dto.Key)
 }
 
+func TestToRedisRequestDTO(t *testing.T) {
+	dto := ToRedisRequestDTO("redis-cluster:6380", "session:abc")
+
+	assert.Equal(t, "redis-cluster:6380", dto.Server)
+	assert.Equal(t, "session:abc", dto.Key)
+}
+
 func TestRedisResultDTO(t *testing.T) {
 	dto := RedisResultDTO{
 		Key:      "user:123",

@@ -11,6 +11,12 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
+type SQLReportDTO struct {
+	Request SQLRequestDTO
+	Result  SQLResultDTO
+	Polling *PollingSummaryDTO
+}
+
 func (r *Reporter) AttachSQLReport(sCtx provider.StepCtx, db *dbclient.Client, report SQLReportDTO) {
 	builder := NewReportBuilder()
 

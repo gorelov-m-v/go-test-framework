@@ -16,26 +16,9 @@ func attachRedisReport(
 	result *client.Result,
 	pollingSummary polling.PollingSummary,
 ) {
-	reqDTO := allure.RedisRequestDTO{
-		Server: q.client.Addr(),
-		Key:    q.key,
-	}
-
-	resultDTO := allure.RedisResultDTO{}
-	if result != nil {
-		resultDTO = allure.RedisResultDTO{
-			Key:      result.Key,
-			Exists:   result.Exists,
-			Value:    result.Value,
-			TTL:      result.TTL,
-			Duration: result.Duration,
-			Error:    result.Error,
-		}
-	}
-
 	report := allure.RedisReportDTO{
-		Request: reqDTO,
-		Result:  resultDTO,
+		Request: allure.ToRedisRequestDTO(q.client.Addr(), q.key),
+		Result:  allure.ToRedisResultDTO(result),
 		Polling: allure.ToPollingSummaryDTO(pollingSummary),
 	}
 

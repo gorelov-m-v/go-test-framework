@@ -22,6 +22,16 @@ func TestKafkaSearchDTO(t *testing.T) {
 	assert.True(t, dto.Unique)
 }
 
+func TestToKafkaSearchDTO(t *testing.T) {
+	filters := map[string]string{"userId": "456", "eventType": "UPDATED"}
+	dto := ToKafkaSearchDTO("order-events", filters, 15*time.Second, false)
+
+	assert.Equal(t, "order-events", dto.Topic)
+	assert.Equal(t, filters, dto.Filters)
+	assert.Equal(t, 15*time.Second, dto.Timeout)
+	assert.False(t, dto.Unique)
+}
+
 func TestKafkaResultDTO(t *testing.T) {
 	dto := KafkaResultDTO{
 		Found:      true,

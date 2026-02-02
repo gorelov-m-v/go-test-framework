@@ -1,10 +1,6 @@
 package dsl
 
 import (
-	"database/sql"
-	"errors"
-	"time"
-
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/allure"
@@ -17,35 +13,17 @@ var sqlReporter = allure.NewDefaultReporter()
 func attachSQLReport(
 	stepCtx provider.StepCtx,
 	dbClient *client.Client,
-	sqlQuery string,
-	args []any,
-	result any,
-	rowCount int,
-	duration time.Duration,
-	err error,
+	params allure.SQLAttachParams,
 	pollingSummary polling.PollingSummary,
 ) {
-	reqDTO := allure.SQLRequestDTO{
-		Query: sqlQuery,
-		Args:  args,
-	}
-
-	resultDTO := allure.SQLResultDTO{
-		Duration: duration,
-		Error:    err,
-	}
-
-	if err == nil {
-		resultDTO.Found = true
-		resultDTO.RowCount = rowCount
-		resultDTO.Data = result
-	} else if errors.Is(err, sql.ErrNoRows) {
-		resultDTO.Found = false
-	}
-
 	report := allure.SQLReportDTO{
-		Request: reqDTO,
-		Result:  resultDTO,
+		Request: allure.ToSQLRequestDTO(params.Query, params.Args),
+		Result: allure.ToSQLResultDTO(allure.SQLResultParams{
+			Result:   params.Result,
+			RowCount: params.RowCount,
+			Duration: params.Duration,
+			Error:    params.Error,
+		}),
 		Polling: allure.ToPollingSummaryDTO(pollingSummary),
 	}
 

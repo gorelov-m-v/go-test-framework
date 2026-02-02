@@ -1,10 +1,21 @@
 package allure
 
-import "time"
+import (
+	"time"
+
+	"github.com/gorelov-m-v/go-test-framework/pkg/redis/client"
+)
 
 type RedisRequestDTO struct {
 	Server string
 	Key    string
+}
+
+func ToRedisRequestDTO(server, key string) RedisRequestDTO {
+	return RedisRequestDTO{
+		Server: server,
+		Key:    key,
+	}
 }
 
 type RedisResultDTO struct {
@@ -14,4 +25,18 @@ type RedisResultDTO struct {
 	TTL      time.Duration
 	Duration time.Duration
 	Error    error
+}
+
+func ToRedisResultDTO(result *client.Result) RedisResultDTO {
+	if result == nil {
+		return RedisResultDTO{}
+	}
+	return RedisResultDTO{
+		Key:      result.Key,
+		Exists:   result.Exists,
+		Value:    result.Value,
+		TTL:      result.TTL,
+		Duration: result.Duration,
+		Error:    result.Error,
+	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/allure"
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/internal/validation"
@@ -95,7 +96,14 @@ func (q *Query[T]) Send() T {
 		if err == nil {
 			rowCount = 1
 		}
-		attachSQLReport(stepCtx, q.client, q.sql, q.args, q.scannedResult, rowCount, duration, err, summary)
+		attachSQLReport(stepCtx, q.client, allure.SQLAttachParams{
+			Query:    q.sql,
+			Args:     q.args,
+			Result:   q.scannedResult,
+			RowCount: rowCount,
+			Duration: duration,
+			Error:    err,
+		}, summary)
 		q.assertResults(stepCtx, err)
 	})
 
@@ -137,7 +145,14 @@ func (q *Query[T]) SendAll() []T {
 		q.scannedResults = results
 		q.lastError = err
 
-		attachSQLReport(stepCtx, q.client, q.sql, q.args, q.scannedResults, len(q.scannedResults), duration, err, summary)
+		attachSQLReport(stepCtx, q.client, allure.SQLAttachParams{
+			Query:    q.sql,
+			Args:     q.args,
+			Result:   q.scannedResults,
+			RowCount: len(q.scannedResults),
+			Duration: duration,
+			Error:    err,
+		}, summary)
 		q.assertResultsAll(stepCtx, err)
 	})
 

@@ -5,5 +5,7 @@ type ConsumerConfig struct {
 	GroupID          string
 	Topics           []string
 	Version          string
+	StartFromNewest  bool
+	SkipExisting     bool
 	SaramaConfig     map[string]interface{}
 }

@@ -361,6 +361,8 @@ kafka:
   groupId: "qa-test-group"
   topics: ["events-topic"]
   bufferSize: 1000
+  skipExisting: true       # Skip messages sent before test start (by timestamp)
+  startFromNewest: true    # Start from latest offset for new consumer groups
 
 grpc:
   serviceName:

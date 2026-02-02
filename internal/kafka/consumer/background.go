@@ -27,6 +27,8 @@ type BackgroundConsumer struct {
 	fullTopicNames []string
 	ready          chan struct{}
 	readyOnce      sync.Once
+	skipExisting   bool
+	startTime      int64
 }
 
 func NewBackgroundConsumer(
@@ -42,7 +44,11 @@ func NewBackgroundConsumer(
 	saramaConfig.Version = version
 
 	saramaConfig.Consumer.Return.Errors = true
-	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+	if cfg.StartFromNewest {
+		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetNewest
+	} else {
+		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+	}
 	saramaConfig.Consumer.Group.Rebalance.Strategy = sarama.NewBalanceStrategyRoundRobin()
 
 	if err := applySaramaConfig(saramaConfig, cfg.SaramaConfig); err != nil {
@@ -67,6 +73,8 @@ func NewBackgroundConsumer(
 		cancel:         cancel,
 		fullTopicNames: cfg.Topics,
 		ready:          make(chan struct{}),
+		skipExisting:   cfg.SkipExisting,
+		startTime:      time.Now().UnixMilli(),
 	}
 
 	return bc, nil
@@ -130,9 +138,11 @@ func (bc *BackgroundConsumer) consumeLoop() {
 	defer bc.wg.Done()
 
 	handler := &consumerGroupHandler{
-		buffer:    bc.buffer,
-		ready:     bc.ready,
-		readyOnce: &bc.readyOnce,
+		buffer:       bc.buffer,
+		ready:        bc.ready,
+		readyOnce:    &bc.readyOnce,
+		skipExisting: bc.skipExisting,
+		startTime:    bc.startTime,
 	}
 
 	for {
@@ -162,9 +172,11 @@ func (bc *BackgroundConsumer) consumeLoop() {
 }
 
 type consumerGroupHandler struct {
-	buffer    MessageBufferInterface
-	ready     chan struct{}
-	readyOnce *sync.Once
+	buffer       MessageBufferInterface
+	ready        chan struct{}
+	readyOnce    *sync.Once
+	skipExisting bool
+	startTime    int64
 }
 
 func (h *consumerGroupHandler) Setup(sarama.ConsumerGroupSession) error {
@@ -187,6 +199,12 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 		case msg := <-claim.Messages():
 			if msg == nil {
 				return nil
+			}
+
+			// Skip messages that existed before consumer started
+			if h.skipExisting && msg.Timestamp.UnixMilli() < h.startTime {
+				session.MarkMessage(msg, "")
+				continue
 			}
 
 			kafkaMsg := &types.KafkaMessage{

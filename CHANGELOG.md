@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-02-02
+
+### Added
+- `skipExisting` option for Kafka — skip messages sent before test start (by timestamp)
+- `startFromNewest` option for Kafka — start from latest offset for new consumer groups
+
 ## [1.3.1] - 2026-02-02
 
 ### Changed

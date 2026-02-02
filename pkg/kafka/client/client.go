@@ -20,6 +20,8 @@ type Config struct {
 	FindMessageSleepInterval time.Duration          `mapstructure:"findMessageSleepInterval" yaml:"findMessageSleepInterval" json:"findMessageSleepInterval"`
 	UniqueDuplicateWindowMs  int64                  `mapstructure:"uniqueDuplicateWindowMs" yaml:"uniqueDuplicateWindowMs" json:"uniqueDuplicateWindowMs"`
 	WarmupTimeout            time.Duration          `mapstructure:"warmupTimeout" yaml:"warmupTimeout" json:"warmupTimeout"`
+	StartFromNewest          bool                   `mapstructure:"startFromNewest" yaml:"startFromNewest" json:"startFromNewest"`
+	SkipExisting             bool                   `mapstructure:"skipExisting" yaml:"skipExisting" json:"skipExisting"`
 	Version                  string                 `mapstructure:"version" yaml:"version" json:"version"`
 	SaramaConfig             map[string]interface{} `mapstructure:"saramaConfig" yaml:"saramaConfig" json:"saramaConfig"`
 }
@@ -86,6 +88,8 @@ func New(cfg Config) (*Client, error) {
 		GroupID:          cfg.GroupID,
 		Topics:           fullTopics,
 		Version:          cfg.Version,
+		StartFromNewest:  cfg.StartFromNewest,
+		SkipExisting:     cfg.SkipExisting,
 		SaramaConfig:     cfg.SaramaConfig,
 	}
 

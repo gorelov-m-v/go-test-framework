@@ -9,9 +9,3 @@ type KafkaMessage struct {
 	Timestamp int64
 	Headers   map[string]string
 }
-
-type FindResult[T any] struct {
-	FirstMatch *T
-	AllMatches []T
-	Count      int
-}

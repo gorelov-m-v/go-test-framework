@@ -14,24 +14,24 @@ import (
 	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
+type MessageBufferInterface = types.MessageBufferInterface
+
 type BackgroundConsumer struct {
-	config         *types.Config
-	buffer         types.MessageBufferInterface
+	buffer         MessageBufferInterface
 	consumerGroup  sarama.ConsumerGroup
 	ctx            context.Context
 	cancel         context.CancelFunc
 	wg             sync.WaitGroup
 	started        bool
 	mu             sync.Mutex
-	topicPrefix    string
 	fullTopicNames []string
 	ready          chan struct{}
 	readyOnce      sync.Once
 }
 
 func NewBackgroundConsumer(
-	cfg *types.Config,
-	buffer types.MessageBufferInterface,
+	cfg ConsumerConfig,
+	buffer MessageBufferInterface,
 ) (*BackgroundConsumer, error) {
 	saramaConfig := sarama.NewConfig()
 
@@ -58,18 +58,14 @@ func NewBackgroundConsumer(
 		return nil, fmt.Errorf("no topics configured")
 	}
 
-	fullTopicNames := cfg.Topics
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	bc := &BackgroundConsumer{
-		config:         cfg,
 		buffer:         buffer,
 		consumerGroup:  consumerGroup,
 		ctx:            ctx,
 		cancel:         cancel,
-		topicPrefix:    "",
-		fullTopicNames: fullTopicNames,
+		fullTopicNames: cfg.Topics,
 		ready:          make(chan struct{}),
 	}
 
@@ -166,7 +162,7 @@ func (bc *BackgroundConsumer) consumeLoop() {
 }
 
 type consumerGroupHandler struct {
-	buffer    types.MessageBufferInterface
+	buffer    MessageBufferInterface
 	ready     chan struct{}
 	readyOnce *sync.Once
 }

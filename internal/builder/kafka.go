@@ -8,7 +8,6 @@ import (
 
 	"github.com/gorelov-m-v/go-test-framework/pkg/config"
 	kafkaclient "github.com/gorelov-m-v/go-test-framework/pkg/kafka/client"
-	"github.com/gorelov-m-v/go-test-framework/pkg/kafka/types"
 )
 
 func injectKafkaClient(v *viper.Viper, fieldValue reflect.Value, field reflect.StructField, kafkaConfigKey, structName string) error {
@@ -22,7 +21,7 @@ func injectKafkaClient(v *viper.Viper, fieldValue reflect.Value, field reflect.S
 		return fmt.Errorf("BuildEnv(%s): field '%s' tag kafka_config:\"%s\": config key '%s' not found", structName, field.Name, kafkaConfigKey, kafkaConfigKey)
 	}
 
-	var kafkaCfg types.Config
+	var kafkaCfg kafkaclient.Config
 	if err := v.UnmarshalKey(kafkaConfigKey, &kafkaCfg); err != nil {
 		return fmt.Errorf("BuildEnv(%s): field '%s' tag kafka_config:\"%s\": failed to unmarshal config: %w", structName, field.Name, kafkaConfigKey, err)
 	}

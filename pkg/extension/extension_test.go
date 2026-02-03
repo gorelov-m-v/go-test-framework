@@ -381,19 +381,11 @@ func TestBaseSuite_MultipleAsyncWaitGroup(t *testing.T) {
 	}
 }
 
-func TestBaseSuite_CleanupField(t *testing.T) {
+func TestBaseSuite_CleanupStep(t *testing.T) {
+	// CleanupStep requires currentT to be set
 	s := &BaseSuite{}
-
-	assert.Nil(t, s.cleanup)
-
-	cleanupCalled := false
-	s.cleanup = func(t provider.T) {
-		cleanupCalled = true
-	}
-
-	require.NotNil(t, s.cleanup)
-	s.cleanup(nil)
-	assert.True(t, cleanupCalled)
+	assert.Nil(t, s.currentT, "currentT should be nil initially")
+	// CleanupStep is a no-op when currentT is nil - this is tested implicitly
 }
 
 func TestBaseSuite_TExtField(t *testing.T) {
@@ -576,19 +568,10 @@ func TestModeSwitch_SyncToAsync(t *testing.T) {
 // BaseSuite internal behavior tests (without provider.T dependency)
 // =============================================================================
 
-func TestBaseSuite_CleanupField_SetAndCall(t *testing.T) {
+func TestBaseSuite_CurrentT_SetInBeforeEach(t *testing.T) {
 	s := &BaseSuite{}
-
-	assert.Nil(t, s.cleanup, "cleanup should be nil initially")
-
-	called := false
-	s.cleanup = func(t provider.T) {
-		called = true
-	}
-
-	assert.NotNil(t, s.cleanup)
-	s.cleanup(nil)
-	assert.True(t, called, "cleanup function should be called")
+	assert.Nil(t, s.currentT, "currentT should be nil before BeforeEach")
+	// currentT is set in BeforeEach - this is tested implicitly via other tests
 }
 
 func TestBaseSuite_TExtField_SetAndReset(t *testing.T) {

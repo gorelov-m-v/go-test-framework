@@ -9,8 +9,9 @@ import (
 type StepMode = polling.StepMode
 
 const (
-	SyncMode  = polling.SyncMode
-	AsyncMode = polling.AsyncMode
+	SyncMode    = polling.SyncMode
+	AsyncMode   = polling.AsyncMode
+	CleanupMode = polling.CleanupMode
 )
 
 type StepModeProvider = polling.StepModeProvider

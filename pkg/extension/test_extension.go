@@ -27,11 +27,3 @@ func (t *TExtension) WithNewAsyncStep(stepName string, step func(sCtx provider.S
 	}, params...)
 }
 
-// WithNewCleanupStep creates a step in cleanup mode.
-// Uses Assert (non-fatal) so errors are logged but don't stop other cleanup steps.
-func (t *TExtension) WithNewCleanupStep(stepName string, step func(sCtx provider.StepCtx), params ...*allure.Parameter) {
-	t.T.WithNewStep(stepName, func(sCtx provider.StepCtx) {
-		cleanupCtx := WithCleanupMode(sCtx)
-		step(cleanupCtx)
-	}, params...)
-}

@@ -60,17 +60,3 @@ func WithSyncMode(sCtx provider.StepCtx) provider.StepCtx {
 	}
 }
 
-// WithCleanupMode wraps step context in cleanup mode.
-// CleanupMode uses Assert (non-fatal assertions) so errors don't stop other cleanup steps.
-func WithCleanupMode(sCtx provider.StepCtx) provider.StepCtx {
-	if wrapped, ok := sCtx.(*stepCtxWrapper); ok {
-		return &stepCtxWrapper{
-			StepCtx: wrapped.StepCtx,
-			mode:    CleanupMode,
-		}
-	}
-	return &stepCtxWrapper{
-		StepCtx: sCtx,
-		mode:    CleanupMode,
-	}
-}

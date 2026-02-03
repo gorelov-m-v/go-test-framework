@@ -9,7 +9,6 @@ type StepMode int
 const (
 	SyncMode StepMode = iota
 	AsyncMode
-	CleanupMode // Uses Assert (non-fatal) - errors logged but don't stop other cleanup steps
 )
 
 type StepModeProvider interface {
@@ -26,7 +25,7 @@ func GetStepMode(stepCtx provider.StepCtx) StepMode {
 }
 
 func GetAssertionModeFromStepMode(stepMode StepMode) AssertionMode {
-	if stepMode == AsyncMode || stepMode == CleanupMode {
+	if stepMode == AsyncMode {
 		return AssertionAssert
 	}
 	return AssertionRequire

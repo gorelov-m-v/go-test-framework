@@ -3,13 +3,14 @@ package dsl
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
+	stderrors "errors"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/jmoiron/sqlx/reflectx"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/errors"
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/jsonutil"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
@@ -20,11 +21,19 @@ var structMapper = reflectx.NewMapper("db")
 
 func (q *Query[T]) breakIfNotFound(methodName string) bool {
 	if q.expectsNotFound {
-		q.sCtx.Break(fmt.Sprintf("DB DSL Error: %s cannot be used with ExpectNotFound()", methodName))
-		q.sCtx.BrokenNow()
+		q.stepCtx.Break(errors.ConflictingExpectations("DB", methodName, "ExpectNotFound()"))
+		q.stepCtx.BrokenNow()
 		return true
 	}
 	return false
+}
+
+func (q *Query[T]) addExpectation(exp *expect.Expectation[T]) {
+	expect.AddExpectation(q.stepCtx, q.sent, &q.expectations, exp, "DB")
+}
+
+func (q *Query[T]) addExpectationAll(exp *expect.Expectation[[]T]) {
+	expect.AddExpectation(q.stepCtx, q.sent, &q.expectationsAll, exp, "DB")
 }
 
 func getFieldValueByColumnName(target any, columnName string) (any, error) {
@@ -79,21 +88,26 @@ func (q *Query[T]) ExpectFound() *Query[T] {
 	if q.breakIfNotFound("ExpectFound()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeFoundExpectation[T]())
+	q.addExpectation(makeFoundExpectation[T]())
 	return q
 }
 
 // ExpectNotFound checks that the query returns no rows (sql.ErrNoRows).
 // Cannot be combined with other expectations.
 func (q *Query[T]) ExpectNotFound() *Query[T] {
+	if q.sent {
+		q.stepCtx.Break(errors.ExpectationsAfterSend("DB"))
+		q.stepCtx.BrokenNow()
+		return q
+	}
 	if len(q.expectations) > 0 {
-		q.sCtx.Break("DB DSL Error: ExpectNotFound() cannot be used after other expectations (ExpectFound, ExpectColumnEquals, etc.)")
-		q.sCtx.BrokenNow()
+		q.stepCtx.Break(errors.ExpectationOrder("DB", "ExpectNotFound()", "other expectations (ExpectFound, ExpectColumnEquals, etc.)"))
+		q.stepCtx.BrokenNow()
 		return q
 	}
 	q.expectsNotFound = true
 	q.expectations = []*expect.Expectation[T]{}
-	q.expectations = append(q.expectations, makeNotFoundExpectation[T]())
+	q.addExpectation(makeNotFoundExpectation[T]())
 	return q
 }
 
@@ -103,7 +117,7 @@ func (q *Query[T]) ExpectColumnEquals(columnName string, expectedValue any) *Que
 	if q.breakIfNotFound("ExpectColumnEquals()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnEqualsExpectation[T](columnName, expectedValue))
+	q.addExpectation(makeColumnEqualsExpectation[T](columnName, expectedValue))
 	return q
 }
 
@@ -112,7 +126,7 @@ func (q *Query[T]) ExpectColumnNotEquals(columnName string, notExpectedValue any
 	if q.breakIfNotFound("ExpectColumnNotEquals()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnNotEqualsExpectation[T](columnName, notExpectedValue))
+	q.addExpectation(makeColumnNotEqualsExpectation[T](columnName, notExpectedValue))
 	return q
 }
 
@@ -121,7 +135,7 @@ func (q *Query[T]) ExpectColumnNotEmpty(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnNotEmpty()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnNotEmptyExpectation[T](columnName))
+	q.addExpectation(makeColumnNotEmptyExpectation[T](columnName))
 	return q
 }
 
@@ -130,7 +144,7 @@ func (q *Query[T]) ExpectColumnIsNull(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnIsNull()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnIsNullExpectation[T](columnName))
+	q.addExpectation(makeColumnIsNullExpectation[T](columnName))
 	return q
 }
 
@@ -139,7 +153,7 @@ func (q *Query[T]) ExpectColumnEmpty(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnEmpty()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnEmptyExpectation[T](columnName))
+	q.addExpectation(makeColumnEmptyExpectation[T](columnName))
 	return q
 }
 
@@ -148,7 +162,7 @@ func (q *Query[T]) ExpectColumnIsNotNull(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnIsNotNull()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnIsNotNullExpectation[T](columnName))
+	q.addExpectation(makeColumnIsNotNullExpectation[T](columnName))
 	return q
 }
 
@@ -157,7 +171,7 @@ func (q *Query[T]) ExpectColumnTrue(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnTrue()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnTrueExpectation[T](columnName))
+	q.addExpectation(makeColumnTrueExpectation[T](columnName))
 	return q
 }
 
@@ -166,7 +180,7 @@ func (q *Query[T]) ExpectColumnFalse(columnName string) *Query[T] {
 	if q.breakIfNotFound("ExpectColumnFalse()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnFalseExpectation[T](columnName))
+	q.addExpectation(makeColumnFalseExpectation[T](columnName))
 	return q
 }
 
@@ -175,7 +189,7 @@ func (q *Query[T]) ExpectColumnJSON(columnName string, expected map[string]inter
 	if q.breakIfNotFound("ExpectColumnJSON()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeColumnJSONEqualsExpectation[T](columnName, expected))
+	q.addExpectation(makeColumnJSONEqualsExpectation[T](columnName, expected))
 	return q
 }
 
@@ -184,7 +198,7 @@ func (q *Query[T]) ExpectRowEquals(expected T) *Query[T] {
 	if q.breakIfNotFound("ExpectRowEquals()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeRowExpectation[T](expected))
+	q.addExpectation(makeRowExpectation[T](expected))
 	return q
 }
 
@@ -193,19 +207,19 @@ func (q *Query[T]) ExpectRowPartial(expected T) *Query[T] {
 	if q.breakIfNotFound("ExpectRowPartial()") {
 		return q
 	}
-	q.expectations = append(q.expectations, makeRowPartialExpectation[T](expected))
+	q.addExpectation(makeRowPartialExpectation[T](expected))
 	return q
 }
 
 // ExpectCountAll checks that the query returns exactly the specified number of rows. Use with SendAll().
 func (q *Query[T]) ExpectCountAll(count int) *Query[T] {
-	q.expectationsAll = append(q.expectationsAll, makeCountAllExpectation[T](count))
+	q.addExpectationAll(makeCountAllExpectation[T](count))
 	return q
 }
 
 // ExpectNotEmptyAll checks that the query returns at least one row. Use with SendAll().
 func (q *Query[T]) ExpectNotEmptyAll() *Query[T] {
-	q.expectationsAll = append(q.expectationsAll, makeNotEmptyAllExpectation[T]())
+	q.addExpectationAll(makeNotEmptyAllExpectation[T]())
 	return q
 }
 
@@ -215,7 +229,7 @@ func makeFoundExpectation[T any]() *expect.Expectation[T] {
 		name,
 		func(err error, result T) polling.CheckResult {
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
+				if stderrors.Is(err, sql.ErrNoRows) {
 					return polling.CheckResult{
 						Ok:        false,
 						Retryable: true,
@@ -239,7 +253,7 @@ func makeNotFoundExpectation[T any]() *expect.Expectation[T] {
 	return expect.New(
 		name,
 		func(err error, result T) polling.CheckResult {
-			if errors.Is(err, sql.ErrNoRows) {
+			if stderrors.Is(err, sql.ErrNoRows) {
 				return polling.CheckResult{Ok: true}
 			}
 			if err != nil {
@@ -360,7 +374,7 @@ func makeColumnJSONEqualsExpectation[T any](columnName string, expected map[stri
 		name,
 		func(err error, result T) polling.CheckResult {
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
+				if stderrors.Is(err, sql.ErrNoRows) {
 					return polling.CheckResult{
 						Ok:        false,
 						Retryable: true,
@@ -439,7 +453,7 @@ func makeRowExpectation[T any](expected T) *expect.Expectation[T] {
 		name,
 		func(err error, result T) polling.CheckResult {
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
+				if stderrors.Is(err, sql.ErrNoRows) {
 					return polling.CheckResult{
 						Ok:        false,
 						Retryable: true,
@@ -473,7 +487,7 @@ func makeRowPartialExpectation[T any](expected T) *expect.Expectation[T] {
 		name,
 		func(err error, result T) polling.CheckResult {
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
+				if stderrors.Is(err, sql.ErrNoRows) {
 					return polling.CheckResult{
 						Ok:        false,
 						Retryable: true,

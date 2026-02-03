@@ -6,6 +6,7 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/errors"
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/pkg/http/client"
@@ -105,8 +106,8 @@ func makeResponseBodyNotEmptyExpectation() *expect.Expectation[*client.Response[
 
 func (c *Call[TReq, TResp]) ExpectMatchesContract() *Call[TReq, TResp] {
 	if c.sent {
-		c.sCtx.Break("HTTP DSL Error: ExpectMatchesContract must be called before Send()")
-		c.sCtx.BrokenNow()
+		c.stepCtx.Break(errors.MethodAfterSend("HTTP", "ExpectMatchesContract"))
+		c.stepCtx.BrokenNow()
 		return c
 	}
 	c.validateContract = true
@@ -115,8 +116,8 @@ func (c *Call[TReq, TResp]) ExpectMatchesContract() *Call[TReq, TResp] {
 
 func (c *Call[TReq, TResp]) ExpectMatchesSchema(schemaName string) *Call[TReq, TResp] {
 	if c.sent {
-		c.sCtx.Break("HTTP DSL Error: ExpectMatchesSchema must be called before Send()")
-		c.sCtx.BrokenNow()
+		c.stepCtx.Break(errors.MethodAfterSend("HTTP", "ExpectMatchesSchema"))
+		c.stepCtx.BrokenNow()
 		return c
 	}
 	c.contractSchema = schemaName

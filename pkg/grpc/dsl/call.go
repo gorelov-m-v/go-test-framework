@@ -30,9 +30,9 @@ import (
 //	    ExpectFieldEquals("name", "John").
 //	    Send()
 type Call[TReq any, TResp any] struct {
-	sCtx   provider.StepCtx
-	client *client.Client
-	ctx    context.Context
+	stepCtx provider.StepCtx
+	client  *client.Client
+	ctx     context.Context
 
 	fullMethod string
 	body       *TReq
@@ -51,9 +51,9 @@ type Call[TReq any, TResp any] struct {
 //   - grpcClient: gRPC client configured with target address
 //
 // Returns a Call builder that can be configured with method, request, and expectations.
-func NewCall[TReq any, TResp any](sCtx provider.StepCtx, grpcClient *client.Client) *Call[TReq, TResp] {
+func NewCall[TReq any, TResp any](stepCtx provider.StepCtx, grpcClient *client.Client) *Call[TReq, TResp] {
 	return &Call[TReq, TResp]{
-		sCtx:     sCtx,
+		stepCtx:  stepCtx,
 		client:   grpcClient,
 		ctx:      context.Background(),
 		metadata: metadata.MD{},
@@ -79,7 +79,7 @@ func (c *Call[TReq, TResp]) Metadata(key, value string) *Call[TReq, TResp] {
 }
 
 func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Response[any]]) {
-	expect.AddExpectation(c.sCtx, c.sent, &c.expectations, exp, "gRPC")
+	expect.AddExpectation(c.stepCtx, c.sent, &c.expectations, exp, "gRPC")
 }
 
 // Send executes the gRPC call and validates all expectations.
@@ -88,7 +88,7 @@ func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Respo
 func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validate()
 
-	c.sCtx.WithNewStep(c.stepName(), func(stepCtx provider.StepCtx) {
+	c.stepCtx.WithNewStep(c.stepName(), func(stepCtx provider.StepCtx) {
 		resp, err, summary := c.execute(stepCtx, c.expectations)
 		c.resp = resp
 		c.sent = true
@@ -119,7 +119,7 @@ func (c *Call[TReq, TResp]) convertToAny() *client.Response[any] {
 }
 
 func (c *Call[TReq, TResp]) validate() {
-	v := validation.New(c.sCtx, "gRPC")
+	v := validation.New(c.stepCtx, "gRPC")
 	v.RequireNotNil(c.client, "gRPC client")
 	v.RequireNotEmptyWithHint(c.fullMethod, "gRPC method", "Use .Method(\"/package.Service/Method\").")
 }

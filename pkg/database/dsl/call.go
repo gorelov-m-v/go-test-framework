@@ -3,7 +3,7 @@ package dsl
 import (
 	"context"
 	"database/sql"
-	"errors"
+	stderrors "errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
 	"github.com/gorelov-m-v/go-test-framework/internal/allure"
+	"github.com/gorelov-m-v/go-test-framework/internal/errors"
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/internal/validation"
@@ -30,7 +31,7 @@ import (
 //	    ExpectColumnEquals("status", "active").
 //	    Send()
 type Query[T any] struct {
-	sCtx            provider.StepCtx
+	stepCtx         provider.StepCtx
 	client          *client.Client
 	ctx             context.Context
 	sql             string
@@ -38,6 +39,7 @@ type Query[T any] struct {
 	expectations    []*expect.Expectation[T]
 	expectationsAll []*expect.Expectation[[]T]
 	expectsNotFound bool
+	sent            bool
 	scannedResult   T
 	scannedResults  []T
 	lastError       error
@@ -51,19 +53,19 @@ type Query[T any] struct {
 //   - dbClient: Database client with connection pool
 //
 // Returns a Query builder that can be configured with SQL and expectations.
-func NewQuery[T any](sCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
+func NewQuery[T any](stepCtx provider.StepCtx, dbClient *client.Client) *Query[T] {
 	var zero T
 	t := reflect.TypeOf(zero)
 	if t == nil || t.Kind() != reflect.Struct {
-		sCtx.Break(fmt.Sprintf("DB DSL Error: Query type parameter must be a struct, got %T. Check your NewQuery[T] generic type.", zero))
-		sCtx.BrokenNow()
+		stepCtx.Break(errors.InvalidGenericType("DB", zero))
+		stepCtx.BrokenNow()
 		return nil
 	}
 
 	return &Query[T]{
-		sCtx:   sCtx,
-		client: dbClient,
-		ctx:    context.Background(),
+		stepCtx: stepCtx,
+		client:  dbClient,
+		ctx:     context.Background(),
 	}
 }
 
@@ -76,7 +78,7 @@ func (q *Query[T]) SQL(query string, args ...any) *Query[T] {
 }
 
 func (q *Query[T]) validate() {
-	v := validation.New(q.sCtx, "DB")
+	v := validation.New(q.stepCtx, "DB")
 	v.RequireNotNil(q.client, "Database client")
 	v.RequireNotEmptyWithHint(q.sql, "SQL query", "Use .SQL(\"SELECT...\", args...).")
 }
@@ -87,10 +89,11 @@ func (q *Query[T]) validate() {
 func (q *Query[T]) Send() T {
 	q.validate()
 
-	q.sCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
+	q.stepCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
 		result, duration, err, summary := q.execute(stepCtx, q.expectations)
 		q.scannedResult = result
 		q.lastError = err
+		q.sent = true
 
 		rowCount := 0
 		if err == nil {
@@ -124,7 +127,7 @@ func (q *Query[T]) assertNoExpectations(stepCtx provider.StepCtx, mode polling.A
 		return
 	}
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		if !q.expectsNotFound {
 			polling.NoError(stepCtx, mode, err, "Expected row to exist, but got sql.ErrNoRows. Use ExpectNotFound() if 'not found' is expected")
 		}
@@ -140,10 +143,11 @@ func (q *Query[T]) assertNoExpectations(stepCtx provider.StepCtx, mode polling.A
 func (q *Query[T]) SendAll() []T {
 	q.validate()
 
-	q.sCtx.WithNewStep(q.stepNameAll(), func(stepCtx provider.StepCtx) {
+	q.stepCtx.WithNewStep(q.stepNameAll(), func(stepCtx provider.StepCtx) {
 		results, duration, err, summary := q.executeAll(stepCtx)
 		q.scannedResults = results
 		q.lastError = err
+		q.sent = true
 
 		attachSQLReport(stepCtx, q.client, allure.SQLAttachParams{
 			Query:    q.sql,

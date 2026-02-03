@@ -8,6 +8,7 @@ import (
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/errors"
 	"github.com/gorelov-m-v/go-test-framework/internal/expect"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 	"github.com/gorelov-m-v/go-test-framework/internal/validation"
@@ -31,9 +32,9 @@ import (
 //	    ExpectFieldNotEmpty("id").
 //	    Send()
 type Call[TReq any, TResp any] struct {
-	sCtx   provider.StepCtx
-	client *client.Client
-	ctx    context.Context
+	stepCtx provider.StepCtx
+	client  *client.Client
+	ctx     context.Context
 
 	req  *client.Request[TReq]
 	resp *client.Response[TResp]
@@ -51,11 +52,11 @@ type Call[TReq any, TResp any] struct {
 //   - httpClient: HTTP client configured with base URL and settings
 //
 // Returns a Call builder that can be configured with HTTP method, path, and expectations.
-func NewCall[TReq any, TResp any](sCtx provider.StepCtx, httpClient *client.Client) *Call[TReq, TResp] {
+func NewCall[TReq any, TResp any](stepCtx provider.StepCtx, httpClient *client.Client) *Call[TReq, TResp] {
 	return &Call[TReq, TResp]{
-		sCtx:   sCtx,
-		client: httpClient,
-		ctx:    context.Background(),
+		stepCtx: stepCtx,
+		client:  httpClient,
+		ctx:     context.Background(),
 		req: &client.Request[TReq]{
 			Headers:     make(map[string]string),
 			PathParams:  make(map[string]string),
@@ -126,7 +127,7 @@ func (c *Call[TReq, TResp]) RequestBodyMap(body map[string]interface{}) *Call[TR
 }
 
 func (c *Call[TReq, TResp]) addExpectation(exp *expect.Expectation[*client.Response[any]]) {
-	expect.AddExpectation(c.sCtx, c.sent, &c.expectations, exp, "HTTP")
+	expect.AddExpectation(c.stepCtx, c.sent, &c.expectations, exp, "HTTP")
 }
 
 // Send executes the HTTP request and validates all expectations.
@@ -136,7 +137,7 @@ func (c *Call[TReq, TResp]) Send() *client.Response[TResp] {
 	c.validate()
 	c.validateContractConfig()
 
-	c.sCtx.WithNewStep(c.stepName(), func(stepCtx provider.StepCtx) {
+	c.stepCtx.WithNewStep(c.stepName(), func(stepCtx provider.StepCtx) {
 		resp, err, summary := c.execute(stepCtx, c.expectations)
 		c.resp = resp
 		c.sent = true
@@ -172,7 +173,7 @@ func (c *Call[TReq, TResp]) convertToAny() *client.Response[any] {
 }
 
 func (c *Call[TReq, TResp]) validate() {
-	v := validation.New(c.sCtx, "HTTP")
+	v := validation.New(c.stepCtx, "HTTP")
 	if !v.RequireNotNil(c.client, "HTTP client") {
 		return
 	}
@@ -189,8 +190,8 @@ func (c *Call[TReq, TResp]) validateContractConfig() {
 	}
 
 	if c.client.ContractValidator == nil {
-		c.sCtx.Break("HTTP DSL Error: Contract validation requested but no contractSpec configured for this client. Add 'contractSpec' to your HTTP client config.")
-		c.sCtx.BrokenNow()
+		c.stepCtx.Break(errors.ContractValidationMissingSpec("HTTP"))
+		c.stepCtx.BrokenNow()
 		return
 	}
 }

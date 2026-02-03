@@ -120,7 +120,7 @@ func TestNewCall(t *testing.T) {
 	call := NewCall[any, any](mockCtx, httpClient)
 
 	require.NotNil(t, call)
-	assert.Equal(t, mockCtx, call.sCtx)
+	assert.Equal(t, mockCtx, call.stepCtx)
 	assert.Equal(t, httpClient, call.client)
 	assert.NotNil(t, call.ctx)
 	assert.NotNil(t, call.req)

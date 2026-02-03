@@ -14,7 +14,7 @@ var bytesSource = &expect.JSONExpectationSource[[]byte]{
 }
 
 func (q *Query[T]) addExpectation(exp *expect.Expectation[[]byte]) {
-	expect.AddExpectation(q.sCtx, q.sent, &q.expectations, exp, "Kafka")
+	expect.AddExpectation(q.stepCtx, q.sent, &q.expectations, exp, "Kafka")
 }
 
 func (q *Query[T]) ExpectFieldEquals(field string, expectedValue interface{}) *Query[T] {

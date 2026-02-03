@@ -1,11 +1,12 @@
 package validation
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
+
+	"github.com/gorelov-m-v/go-test-framework/internal/errors"
 )
 
 type StepBreaker interface {
@@ -14,21 +15,21 @@ type StepBreaker interface {
 }
 
 type Validator struct {
-	sCtx    StepBreaker
+	stepCtx StepBreaker
 	dslName string
 	failed  bool
 }
 
-func New(sCtx provider.StepCtx, dslName string) *Validator {
+func New(stepCtx provider.StepCtx, dslName string) *Validator {
 	return &Validator{
-		sCtx:    sCtx,
+		stepCtx: stepCtx,
 		dslName: dslName,
 	}
 }
 
-func NewWithBreaker(sCtx StepBreaker, dslName string) *Validator {
+func NewWithBreaker(stepCtx StepBreaker, dslName string) *Validator {
 	return &Validator{
-		sCtx:    sCtx,
+		stepCtx: stepCtx,
 		dslName: dslName,
 	}
 }
@@ -38,7 +39,7 @@ func (v *Validator) RequireNotNil(val any, name string) bool {
 		return false
 	}
 	if val == nil || (reflect.ValueOf(val).Kind() == reflect.Ptr && reflect.ValueOf(val).IsNil()) {
-		v.fail("%s DSL Error: %s is nil. Check test configuration.", v.dslName, name)
+		v.fail(errors.NilClient(v.dslName, name))
 		return false
 	}
 	return true
@@ -49,7 +50,7 @@ func (v *Validator) RequireNotEmpty(val string, name string) bool {
 		return false
 	}
 	if strings.TrimSpace(val) == "" {
-		v.fail("%s DSL Error: %s is not set.", v.dslName, name)
+		v.fail(errors.NotSet(v.dslName, name))
 		return false
 	}
 	return true
@@ -60,7 +61,7 @@ func (v *Validator) RequireNotEmptyWithHint(val string, name, hint string) bool 
 		return false
 	}
 	if strings.TrimSpace(val) == "" {
-		v.fail("%s DSL Error: %s is not set. %s", v.dslName, name, hint)
+		v.fail(errors.NotSetWithHint(v.dslName, name, hint))
 		return false
 	}
 	return true
@@ -71,12 +72,12 @@ func (v *Validator) RequireStruct(val any, name string) bool {
 		return false
 	}
 	if val == nil {
-		v.fail("%s DSL Error: %s must be a struct, got nil.", v.dslName, name)
+		v.fail(errors.MustBeStruct(v.dslName, name, nil))
 		return false
 	}
 	t := reflect.TypeOf(val)
 	if t == nil || t.Kind() != reflect.Struct {
-		v.fail("%s DSL Error: %s must be a struct, got %T.", v.dslName, name, val)
+		v.fail(errors.MustBeStruct(v.dslName, name, val))
 		return false
 	}
 	return true
@@ -87,14 +88,14 @@ func (v *Validator) Require(condition bool, message string) bool {
 		return false
 	}
 	if !condition {
-		v.fail("%s DSL Error: %s", v.dslName, message)
+		v.fail(errors.Custom(v.dslName, message))
 		return false
 	}
 	return true
 }
 
-func (v *Validator) fail(format string, args ...any) {
+func (v *Validator) fail(msg string) {
 	v.failed = true
-	v.sCtx.Break(fmt.Sprintf(format, args...))
-	v.sCtx.BrokenNow()
+	v.stepCtx.Break(msg)
+	v.stepCtx.BrokenNow()
 }

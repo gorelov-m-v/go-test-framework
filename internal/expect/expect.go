@@ -3,6 +3,7 @@ package expect
 import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 
+	"github.com/gorelov-m-v/go-test-framework/internal/errors"
 	"github.com/gorelov-m-v/go-test-framework/internal/polling"
 )
 
@@ -40,15 +41,15 @@ func ReportAll[T any](
 // AddExpectation appends an expectation to the slice, validating that Send() hasn't been called yet.
 // Returns true if added successfully, false if already sent (and breaks the test).
 func AddExpectation[T any](
-	sCtx provider.StepCtx,
+	stepCtx provider.StepCtx,
 	sent bool,
 	expectations *[]*Expectation[T],
 	exp *Expectation[T],
 	dslName string,
 ) bool {
 	if sent {
-		sCtx.Break(dslName + " DSL Error: Expectations must be added before Send().")
-		sCtx.BrokenNow()
+		stepCtx.Break(errors.ExpectationsAfterSend(dslName))
+		stepCtx.BrokenNow()
 		return false
 	}
 	*expectations = append(*expectations, exp)

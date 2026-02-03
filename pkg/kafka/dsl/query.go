@@ -30,9 +30,9 @@ import (
 //	    ExpectFieldEquals("eventType", "USER_CREATED").
 //	    Send()
 type Query[T any] struct {
-	sCtx   provider.StepCtx
-	client *client.Client
-	ctx    context.Context
+	stepCtx provider.StepCtx
+	client  *client.Client
+	ctx     context.Context
 
 	topicName string
 
@@ -78,9 +78,9 @@ type Result[T any] struct {
 //   - topicName: Full topic name to search in
 //
 // Prefer using Consume[T] for typed topic consumption.
-func NewQuery[T any](sCtx provider.StepCtx, kafkaClient *client.Client, topicName string) *Query[T] {
+func NewQuery[T any](stepCtx provider.StepCtx, kafkaClient *client.Client, topicName string) *Query[T] {
 	return &Query[T]{
-		sCtx:            sCtx,
+		stepCtx:         stepCtx,
 		client:          kafkaClient,
 		ctx:             context.Background(),
 		topicName:       topicName,
@@ -102,14 +102,14 @@ func NewQuery[T any](sCtx provider.StepCtx, kafkaClient *client.Client, topicNam
 //	    With("eventType", "PLAYER_CREATED").
 //	    ExpectFieldEquals("playerName", "John").
 //	    Send()
-func Consume[TTopic topic.TopicName](sCtx provider.StepCtx, kafkaClient *client.Client) *Query[TTopic] {
+func Consume[TTopic topic.TopicName](stepCtx provider.StepCtx, kafkaClient *client.Client) *Query[TTopic] {
 	var topicName TTopic
 	fullTopicName := kafkaClient.GetTopicPrefix() + topicName.TopicName()
-	return NewQuery[TTopic](sCtx, kafkaClient, fullTopicName)
+	return NewQuery[TTopic](stepCtx, kafkaClient, fullTopicName)
 }
 
 func (q *Query[T]) validate() {
-	v := validation.New(q.sCtx, "Kafka")
+	v := validation.New(q.stepCtx, "Kafka")
 	v.RequireNotNil(q.client, "Kafka client")
 	v.RequireNotEmptyWithHint(q.topicName, "Topic name", "Use Consume[TopicType]() or NewQuery().")
 }
@@ -120,7 +120,7 @@ func (q *Query[T]) validate() {
 func (q *Query[T]) Send() *Result[T] {
 	q.validate()
 
-	q.sCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
+	q.stepCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
 		var summary polling.PollingSummary
 		var err error
 		q.messageBytes, q.found, err, summary = q.execute(stepCtx)

@@ -24,9 +24,9 @@ import (
 //	    ExpectFieldEquals("status", "active").
 //	    Send()
 type Query struct {
-	sCtx   provider.StepCtx
-	client *client.Client
-	ctx    context.Context
+	stepCtx provider.StepCtx
+	client  *client.Client
+	ctx     context.Context
 
 	key string
 
@@ -43,11 +43,11 @@ type Query struct {
 //   - redisClient: Redis client configured with connection settings
 //
 // Returns a Query builder that can be configured with key and expectations.
-func NewQuery(sCtx provider.StepCtx, redisClient *client.Client) *Query {
+func NewQuery(stepCtx provider.StepCtx, redisClient *client.Client) *Query {
 	return &Query{
-		sCtx:   sCtx,
-		client: redisClient,
-		ctx:    context.Background(),
+		stepCtx: stepCtx,
+		client:  redisClient,
+		ctx:     context.Background(),
 	}
 }
 
@@ -58,7 +58,7 @@ func (q *Query) Key(key string) *Query {
 }
 
 func (q *Query) addExpectation(exp *expect.Expectation[*client.Result]) {
-	expect.AddExpectation(q.sCtx, q.sent, &q.expectations, exp, "Redis")
+	expect.AddExpectation(q.stepCtx, q.sent, &q.expectations, exp, "Redis")
 }
 
 // Send executes the Redis query and validates all expectations.
@@ -67,7 +67,7 @@ func (q *Query) addExpectation(exp *expect.Expectation[*client.Result]) {
 func (q *Query) Send() *client.Result {
 	q.validate()
 
-	q.sCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
+	q.stepCtx.WithNewStep(q.stepName(), func(stepCtx provider.StepCtx) {
 		result, err, summary := q.execute(stepCtx, q.expectations)
 		q.result = result
 		q.sent = true
@@ -94,7 +94,7 @@ func (q *Query) assertNoExpectations(stepCtx provider.StepCtx, mode polling.Asse
 }
 
 func (q *Query) validate() {
-	v := validation.New(q.sCtx, "Redis")
+	v := validation.New(q.stepCtx, "Redis")
 	v.RequireNotNil(q.client, "Redis client")
 	v.RequireNotEmptyWithHint(q.key, "Redis key", "Use .Key(\"key_name\").")
 }

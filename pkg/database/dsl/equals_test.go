@@ -5,202 +5,204 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/gorelov-m-v/go-test-framework/internal/typeconv"
 )
 
-func TestToComparableNumber_Int(t *testing.T) {
-	result, ok := toComparableNumber(42)
+func TestToNumber_Int(t *testing.T) {
+	result, ok := typeconv.ToNumber(42)
 	assert.True(t, ok)
 	assert.Equal(t, float64(42), result)
 }
 
-func TestToComparableNumber_Int8(t *testing.T) {
-	result, ok := toComparableNumber(int8(8))
+func TestToNumber_Int8(t *testing.T) {
+	result, ok := typeconv.ToNumber(int8(8))
 	assert.True(t, ok)
 	assert.Equal(t, float64(8), result)
 }
 
-func TestToComparableNumber_Int16(t *testing.T) {
-	result, ok := toComparableNumber(int16(16))
+func TestToNumber_Int16(t *testing.T) {
+	result, ok := typeconv.ToNumber(int16(16))
 	assert.True(t, ok)
 	assert.Equal(t, float64(16), result)
 }
 
-func TestToComparableNumber_Int32(t *testing.T) {
-	result, ok := toComparableNumber(int32(32))
+func TestToNumber_Int32(t *testing.T) {
+	result, ok := typeconv.ToNumber(int32(32))
 	assert.True(t, ok)
 	assert.Equal(t, float64(32), result)
 }
 
-func TestToComparableNumber_Int64(t *testing.T) {
-	result, ok := toComparableNumber(int64(64))
+func TestToNumber_Int64(t *testing.T) {
+	result, ok := typeconv.ToNumber(int64(64))
 	assert.True(t, ok)
 	assert.Equal(t, float64(64), result)
 }
 
-func TestToComparableNumber_Uint(t *testing.T) {
-	result, ok := toComparableNumber(uint(100))
+func TestToNumber_Uint(t *testing.T) {
+	result, ok := typeconv.ToNumber(uint(100))
 	assert.True(t, ok)
 	assert.Equal(t, float64(100), result)
 }
 
-func TestToComparableNumber_Uint8(t *testing.T) {
-	result, ok := toComparableNumber(uint8(8))
+func TestToNumber_Uint8(t *testing.T) {
+	result, ok := typeconv.ToNumber(uint8(8))
 	assert.True(t, ok)
 	assert.Equal(t, float64(8), result)
 }
 
-func TestToComparableNumber_Uint16(t *testing.T) {
-	result, ok := toComparableNumber(uint16(16))
+func TestToNumber_Uint16(t *testing.T) {
+	result, ok := typeconv.ToNumber(uint16(16))
 	assert.True(t, ok)
 	assert.Equal(t, float64(16), result)
 }
 
-func TestToComparableNumber_Uint32(t *testing.T) {
-	result, ok := toComparableNumber(uint32(32))
+func TestToNumber_Uint32(t *testing.T) {
+	result, ok := typeconv.ToNumber(uint32(32))
 	assert.True(t, ok)
 	assert.Equal(t, float64(32), result)
 }
 
-func TestToComparableNumber_Uint64(t *testing.T) {
-	result, ok := toComparableNumber(uint64(64))
+func TestToNumber_Uint64(t *testing.T) {
+	result, ok := typeconv.ToNumber(uint64(64))
 	assert.True(t, ok)
 	assert.Equal(t, float64(64), result)
 }
 
-func TestToComparableNumber_Float32(t *testing.T) {
-	result, ok := toComparableNumber(float32(3.14))
+func TestToNumber_Float32(t *testing.T) {
+	result, ok := typeconv.ToNumber(float32(3.14))
 	assert.True(t, ok)
 	assert.InDelta(t, float64(3.14), result, 0.001)
 }
 
-func TestToComparableNumber_Float64(t *testing.T) {
-	result, ok := toComparableNumber(float64(3.14159))
+func TestToNumber_Float64(t *testing.T) {
+	result, ok := typeconv.ToNumber(float64(3.14159))
 	assert.True(t, ok)
 	assert.Equal(t, float64(3.14159), result)
 }
 
-func TestToComparableNumber_SqlNullInt64_Valid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullInt64{Int64: 123, Valid: true})
+func TestToNumber_SqlNullInt64_Valid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullInt64{Int64: 123, Valid: true})
 	assert.True(t, ok)
 	assert.Equal(t, float64(123), result)
 }
 
-func TestToComparableNumber_SqlNullInt64_Invalid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullInt64{Int64: 123, Valid: false})
+func TestToNumber_SqlNullInt64_Invalid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullInt64{Int64: 123, Valid: false})
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_SqlNullInt64_Pointer_Valid(t *testing.T) {
+func TestToNumber_SqlNullInt64_Pointer_Valid(t *testing.T) {
 	val := &sql.NullInt64{Int64: 456, Valid: true}
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.True(t, ok)
 	assert.Equal(t, float64(456), result)
 }
 
-func TestToComparableNumber_SqlNullInt64_Pointer_Nil(t *testing.T) {
+func TestToNumber_SqlNullInt64_Pointer_Nil(t *testing.T) {
 	var val *sql.NullInt64
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_SqlNullInt32_Valid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullInt32{Int32: 32, Valid: true})
+func TestToNumber_SqlNullInt32_Valid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullInt32{Int32: 32, Valid: true})
 	assert.True(t, ok)
 	assert.Equal(t, float64(32), result)
 }
 
-func TestToComparableNumber_SqlNullInt16_Valid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullInt16{Int16: 16, Valid: true})
+func TestToNumber_SqlNullInt16_Valid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullInt16{Int16: 16, Valid: true})
 	assert.True(t, ok)
 	assert.Equal(t, float64(16), result)
 }
 
-func TestToComparableNumber_SqlNullFloat64_Valid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullFloat64{Float64: 99.99, Valid: true})
+func TestToNumber_SqlNullFloat64_Valid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullFloat64{Float64: 99.99, Valid: true})
 	assert.True(t, ok)
 	assert.Equal(t, float64(99.99), result)
 }
 
-func TestToComparableNumber_SqlNullFloat64_Invalid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullFloat64{Float64: 99.99, Valid: false})
+func TestToNumber_SqlNullFloat64_Invalid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullFloat64{Float64: 99.99, Valid: false})
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_SqlNullByte_Valid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullByte{Byte: 255, Valid: true})
+func TestToNumber_SqlNullByte_Valid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullByte{Byte: 255, Valid: true})
 	assert.True(t, ok)
 	assert.Equal(t, float64(255), result)
 }
 
-func TestToComparableNumber_String(t *testing.T) {
-	result, ok := toComparableNumber("not a number")
+func TestToNumber_String(t *testing.T) {
+	result, ok := typeconv.ToNumber("not a number")
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_Nil(t *testing.T) {
-	result, ok := toComparableNumber(nil)
+func TestToNumber_Nil(t *testing.T) {
+	result, ok := typeconv.ToNumber(nil)
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableString_String(t *testing.T) {
-	result, ok := toComparableString("hello")
+func TestToString_String(t *testing.T) {
+	result, ok := typeconv.ToString("hello")
 	assert.True(t, ok)
 	assert.Equal(t, "hello", result)
 }
 
-func TestToComparableString_StringPointer(t *testing.T) {
+func TestToString_StringPointer(t *testing.T) {
 	s := "world"
-	result, ok := toComparableString(&s)
+	result, ok := typeconv.ToString(&s)
 	assert.True(t, ok)
 	assert.Equal(t, "world", result)
 }
 
-func TestToComparableString_StringPointer_Nil(t *testing.T) {
+func TestToString_StringPointer_Nil(t *testing.T) {
 	var s *string
-	result, ok := toComparableString(s)
+	result, ok := typeconv.ToString(s)
 	assert.False(t, ok)
 	assert.Equal(t, "", result)
 }
 
-func TestToComparableString_ByteSlice(t *testing.T) {
-	result, ok := toComparableString([]byte("bytes"))
+func TestToString_ByteSlice(t *testing.T) {
+	result, ok := typeconv.ToString([]byte("bytes"))
 	assert.True(t, ok)
 	assert.Equal(t, "bytes", result)
 }
 
-func TestToComparableString_SqlNullString_Valid(t *testing.T) {
-	result, ok := toComparableString(sql.NullString{String: "valid", Valid: true})
+func TestToString_SqlNullString_Valid(t *testing.T) {
+	result, ok := typeconv.ToString(sql.NullString{String: "valid", Valid: true})
 	assert.True(t, ok)
 	assert.Equal(t, "valid", result)
 }
 
-func TestToComparableString_SqlNullString_Invalid(t *testing.T) {
-	result, ok := toComparableString(sql.NullString{String: "invalid", Valid: false})
+func TestToString_SqlNullString_Invalid(t *testing.T) {
+	result, ok := typeconv.ToString(sql.NullString{String: "invalid", Valid: false})
 	assert.False(t, ok)
 	assert.Equal(t, "", result)
 }
 
-func TestToComparableString_SqlNullString_Pointer_Valid(t *testing.T) {
+func TestToString_SqlNullString_Pointer_Valid(t *testing.T) {
 	val := &sql.NullString{String: "pointer", Valid: true}
-	result, ok := toComparableString(val)
+	result, ok := typeconv.ToString(val)
 	assert.True(t, ok)
 	assert.Equal(t, "pointer", result)
 }
 
-func TestToComparableString_SqlNullString_Pointer_Nil(t *testing.T) {
+func TestToString_SqlNullString_Pointer_Nil(t *testing.T) {
 	var val *sql.NullString
-	result, ok := toComparableString(val)
+	result, ok := typeconv.ToString(val)
 	assert.False(t, ok)
 	assert.Equal(t, "", result)
 }
 
-func TestToComparableString_Int(t *testing.T) {
-	result, ok := toComparableString(123)
+func TestToString_Int(t *testing.T) {
+	result, ok := typeconv.ToString(123)
 	assert.False(t, ok)
 	assert.Equal(t, "", result)
 }
@@ -357,91 +359,91 @@ func TestEqualsLoose_EmptyVsNonEmpty(t *testing.T) {
 	assert.False(t, equal)
 }
 
-func TestToComparableNumber_SqlNullInt32_Pointer_Valid(t *testing.T) {
+func TestToNumber_SqlNullInt32_Pointer_Valid(t *testing.T) {
 	val := &sql.NullInt32{Int32: 32, Valid: true}
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.True(t, ok)
 	assert.Equal(t, float64(32), result)
 }
 
-func TestToComparableNumber_SqlNullInt32_Pointer_Nil(t *testing.T) {
+func TestToNumber_SqlNullInt32_Pointer_Nil(t *testing.T) {
 	var val *sql.NullInt32
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_SqlNullInt32_Invalid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullInt32{Int32: 32, Valid: false})
+func TestToNumber_SqlNullInt32_Invalid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullInt32{Int32: 32, Valid: false})
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_SqlNullInt16_Pointer_Valid(t *testing.T) {
+func TestToNumber_SqlNullInt16_Pointer_Valid(t *testing.T) {
 	val := &sql.NullInt16{Int16: 16, Valid: true}
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.True(t, ok)
 	assert.Equal(t, float64(16), result)
 }
 
-func TestToComparableNumber_SqlNullInt16_Pointer_Nil(t *testing.T) {
+func TestToNumber_SqlNullInt16_Pointer_Nil(t *testing.T) {
 	var val *sql.NullInt16
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_SqlNullInt16_Invalid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullInt16{Int16: 16, Valid: false})
+func TestToNumber_SqlNullInt16_Invalid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullInt16{Int16: 16, Valid: false})
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_SqlNullByte_Pointer_Valid(t *testing.T) {
+func TestToNumber_SqlNullByte_Pointer_Valid(t *testing.T) {
 	val := &sql.NullByte{Byte: 255, Valid: true}
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.True(t, ok)
 	assert.Equal(t, float64(255), result)
 }
 
-func TestToComparableNumber_SqlNullByte_Pointer_Nil(t *testing.T) {
+func TestToNumber_SqlNullByte_Pointer_Nil(t *testing.T) {
 	var val *sql.NullByte
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_SqlNullByte_Invalid(t *testing.T) {
-	result, ok := toComparableNumber(sql.NullByte{Byte: 255, Valid: false})
+func TestToNumber_SqlNullByte_Invalid(t *testing.T) {
+	result, ok := typeconv.ToNumber(sql.NullByte{Byte: 255, Valid: false})
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableNumber_SqlNullFloat64_Pointer_Valid(t *testing.T) {
+func TestToNumber_SqlNullFloat64_Pointer_Valid(t *testing.T) {
 	val := &sql.NullFloat64{Float64: 3.14, Valid: true}
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.True(t, ok)
 	assert.Equal(t, float64(3.14), result)
 }
 
-func TestToComparableNumber_SqlNullFloat64_Pointer_Nil(t *testing.T) {
+func TestToNumber_SqlNullFloat64_Pointer_Nil(t *testing.T) {
 	var val *sql.NullFloat64
-	result, ok := toComparableNumber(val)
+	result, ok := typeconv.ToNumber(val)
 	assert.False(t, ok)
 	assert.Equal(t, float64(0), result)
 }
 
-func TestToComparableString_ReflectPointerToString(t *testing.T) {
+func TestToString_ReflectPointerToString(t *testing.T) {
 	type StringAlias string
 	s := StringAlias("alias")
-	result, ok := toComparableString(&s)
+	result, ok := typeconv.ToString(&s)
 	assert.True(t, ok)
 	assert.Equal(t, "alias", result)
 }
 
-func TestToComparableString_SqlNullString_Pointer_Invalid(t *testing.T) {
+func TestToString_SqlNullString_Pointer_Invalid(t *testing.T) {
 	val := &sql.NullString{String: "invalid", Valid: false}
-	result, ok := toComparableString(val)
+	result, ok := typeconv.ToString(val)
 	assert.False(t, ok)
 	assert.Equal(t, "", result)
 }

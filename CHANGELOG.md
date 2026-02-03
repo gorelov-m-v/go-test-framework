@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-02-04
+
+### Added
+- `CleanupMode` for step context — uses non-fatal assertions so cleanup errors don't stop other cleanups
+- `DeferCleanup(name, fn)` method in `BaseSuite` — cleanup steps execute in LIFO order
+- `WithCleanupMode()` and `WithNewCleanupStep()` functions in extension package
+
+### Changed
+- Centralized DSL error messages in `internal/errors/dsl_errors.go`
+- Renamed `sCtx` to `stepCtx` in DSL struct fields for clarity
+- Moved `ToNumber()` and `ToString()` to `internal/typeconv` package
+
 ## [1.4.0] - 2026-02-02
 
 ### Added
